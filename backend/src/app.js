@@ -56,6 +56,8 @@ app.use('/api/departments', require('./modules/department/routes/departmentRoute
 app.use('/api/courses',     require('./modules/course/routes/courseRoutes'));
 app.use('/api/semesters',   require('./modules/semester/routes/semesterRoutes'));
 app.use('/api/classes',     require('./modules/class/routes/classRoutes'));
+app.use('/api/students',    require('./modules/student/routes/studentRoutes'));
+app.use('/api',             require('./modules/attendance/routes/attendanceRoutes'));
 
 // ── 404 & error handling ─────────────────────────────────────────────────────
 app.use(notFound);
