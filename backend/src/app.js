@@ -51,6 +51,11 @@ app.get('/health', (_req, res) => {
 
 // ── Module routes ────────────────────────────────────────────────────────────
 app.use('/api/auth',        require('./modules/auth/routes/authRoutes'));
+app.use('/api/faculty',     require('./modules/faculty/routes/facultyRoutes'));
+app.use('/api/departments', require('./modules/department/routes/departmentRoutes'));
+app.use('/api/courses',     require('./modules/course/routes/courseRoutes'));
+app.use('/api/semesters',   require('./modules/semester/routes/semesterRoutes'));
+app.use('/api/classes',     require('./modules/class/routes/classRoutes'));
 
 // ── 404 & error handling ─────────────────────────────────────────────────────
 app.use(notFound);
