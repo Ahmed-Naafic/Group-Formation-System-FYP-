@@ -49,6 +49,9 @@ app.get('/health', (_req, res) => {
   });
 });
 
+// ── Module routes ────────────────────────────────────────────────────────────
+app.use('/api/auth',        require('./modules/auth/routes/authRoutes'));
+
 // ── 404 & error handling ─────────────────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);

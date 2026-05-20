@@ -19,6 +19,18 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // ── Boot sequence ────────────────────────────────────────────────────────────
+const mongoose = require('mongoose');
+const seedAdmin = require('./src/scripts/seedAdmin');
+
+// Register before connect() so the handler is in place before the event fires
+mongoose.connection.once('open', async () => {
+  try {
+    await seedAdmin();
+  } catch (err) {
+    logger.error('Admin seed failed', { message: err.message });
+  }
+});
+
 connect();
 
 const server = app.listen(PORT, () => {
