@@ -1,0 +1,31 @@
+
+// Must be the very first thing — loads .env before any other module reads process.env
+require('dotenv').config();
+
+const { PORT } = require('./src/config/env');
+const { connect } = require('./src/config/db');
+const logger = require('./src/common/utils/logger');
+const app = require('./src/app');
+
+// ── Fatal error guards ───────────────────────────────────────────────────────
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception — shutting down', { message: err.message, stack: err.stack });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection — shutting down', { reason: String(reason) });
+  process.exit(1);
+});
+
+// ── Boot sequence ────────────────────────────────────────────────────────────
+connect();
+
+const server = app.listen(PORT, () => {
+  logger.info(`Server running`, { port: PORT, env: process.env.NODE_ENV });
+});
+
+// Give the HTTP server a graceful shutdown path too
+process.on('SIGTERM', () => {
+  server.close(() => logger.info('HTTP server closed'));
+});
