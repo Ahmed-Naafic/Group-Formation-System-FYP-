@@ -22,6 +22,18 @@ const studentRepository = {
   updateById(id, updates) {
     return Student.findByIdAndUpdate(id, updates, { new: true }).populate('userId', USER_FIELDS);
   },
+
+  // Count students whose stored scores exceed the given maxMarks thresholds.
+  // Used to warn admins after a maxMarks reduction without touching stored data.
+  countExceedingScores(maxMarks) {
+    return Student.countDocuments({
+      $or: [
+        { 'scores.midterm':    { $gt: maxMarks.midterm    } },
+        { 'scores.final':      { $gt: maxMarks.final      } },
+        { 'scores.coursework': { $gt: maxMarks.coursework } },
+      ],
+    });
+  },
 };
 
 module.exports = studentRepository;

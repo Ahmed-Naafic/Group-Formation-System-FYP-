@@ -2,6 +2,7 @@ const columnMapper = require('../utils/columnMapper');
 const classService = require('../../class/services/classService');
 const userService = require('../../user/services/userService');
 const studentService = require('../../student/services/studentService');
+const performanceService = require('../../performance/services/performanceService');
 const passwordGenerator = require('../../../common/utils/passwordGenerator');
 const { ForbiddenError, BadRequestError } = require('../../../common/errors');
 
@@ -48,6 +49,9 @@ const enrollmentService = {
       throw new BadRequestError(`Could not parse file: ${err.message}`);
     }
 
+    // Fetch once for the whole batch — avoids a DB round-trip per row
+    const { maxMarks } = await performanceService.getSettings();
+
     const created = [];
     const skipped = [];
     const failed = [];
@@ -76,6 +80,29 @@ const enrollmentService = {
           continue;
         }
 
+        // Parse scores early so we can validate before creating any accounts
+        const parsedMidterm    = parseScore(row.midterm);
+        const parsedFinal      = parseScore(row.final);
+        const parsedCoursework = parseScore(row.coursework);
+
+        const scoreErrors = [];
+        if (parsedMidterm !== null) {
+          if (parsedMidterm < 0) scoreErrors.push(`midterm score ${parsedMidterm} is negative`);
+          else if (parsedMidterm > maxMarks.midterm) scoreErrors.push(`midterm score ${parsedMidterm} exceeds maximum ${maxMarks.midterm}`);
+        }
+        if (parsedFinal !== null) {
+          if (parsedFinal < 0) scoreErrors.push(`final score ${parsedFinal} is negative`);
+          else if (parsedFinal > maxMarks.final) scoreErrors.push(`final score ${parsedFinal} exceeds maximum ${maxMarks.final}`);
+        }
+        if (parsedCoursework !== null) {
+          if (parsedCoursework < 0) scoreErrors.push(`coursework score ${parsedCoursework} is negative`);
+          else if (parsedCoursework > maxMarks.coursework) scoreErrors.push(`coursework score ${parsedCoursework} exceeds maximum ${maxMarks.coursework}`);
+        }
+        if (scoreErrors.length > 0) {
+          failed.push({ row: rowNum, reason: scoreErrors.join('; ') });
+          continue;
+        }
+
         // Reuse User if the student already has an account (e.g. enrolled in another class)
         let user = await userService.findByStudentId(studentId);
         let tempPassword = null;
@@ -99,9 +126,9 @@ const enrollmentService = {
           fullName,
           attendance: parseAttendance(row.attendance),
           scores: {
-            midterm: parseScore(row.midterm),
-            final: parseScore(row.final),
-            coursework: parseScore(row.coursework),
+            midterm:    parsedMidterm,
+            final:      parsedFinal,
+            coursework: parsedCoursework,
           },
         });
 
