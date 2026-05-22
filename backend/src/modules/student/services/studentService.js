@@ -111,6 +111,15 @@ const studentService = {
     return student.softDelete(userId);
   },
 
+  // ── Internal — called by the grouping engine (auth already verified by caller) ─
+  getStudentsByClass(classId) {
+    return studentRepository.findAll({ classId });
+  },
+
+  markAsLeader(studentId) {
+    return studentRepository.markAsLeader(studentId);
+  },
+
   // ── Instructor-initiated password reset (Section 2.14.5) ─────────────────────
   async resetPassword(id, context) {
     const student = await studentService.getById(id, context);

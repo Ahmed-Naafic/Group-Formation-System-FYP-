@@ -58,6 +58,79 @@ function interleaveRoundRobin(tiers) {
   return result;
 }
 
+// Post-assignment tier rebalancing for a single performance tier (including null = UNGRADED).
+// Conflict avoidance can cluster same-tier students into fewer groups than ideal.
+// This pass enforces max(tier-count per group) - min ≤ 1 by moving or swapping:
+//   - Move:  when src group is larger than dst — preserves ±1 size balance
+//   - Swap:  when groups are equal-sized — swaps a tier student out of src with a
+//            non-tier student out of dst, keeping both group sizes unchanged
+// In both cases the student(s) chosen minimise new conflict-pair memberships.
+function rebalanceTier(groups, tier, avoidPairs) {
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    const counts = groups.map(g => g.filter(s => s.performanceCategory === tier).length);
+    const maxCount = Math.max(...counts);
+    const minCount = Math.min(...counts);
+    if (maxCount - minCount <= 1) break;
+
+    const srcIdx = counts.indexOf(maxCount);
+    const dstIdx = counts.indexOf(minCount);
+
+    if (groups[srcIdx].length > groups[dstIdx].length) {
+      // Plain move: src is the larger group, so moving one student keeps sizes within ±1.
+      let bestI = -1, bestConflicts = Infinity;
+      for (let i = 0; i < groups[srcIdx].length; i++) {
+        const s = groups[srcIdx][i];
+        if (s.performanceCategory !== tier) continue;
+        let c = 0;
+        for (const m of groups[dstIdx]) {
+          const k = [s._id.toString(), m._id.toString()].sort().join('|');
+          if (avoidPairs.has(k)) c++;
+        }
+        if (c < bestConflicts) { bestConflicts = c; bestI = i; }
+      }
+      if (bestI === -1) break;
+      const [student] = groups[srcIdx].splice(bestI, 1);
+      groups[dstIdx].push(student);
+      changed = true;
+    } else {
+      // Swap: groups are equal-sized (or dst is larger — rare).
+      // Exchange the best tier-student from src with the best non-tier-student from
+      // dst so that group sizes remain unchanged.
+      const srcCandidates = groups[srcIdx].map((s, i) => ({ s, i })).filter(x => x.s.performanceCategory === tier);
+      const dstCandidates = groups[dstIdx].map((s, i) => ({ s, i })).filter(x => x.s.performanceCategory !== tier);
+      if (!srcCandidates.length || !dstCandidates.length) break;
+
+      let bestSI = srcCandidates[0].i, bestDI = dstCandidates[0].i, bestScore = Infinity;
+      for (const { s: ss, i: si } of srcCandidates) {
+        for (const { s: ds, i: di } of dstCandidates) {
+          let score = 0;
+          // Conflicts ss would face in dst (excluding ds, which is leaving)
+          for (const m of groups[dstIdx]) {
+            if (m === ds) continue;
+            const k = [ss._id.toString(), m._id.toString()].sort().join('|');
+            if (avoidPairs.has(k)) score++;
+          }
+          // Conflicts ds would face in src (excluding ss, which is leaving)
+          for (const m of groups[srcIdx]) {
+            if (m === ss) continue;
+            const k = [ds._id.toString(), m._id.toString()].sort().join('|');
+            if (avoidPairs.has(k)) score++;
+          }
+          if (score < bestScore) { bestScore = score; bestSI = si; bestDI = di; }
+        }
+      }
+      const tmp = groups[srcIdx][bestSI];
+      groups[srcIdx][bestSI] = groups[dstIdx][bestDI];
+      groups[dstIdx][bestDI] = tmp;
+      changed = true;
+    }
+  }
+  return groups;
+}
+
 // Post-assignment size rebalancing.
 // After conflict-aware assignment, group sizes may diverge when conflict
 // avoidance forces students into specific groups. This pass moves one student
@@ -142,7 +215,15 @@ class GroupAssemblyStage {
     // Rebalance sizes: after conflict-driven assignment, some groups may be
     // larger than others. Move the least-conflicting student from the biggest
     // group to the smallest until sizes are within ±1 of target.
-    return rebalance(groups, avoidPairs);
+    rebalance(groups, avoidPairs);
+
+    // Tier rebalance for UNGRADED (null performanceCategory).
+    // Conflict avoidance can override the same-tier-spread penalty and cluster
+    // all UNGRADED students into fewer groups than intended. This enforces the
+    // same max-min ≤ 1 invariant that the round-robin interleaving targets.
+    rebalanceTier(groups, null, avoidPairs);
+
+    return groups;
   }
 }
 

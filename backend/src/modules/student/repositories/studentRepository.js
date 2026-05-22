@@ -23,6 +23,16 @@ const studentRepository = {
     return Student.findByIdAndUpdate(id, updates, { new: true }).populate('userId', USER_FIELDS);
   },
 
+  // Atomically sets hasBeenLeader and increments leaderCount in one operation.
+  // Uses separate $set/$inc operators — cannot go through updateById's $set wrapper.
+  markAsLeader(id) {
+    return Student.findByIdAndUpdate(
+      id,
+      { $set: { hasBeenLeader: true }, $inc: { leaderCount: 1 } },
+      { new: true },
+    );
+  },
+
   // Count students whose stored scores exceed the given maxMarks thresholds.
   // Used to warn admins after a maxMarks reduction without touching stored data.
   countExceedingScores(maxMarks) {

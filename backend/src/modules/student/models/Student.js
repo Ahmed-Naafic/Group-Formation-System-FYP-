@@ -19,6 +19,7 @@ const studentSchema = new mongoose.Schema(
       default: null,
     },
     hasBeenLeader: { type: Boolean, default: false },
+    leaderCount:   { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

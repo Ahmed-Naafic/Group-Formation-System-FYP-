@@ -5,7 +5,10 @@
 // 4. MEDIUM performer (any)
 // 5. LOW performer who has never been a leader
 // 6. Any student who has never been a leader
-// 7. First student (last resort — everyone has been a leader)
+// 7. Anyone — last resort when all have led at least once
+//
+// Within each tier, the student with the lowest leaderCount wins.
+// This ensures fair rotation even after everyone has been a leader.
 const LEADER_PREDICATES = [
   m => m.performanceCategory === 'HIGH'   && !m.hasBeenLeader,
   m => m.performanceCategory === 'HIGH',
@@ -18,8 +21,10 @@ const LEADER_PREDICATES = [
 
 function pickLeader(members) {
   for (const pred of LEADER_PREDICATES) {
-    const candidate = members.find(pred);
-    if (candidate) return candidate;
+    const candidates = members.filter(pred);
+    if (candidates.length > 0) {
+      return candidates.reduce((best, m) => m.leaderCount < best.leaderCount ? m : best);
+    }
   }
   return members[0];
 }
