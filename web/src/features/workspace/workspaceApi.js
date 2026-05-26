@@ -12,8 +12,17 @@ export const workspaceApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data.workspace,
       providesTags: (result, error, id) => [{ type: 'Workspace', id }],
     }),
+    getMessages: build.query({
+      query: (workspaceId) => `/api/workspaces/${workspaceId}/messages`,
+      transformResponse: (res) => res.data.messages,
+      providesTags: (result, error, workspaceId) => [{ type: 'Message', id: workspaceId }],
+    }),
   }),
   overrideExisting: false,
 });
 
-export const { useGetMyWorkspacesQuery, useGetWorkspaceByIdQuery } = workspaceApi;
+export const {
+  useGetMyWorkspacesQuery,
+  useGetWorkspaceByIdQuery,
+  useGetMessagesQuery,
+} = workspaceApi;
