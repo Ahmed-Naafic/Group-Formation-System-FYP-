@@ -1,4 +1,5 @@
 const mongoose               = require('mongoose');
+const emitter                = require('../../../common/events/emitter');
 const groupRepository        = require('../repositories/groupRepository');
 const groupHistoryRepository = require('../../grouping/repositories/groupHistoryRepository');
 const workspaceRepository    = require('../../workspace/repositories/workspaceRepository');
@@ -111,6 +112,12 @@ const groupService = {
       throw err;
     }
 
+    emitter.emit('groups.generated', {
+      groups, courseId,
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+    });
+
     return { groups, summary };
   },
 
@@ -157,6 +164,12 @@ const groupService = {
       await _rollback(generationId, archivedGroupIds);
       throw err;
     }
+
+    emitter.emit('groups.generated', {
+      groups, courseId,
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+    });
 
     return { groups, summary };
   },

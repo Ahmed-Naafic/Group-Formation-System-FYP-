@@ -75,6 +75,13 @@ app.use('/api/workspaces/:workspaceId/messages', require('./modules/chat/routes/
 app.use('/api/workspaces/:workspaceId/files',    require('./modules/file/routes/fileRoutes'));
 app.use('/api/course-assignments',  require('./modules/courseAssignment/routes/courseAssignmentRoutes'));
 app.use('/api/users',               require('./modules/user/routes/userRoutes'));
+app.use('/api/tasks',               require('./modules/task/routes/taskRoutes'));
+app.use('/api/submissions',         require('./modules/submission/routes/submissionRoutes'));
+app.use('/api/feedback',            require('./modules/feedback/routes/feedbackRoutes'));
+app.use('/api/notifications',       require('./modules/notification/routes/notificationRoutes'));
+app.use('/api/audit-logs',          require('./modules/auditLog/routes/auditLogRoutes'));
+app.use('/api/reports',             require('./modules/report/routes/reportRoutes'));
+app.use('/api/dashboard',           require('./modules/dashboard/routes/dashboardRoutes'));
 
 // ── 404 & error handling ─────────────────────────────────────────────────────
 app.use(notFound);

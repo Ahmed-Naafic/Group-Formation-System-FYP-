@@ -5,8 +5,9 @@ const { TOKEN_SCOPES } = require('../modules/auth/services/authService');
 const userService      = require('../modules/user/services/userService');
 const workspaceService = require('../modules/workspace/services/workspaceService');
 const messageService   = require('../modules/chat/services/messageService');
-const { buildRequestContext } = require('../middleware/requestContext');
-const logger           = require('../common/utils/logger');
+const { buildRequestContext }  = require('../middleware/requestContext');
+const { initListeners }        = require('../modules/notification/listeners');
+const logger                   = require('../common/utils/logger');
 
 // ── Socket auth middleware ─────────────────────────────────────────────────────
 
@@ -104,7 +105,13 @@ function initSocket(httpServer) {
 
   io.use(socketAuthMiddleware);
 
+  // Register notification + audit listeners (need io for real-time push)
+  initListeners(io);
+
   io.on('connection', (socket) => {
+    // Auto-join personal room so notifications can be pushed without a client event
+    socket.join(`user:${socket.context.userId}`);
+
     logger.info('Socket connected', {
       socketId: socket.id,
       userId:   String(socket.context.userId),
