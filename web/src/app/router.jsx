@@ -22,6 +22,7 @@ import TasksPage               from '@/features/task/TasksPage';
 import TaskSubmissionsPage     from '@/features/task/TaskSubmissionsPage';
 import NotificationsPage       from '@/features/notification/NotificationsPage';
 import AuditLogPage            from '@/features/auditLog/AuditLogPage';
+import ReportsPage             from '@/features/report/ReportsPage';
 
 function ComingSoon({ title }) {
   return (
@@ -134,6 +135,13 @@ export const router = createBrowserRouter([
         path: '/settings/performance',
         element: <ProtectedRoute roles={['admin']}><PerformanceSettingsPage /></ProtectedRoute>,
         handle: { title: 'Performance Settings' },
+      },
+
+      // ── Reports (admin + instructor) ──────────────────────────────────
+      {
+        path: '/reports',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><ReportsPage /></ProtectedRoute>,
+        handle: { title: 'Reports' },
       },
 
       // ── Audit log (admin) ──────────────────────────────────────────────
