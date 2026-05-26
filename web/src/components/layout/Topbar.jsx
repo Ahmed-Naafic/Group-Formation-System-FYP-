@@ -1,11 +1,12 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { Menu, LogOut, Moon, Sun } from 'lucide-react';
+import { Menu, LogOut, Moon, Sun, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { clearCredentials, selectCurrentUser, selectRole } from '@/features/auth/authSlice';
 import { baseApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
+import { useGetNotificationsQuery } from '@/features/notification/notificationApi';
 
 export default function Topbar({ title, onMenuClick }) {
   const dispatch  = useDispatch();
@@ -13,6 +14,8 @@ export default function Topbar({ title, onMenuClick }) {
   const user      = useSelector(selectCurrentUser);
   const role      = useSelector(selectRole);
   const { isDark, toggle } = useTheme();
+  const { data: notifData } = useGetNotificationsQuery();
+  const unreadCount = notifData?.unreadCount ?? 0;
 
   function handleLogout() {
     dispatch(clearCredentials());
@@ -60,6 +63,21 @@ export default function Topbar({ title, onMenuClick }) {
             {role}
           </span>
         </div>
+
+        {/* Notification bell */}
+        <button
+          onClick={() => navigate('/notifications')}
+          className="relative flex h-8 w-8 items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          aria-label="Notifications"
+        >
+          <Bell size={16} strokeWidth={1.75} />
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-danger text-white font-bold"
+              style={{ fontSize: '9px' }}>
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
 
         <Button
           variant="ghost"

@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { Outlet, useMatches } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import { useNotificationSocket } from '@/features/notification/useNotificationSocket';
 
 /**
  * Main authenticated layout: fixed sidebar + scrollable content area.
  * Each route may export a `handle.title` string for the topbar.
  */
 export default function AppShell() {
+  useNotificationSocket();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Read the page title from the nearest route's handle.title

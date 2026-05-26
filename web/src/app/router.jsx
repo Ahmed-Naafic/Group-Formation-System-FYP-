@@ -20,6 +20,7 @@ import InstructorsPage         from '@/features/courseAssignment/InstructorsPage
 import WorkspaceDetailPage     from '@/features/workspace/WorkspaceDetailPage';
 import TasksPage               from '@/features/task/TasksPage';
 import TaskSubmissionsPage     from '@/features/task/TaskSubmissionsPage';
+import NotificationsPage       from '@/features/notification/NotificationsPage';
 
 function ComingSoon({ title }) {
   return (
@@ -139,6 +140,13 @@ export const router = createBrowserRouter([
         path: '/instructors',
         element: <ProtectedRoute roles={['admin']}><InstructorsPage /></ProtectedRoute>,
         handle: { title: 'Instructors' },
+      },
+
+      // ── Notifications (all roles) ─────────────────────────────────────
+      {
+        path: '/notifications',
+        element: <NotificationsPage />,
+        handle: { title: 'Notifications' },
       },
 
       // ── Student workspaces ─────────────────────────────────────────────

@@ -25,6 +25,7 @@ export const baseApi = createApi({
   tagTypes: [
     'Faculty', 'Department', 'Course', 'Semester', 'Class',
     'Student', 'Performance', 'Group', 'Workspace', 'User',
+    'Task', 'Submission', 'Notification',
   ],
   endpoints: () => ({}),
 });
