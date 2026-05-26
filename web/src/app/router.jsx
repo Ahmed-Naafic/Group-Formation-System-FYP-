@@ -18,6 +18,8 @@ import GroupsPage              from '@/features/group/GroupsPage';
 import GroupDetailPage         from '@/features/group/GroupDetailPage';
 import InstructorsPage         from '@/features/courseAssignment/InstructorsPage';
 import WorkspaceDetailPage     from '@/features/workspace/WorkspaceDetailPage';
+import TasksPage               from '@/features/task/TasksPage';
+import TaskSubmissionsPage     from '@/features/task/TaskSubmissionsPage';
 
 function ComingSoon({ title }) {
   return (
@@ -104,6 +106,18 @@ export const router = createBrowserRouter([
         path: '/groups/:id',
         element: <GroupDetailPage />,
         handle: { title: 'Group' },
+      },
+
+      // ── Tasks & Submissions (admin + instructor, scoped by class) ──────
+      {
+        path: '/classes/:classId/tasks',
+        element: <TasksPage />,
+        handle: { title: 'Tasks' },
+      },
+      {
+        path: '/tasks/:taskId/submissions',
+        element: <TaskSubmissionsPage />,
+        handle: { title: 'Submissions' },
       },
 
       // ── Scores & Attendance (admin + instructor, scoped by class) ──────

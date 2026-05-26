@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, BookOpen,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, BookOpen, ClipboardList,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
@@ -293,12 +293,22 @@ export default function GroupsPage() {
             </p>
           )}
         </div>
-        {hasGroups && (
-          <Button variant="outline" className="ml-4 shrink-0" onClick={() => setRegenOpen(true)}>
-            <RefreshCw size={15} />
-            Regenerate
+        <div className="flex items-center gap-2 ml-4 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/classes/${classId}/tasks`)}
+          >
+            <ClipboardList size={15} />
+            Tasks
           </Button>
-        )}
+          {hasGroups && (
+            <Button variant="outline" size="sm" onClick={() => setRegenOpen(true)}>
+              <RefreshCw size={15} />
+              Regenerate
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Course selector */}
