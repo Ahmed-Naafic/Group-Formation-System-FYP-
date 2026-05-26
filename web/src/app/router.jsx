@@ -21,6 +21,7 @@ import WorkspaceDetailPage     from '@/features/workspace/WorkspaceDetailPage';
 import TasksPage               from '@/features/task/TasksPage';
 import TaskSubmissionsPage     from '@/features/task/TaskSubmissionsPage';
 import NotificationsPage       from '@/features/notification/NotificationsPage';
+import AuditLogPage            from '@/features/auditLog/AuditLogPage';
 
 function ComingSoon({ title }) {
   return (
@@ -133,6 +134,13 @@ export const router = createBrowserRouter([
         path: '/settings/performance',
         element: <ProtectedRoute roles={['admin']}><PerformanceSettingsPage /></ProtectedRoute>,
         handle: { title: 'Performance Settings' },
+      },
+
+      // ── Audit log (admin) ──────────────────────────────────────────────
+      {
+        path: '/audit',
+        element: <ProtectedRoute roles={['admin']}><AuditLogPage /></ProtectedRoute>,
+        handle: { title: 'Audit Log' },
       },
 
       // ── Instructor assignments (admin) ─────────────────────────────────

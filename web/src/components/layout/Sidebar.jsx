@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   LayoutDashboard, Building2, Layers, BookOpen,
-  Calendar, Users, UserCheck, SlidersHorizontal, X, Users2,
+  Calendar, Users, UserCheck, SlidersHorizontal, X, Users2, ShieldAlert,
 } from 'lucide-react';
 import { selectRole } from '@/features/auth/authSlice';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ const ADMIN_NAV = [
   { type: 'link',    label: 'Instructors', icon: UserCheck,          to: '/instructors' },
   { type: 'section', label: 'Settings' },
   { type: 'link',    label: 'Performance', icon: SlidersHorizontal,  to: '/settings/performance' },
+  { type: 'link',    label: 'Audit Log',   icon: ShieldAlert,        to: '/audit' },
 ];
 
 const INSTRUCTOR_NAV = [
