@@ -9,7 +9,7 @@ export const performanceApi = baseApi.injectEndpoints({
     }),
     updatePerformanceSettings: build.mutation({
       query: (body) => ({ url: '/api/performance/settings', method: 'PUT', body }),
-      transformResponse: (res) => res.data,
+      transformResponse: (res) => ({ ...res.data, message: res.message }),
       invalidatesTags: ['Performance'],
     }),
     recalculateClass: build.mutation({

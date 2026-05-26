@@ -1,7 +1,9 @@
 import { useParams, Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { Loader2, RefreshCw, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { selectRole } from '@/features/auth/authSlice';
 import { useGetStudentsQuery } from '@/features/student/studentApi';
 import { useGetClassByIdQuery } from '@/features/class/classApi';
 import {
@@ -18,7 +20,7 @@ const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive
 
 // ── Per-row inline editing ────────────────────────────────────────────────────
 
-function ScoreRow({ student }) {
+function ScoreRow({ student, isAdmin }) {
   const [updateScores,     { isLoading: savingScores }] = useUpdateScoresMutation();
   const [updateAttendance, { isLoading: savingAtt }]    = useUpdateAttendanceMutation();
   const saving = savingScores || savingAtt;
@@ -32,10 +34,11 @@ function ScoreRow({ student }) {
 
   async function onSave(data) {
     try {
-      const averageScore = data.averageScore !== '' ? Number(data.averageScore) : null;
-
-      if (averageScore !== null) {
-        await updateScores({ studentId: student._id, averageScore }).unwrap();
+      if (isAdmin) {
+        const averageScore = data.averageScore !== '' ? Number(data.averageScore) : null;
+        if (averageScore !== null) {
+          await updateScores({ studentId: student._id, averageScore }).unwrap();
+        }
       }
       await updateAttendance({ studentId: student._id, attendance: Number(data.attendance) || 0 }).unwrap();
       toast.success(`${student.fullName} saved`);
@@ -56,11 +59,17 @@ function ScoreRow({ student }) {
         />
       </TableCell>
       <TableCell>
-        <Input
-          type="number" min={0} max={100} step="0.01" placeholder="—"
-          className="h-7 w-24 text-xs"
-          {...register('averageScore')}
-        />
+        {isAdmin ? (
+          <Input
+            type="number" min={0} max={100} step="0.01" placeholder="—"
+            className="h-7 w-24 text-xs"
+            {...register('averageScore')}
+          />
+        ) : (
+          <span className="text-sm text-ink-500 tabular-nums">
+            {student.averageScore ?? <span className="text-ink-300">—</span>}
+          </span>
+        )}
       </TableCell>
       <TableCell>
         <Badge variant={CATEGORY_VARIANT[student.performanceCategory] ?? 'secondary'}>
@@ -88,6 +97,7 @@ function ScoreRow({ student }) {
 
 export default function ScoresPage() {
   const { classId } = useParams();
+  const isAdmin = useSelector(selectRole) === 'admin';
   const { data: cls, isLoading: loadingClass } = useGetClassByIdQuery(classId);
   const { data: students = [], isLoading, error } = useGetStudentsQuery(classId);
   const [recalculate, { isLoading: recalculating }] = useRecalculateClassMutation();
@@ -157,14 +167,16 @@ export default function ScoresPage() {
                 <TableHead className="w-32">Student ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead className="w-20">Attend %</TableHead>
-                <TableHead className="w-28">Avg Score</TableHead>
+                <TableHead className="w-28">
+                  Avg Score{!isAdmin && <span className="ml-1 text-ink-300 font-normal text-[10px]">(read-only)</span>}
+                </TableHead>
                 <TableHead className="w-28">Category</TableHead>
                 <TableHead className="w-24" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {students.map((s) => (
-                <ScoreRow key={s._id} student={s} />
+                <ScoreRow key={s._id} student={s} isAdmin={isAdmin} />
               ))}
             </TableBody>
           </Table>

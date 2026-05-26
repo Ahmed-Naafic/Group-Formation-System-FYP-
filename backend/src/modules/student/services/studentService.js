@@ -82,6 +82,11 @@ const studentService = {
   // ── Update student info ───────────────────────────────────────────────────────
   async update(id, updates, context) {
     await studentService.getById(id, context);
+    // averageScore is admin-only — instructors may only update attendance / fullName
+    if (context.role !== 'admin') {
+      const { averageScore: _dropped, ...safeUpdates } = updates;
+      return studentRepository.updateById(id, safeUpdates);
+    }
     return studentRepository.updateById(id, updates);
   },
 

@@ -29,8 +29,8 @@ export default function PerformanceSettingsPage() {
     };
 
     try {
-      await updateSettings(payload).unwrap();
-      toast.success('Settings saved');
+      const result = await updateSettings(payload).unwrap();
+      toast.success(result.message ?? `Thresholds saved — ${result.recalculated} students recalculated`);
     } catch (err) {
       toast.error(err?.data?.error?.message ?? 'Failed to save settings');
     }

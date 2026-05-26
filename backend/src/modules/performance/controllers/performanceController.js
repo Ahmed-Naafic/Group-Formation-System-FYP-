@@ -11,10 +11,10 @@ const performanceController = {
 
   // PUT /api/performance/settings
   updateSettings: asyncHandler(async (req, res) => {
-    const settings = await performanceService.updateSettings(req.body, req.context.userId);
+    const result = await performanceService.updateSettings(req.body, req.context.userId);
     return sendSuccess(res, {
-      message: 'Settings updated — run a class recalculation to apply the new thresholds',
-      data: { settings },
+      message: `Thresholds saved — ${result.recalculated} student${result.recalculated !== 1 ? 's' : ''} recalculated`,
+      data: { settings: result.settings, recalculated: result.recalculated },
     });
   }),
 

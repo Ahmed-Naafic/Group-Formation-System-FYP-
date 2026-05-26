@@ -28,11 +28,23 @@ const performanceService = {
   },
 
   async updateSettings(data, userId) {
-    return performanceSettingsRepository.updateSettings({
+    const settings = await performanceSettingsRepository.updateSettings({
       ...data,
       updatedBy: userId,
       updatedAt: new Date(),
     });
+
+    // Auto-recalculate every student so categories are never stale after a threshold change.
+    const students = await studentRepository.findAll({});
+    await Promise.all(
+      students.map((s) =>
+        studentRepository.updateById(s._id, {
+          performanceCategory: mapToCategory(s.averageScore, settings.thresholds),
+        })
+      )
+    );
+
+    return { settings, recalculated: students.length };
   },
 
   // Called internally after averageScore changes — no ownership check.

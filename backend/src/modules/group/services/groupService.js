@@ -13,10 +13,12 @@ const { ForbiddenError, BadRequestError, NotFoundError, ConflictError } = requir
 
 // ── Ownership guard ────────────────────────────────────────────────────────────
 
-async function assertClassAccess(classId, context) {
+async function assertClassAccess(classId, context, courseId = null) {
   const cls = await classService.getById(String(classId));
   if (context.role === 'admin') return cls;
-  const allowed = await courseAssignmentService.hasAccess(context.userId, String(classId));
+  const allowed = await courseAssignmentService.hasAccess(
+    context.userId, String(classId), courseId ? String(courseId) : undefined,
+  );
   if (!allowed) throw new ForbiddenError('You do not have access to this class');
   return cls;
 }
@@ -86,7 +88,7 @@ const groupService = {
   // Creates groups for a class+course that has none yet.
   // Errors if active groups already exist — use regenerate to replace them.
   async generate(classId, courseId, groupSize, options, context) {
-    await assertClassAccess(classId, context);
+    await assertClassAccess(classId, context, courseId);
     const course = await courseService.getById(courseId);
 
     const existing = await groupRepository.findActiveIdsByCourse(classId, courseId);
@@ -115,7 +117,7 @@ const groupService = {
   // Archives the current active groups for this class+course (writing them to
   // history so the algorithm can avoid those pairs), then generates a fresh set.
   async regenerate(classId, courseId, groupSize, options, context) {
-    await assertClassAccess(classId, context);
+    await assertClassAccess(classId, context, courseId);
     const course = await courseService.getById(courseId);
 
     const currentGroups    = await groupRepository.findActiveIdsByCourse(classId, courseId);
@@ -173,7 +175,7 @@ const groupService = {
       return groupRepository.findByCourseAndMemberId(classId, courseId, studentRecord._id);
     }
 
-    await assertClassAccess(classId, context);
+    await assertClassAccess(classId, context, courseId);
     return groupRepository.findByCourse(classId, courseId);
   },
 
@@ -197,7 +199,7 @@ const groupService = {
       return group;
     }
 
-    await assertClassAccess(group.classId, context);
+    await assertClassAccess(group.classId, context, group.courseId);
     return group;
   },
 
@@ -206,7 +208,7 @@ const groupService = {
   async update(id, { leaderId, addMemberIds = [], removeMemberIds = [] }, context) {
     const group = await groupRepository.findById(id);
     if (!group) throw new NotFoundError('Group not found');
-    await assertClassAccess(group.classId, context);
+    await assertClassAccess(group.classId, context, group.courseId);
 
     // Work with string IDs throughout for safe comparison
     const currentMemberIds  = group.memberIds.map(m => (m._id ?? m).toString());
