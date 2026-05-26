@@ -24,33 +24,16 @@ const FIELD_ALIASES = {
   student_name: 'fullName',
   'student name': 'fullName',
 
-  // midterm
-  midterm: 'midterm',
-  mid_term: 'midterm',
-  'mid term': 'midterm',
-  midtermscore: 'midterm',
-  midterm_score: 'midterm',
-  'midterm score': 'midterm',
-  mid: 'midterm',
-
-  // final
-  final: 'final',
-  finalexam: 'final',
-  final_exam: 'final',
-  'final exam': 'final',
-  finalscore: 'final',
-  final_score: 'final',
-  'final score': 'final',
-
-  // coursework
-  coursework: 'coursework',
-  course_work: 'coursework',
-  'course work': 'coursework',
-  cw: 'coursework',
-  assignment: 'coursework',
-  assignments: 'coursework',
-  courseworkscore: 'coursework',
-  'coursework score': 'coursework',
+  // averageScore
+  averagescore: 'averageScore',
+  average_score: 'averageScore',
+  'average score': 'averageScore',
+  average: 'averageScore',
+  avg: 'averageScore',
+  avgscore: 'averageScore',
+  avg_score: 'averageScore',
+  'avg score': 'averageScore',
+  score: 'averageScore',
 
   // attendance
   attendance: 'attendance',
@@ -62,12 +45,6 @@ const FIELD_ALIASES = {
   attend: 'attendance',
   att: 'attendance',
 
-  // email
-  email: 'email',
-  emailaddress: 'email',
-  email_address: 'email',
-  'email address': 'email',
-  mail: 'email',
 };
 
 function normaliseKey(key) {

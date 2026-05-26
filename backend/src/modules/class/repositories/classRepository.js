@@ -6,13 +6,11 @@ const classRepository = {
   },
 
   findAll(filter = {}) {
-    return Class.find(filter)
-      .populate('instructorId', 'fullName email')
-      .sort({ name: 1 });
+    return Class.find(filter).populate('courseIds', 'name code').sort({ name: 1 });
   },
 
   findById(id) {
-    return Class.findById(id).populate('instructorId', 'fullName email');
+    return Class.findById(id).populate('courseIds', 'name code');
   },
 
   findOne(filter) {
@@ -20,10 +18,7 @@ const classRepository = {
   },
 
   updateById(id, updates) {
-    return Class.findByIdAndUpdate(id, updates, { new: true }).populate(
-      'instructorId',
-      'fullName email'
-    );
+    return Class.findByIdAndUpdate(id, updates, { new: true }).populate('courseIds', 'name code');
   },
 };
 

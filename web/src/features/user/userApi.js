@@ -1,0 +1,19 @@
+import { baseApi } from '@/lib/api';
+
+export const userApi = baseApi.injectEndpoints({
+  endpoints: (build) => ({
+    getUsers: build.query({
+      query: (params = {}) => ({ url: '/api/users', params }),
+      transformResponse: (res) => res.data.users,
+      providesTags: ['User'],
+    }),
+    createInstructor: build.mutation({
+      query: (body) => ({ url: '/api/users', method: 'POST', body }),
+      transformResponse: (res) => res.data.user,
+      invalidatesTags: ['User'],
+    }),
+  }),
+  overrideExisting: false,
+});
+
+export const { useGetUsersQuery, useCreateInstructorMutation } = userApi;

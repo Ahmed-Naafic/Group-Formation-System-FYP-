@@ -4,7 +4,7 @@ const cors = require('cors');
 const compression = require('compression');
 const morgan = require('morgan');
 
-const { ALLOWED_ORIGINS, IS_PRODUCTION } = require('./config/env');
+const { ALLOWED_ORIGINS, IS_PRODUCTION, IS_DEVELOPMENT } = require('./config/env');
 const { connection } = require('./config/db');
 const { sendSuccess } = require('./common/responses/apiResponse');
 const notFound = require('./middleware/notFound');
@@ -16,7 +16,17 @@ const app = express();
 app.use(helmet());
 app.use(
   cors({
-    origin: ALLOWED_ORIGINS,
+    origin(origin, callback) {
+      // Allow requests with no origin (curl, mobile apps, server-to-server)
+      if (!origin) return callback(null, true);
+      // In development, accept any localhost port so the Vite dev server can connect
+      // regardless of which port it lands on (5173, 5174, …).
+      if (IS_DEVELOPMENT && /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -59,7 +69,10 @@ app.use('/api/classes',     require('./modules/class/routes/classRoutes'));
 app.use('/api/students',    require('./modules/student/routes/studentRoutes'));
 app.use('/api',             require('./modules/attendance/routes/attendanceRoutes'));
 app.use('/api/performance', require('./modules/performance/routes/performanceRoutes'));
-app.use('/api/groups',     require('./modules/group/routes/groupRoutes'));
+app.use('/api/groups',              require('./modules/group/routes/groupRoutes'));
+app.use('/api/workspaces',          require('./modules/workspace/routes/workspaceRoutes'));
+app.use('/api/course-assignments',  require('./modules/courseAssignment/routes/courseAssignmentRoutes'));
+app.use('/api/users',               require('./modules/user/routes/userRoutes'));
 
 // ── 404 & error handling ─────────────────────────────────────────────────────
 app.use(notFound);

@@ -4,6 +4,10 @@ const userRepository = require('../repositories/userRepository');
 const BCRYPT_ROUNDS = 12;
 
 const userService = {
+  findAll(filter = {}) {
+    return userRepository.findAll(filter);
+  },
+
   findById(id) {
     return userRepository.findById(id);
   },
@@ -16,6 +20,10 @@ const userService = {
    * Resolves an identifier to a user document that includes passwordHash.
    * Identifies emails by the presence of '@'; everything else is treated as a studentId.
    */
+  findByEmail(email) {
+    return userRepository.findByEmail(email);
+  },
+
   findByIdentifier(identifier) {
     return identifier.includes('@')
       ? userRepository.findByEmailWithPassword(identifier)

@@ -5,8 +5,8 @@ const groupService  = require('../services/groupService');
 const groupController = {
   // POST /api/groups/generate
   generate: asyncHandler(async (req, res) => {
-    const { classId, groupSize, options } = req.body;
-    const { groups, summary } = await groupService.generate(classId, groupSize, options, req.context);
+    const { classId, courseId, groupSize, options } = req.body;
+    const { groups, summary } = await groupService.generate(classId, courseId, groupSize, options, req.context);
 
     const data = { groups, summary };
     if (summary.ungraded > 0) {
@@ -21,8 +21,8 @@ const groupController = {
 
   // POST /api/groups/regenerate
   regenerate: asyncHandler(async (req, res) => {
-    const { classId, groupSize, options } = req.body;
-    const { groups, summary } = await groupService.regenerate(classId, groupSize, options, req.context);
+    const { classId, courseId, groupSize, options } = req.body;
+    const { groups, summary } = await groupService.regenerate(classId, courseId, groupSize, options, req.context);
 
     const data = { groups, summary };
     if (summary.ungraded > 0) {
@@ -35,9 +35,9 @@ const groupController = {
     });
   }),
 
-  // GET /api/groups?classId=
+  // GET /api/groups?classId=&courseId=
   getByClass: asyncHandler(async (req, res) => {
-    const groups = await groupService.getByClass(req.query.classId, req.context);
+    const groups = await groupService.getByClass(req.query.classId, req.query.courseId, req.context);
     return sendSuccess(res, { data: { groups } });
   }),
 

@@ -1,23 +1,12 @@
 const classRepository = require('../repositories/classRepository');
 const courseService = require('../../course/services/courseService');
 const semesterService = require('../../semester/services/semesterService');
-const userService = require('../../user/services/userService');
-const { NotFoundError, BadRequestError } = require('../../../common/errors');
-
-async function validateInstructor(instructorId) {
-  const instructor = await userService.findById(instructorId);
-  if (!instructor) throw new NotFoundError('Instructor not found');
-  if (instructor.role !== 'instructor') {
-    throw new BadRequestError('The specified user is not an instructor');
-  }
-}
+const { NotFoundError } = require('../../../common/errors');
 
 const classService = {
   async create(data) {
-    await courseService.getById(data.courseId);
+    for (const cid of data.courseIds ?? []) await courseService.getById(cid);
     await semesterService.getById(data.semesterId);
-    if (data.instructorId) await validateInstructor(data.instructorId);
-
     return classRepository.create(data);
   },
 
@@ -33,10 +22,10 @@ const classService = {
 
   async update(id, updates) {
     await classService.getById(id);
-    if (updates.courseId) await courseService.getById(updates.courseId);
+    if (updates.courseIds) {
+      for (const cid of updates.courseIds) await courseService.getById(cid);
+    }
     if (updates.semesterId) await semesterService.getById(updates.semesterId);
-    if (updates.instructorId) await validateInstructor(updates.instructorId);
-
     return classRepository.updateById(id, updates);
   },
 

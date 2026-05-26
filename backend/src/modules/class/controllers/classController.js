@@ -10,7 +10,6 @@ const classController = {
 
   getAll: asyncHandler(async (req, res) => {
     const filter = {};
-    if (req.query.courseId) filter.courseId = req.query.courseId;
     if (req.query.semesterId) filter.semesterId = req.query.semesterId;
     const classes = await classService.getAll(filter);
     return sendSuccess(res, { data: { classes } });

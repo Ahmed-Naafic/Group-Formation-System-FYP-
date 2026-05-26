@@ -1,0 +1,104 @@
+/* JUST tokens must come first — they define the CSS variables Tailwind references */
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── shadcn/ui semantic variable bridge ────────────────────────────────────
+   Maps shadcn's expected variable names to the JUST design tokens.
+   Components use these via Tailwind classes (bg-primary, text-foreground …)
+   ─────────────────────────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --background:          var(--paper);
+    --foreground:          var(--ink-900);
+    --card:                var(--white);
+    --card-foreground:     var(--ink-900);
+    --popover:             var(--white);
+    --popover-foreground:  var(--ink-900);
+    --primary:             var(--just-blue-600);
+    --primary-foreground:  var(--white);
+    --secondary:           var(--just-green-500);
+    --secondary-foreground: var(--white);
+    --muted:               var(--paper-2);
+    --muted-foreground:    var(--ink-500);
+    --accent:              var(--just-gold-400);
+    --accent-foreground:   var(--ink-900);
+    --destructive:         var(--danger);
+    --destructive-foreground: var(--white);
+    --border:              var(--ink-200);
+    --input:               var(--ink-200);
+    --ring:                var(--just-blue-500);
+    /* shadcn reads --radius for its default rounding */
+    --radius:              0.5rem;
+  }
+
+  .dark {
+    --background:             var(--paper);
+    --foreground:             var(--ink-900);
+    --card:                   #161C2D;
+    --card-foreground:        var(--ink-900);
+    --popover:                #1C2338;
+    --popover-foreground:     var(--ink-900);
+    --primary:                var(--just-blue-400);
+    --primary-foreground:     #EEF0F8;
+    --secondary:              var(--just-green-600);
+    --secondary-foreground:   #EEF0F8;
+    --muted:                  var(--paper-2);
+    --muted-foreground:       var(--ink-600);
+    --accent:                 var(--just-gold-400);
+    --accent-foreground:      var(--ink-900);
+    --destructive:            var(--danger);
+    --destructive-foreground: #EEF0F8;
+    --border:                 var(--ink-200);
+    --input:                  var(--ink-200);
+    --ring:                   var(--just-blue-400);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: var(--fs-body);
+    line-height: var(--lh-normal);
+  }
+
+  h1, h2 {
+    font-family: var(--font-serif);
+    font-weight: var(--fw-semibold);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  h1 { font-size: var(--fs-h1); }
+  h2 { font-size: var(--fs-h2); }
+  h3 { font-size: var(--fs-h3); font-weight: var(--fw-semibold); }
+  h4 { font-size: var(--fs-h4); font-weight: var(--fw-semibold); }
+  h5 { font-size: var(--fs-h5); font-weight: var(--fw-semibold); }
+}
+
+/* ── Utility classes from the design system ────────────────────────────── */
+@layer utilities {
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: var(--fs-micro);
+    font-weight: var(--fw-semibold);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--brand-primary);
+  }
+
+  .text-balance { text-wrap: balance; }
+  .text-pretty  { text-wrap: pretty; }
+}
+
+/* ── Dark mode: remap bg-white to card surface ──────────────────────────
+   Applied after @tailwind utilities so dark: variants can still override
+   this (e.g. dark:bg-white in sidebar logo).
+   ─────────────────────────────────────────────────────────────────────── */
+.dark .bg-white {
+  background-color: var(--card);
+}

@@ -4,6 +4,7 @@ const softDelete = require('../../../common/plugins/softDelete');
 const groupSchema = new mongoose.Schema(
   {
     classId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Class',   required: true },
+    courseId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Course',  required: true },
     name:      { type: String, required: true, trim: true },
     leaderId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
     memberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }],
@@ -19,6 +20,6 @@ const groupSchema = new mongoose.Schema(
 );
 
 groupSchema.plugin(softDelete);
-groupSchema.index({ classId: 1, status: 1 });
+groupSchema.index({ classId: 1, courseId: 1, status: 1 });
 
 module.exports = mongoose.model('Group', groupSchema);

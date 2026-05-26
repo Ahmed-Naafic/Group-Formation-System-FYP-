@@ -12,12 +12,8 @@ const attendanceController = {
 
   // POST /api/scores
   updateScores: asyncHandler(async (req, res) => {
-    const { studentId, midterm, final: finalScore, coursework } = req.body;
-    const student = await attendanceService.updateScores(
-      studentId,
-      { midterm, final: finalScore, coursework },
-      req.context
-    );
+    const { studentId, averageScore } = req.body;
+    const student = await attendanceService.updateScores(studentId, averageScore, req.context);
     return sendSuccess(res, { message: 'Scores updated', data: { student } });
   }),
 

@@ -6,6 +6,7 @@ const objectId  = Joi.string().pattern(/^[0-9a-fA-F]{24}$/).messages({
 // POST /api/groups/generate  and  POST /api/groups/regenerate
 const generateGroupsSchema = Joi.object({
   classId:   objectId.required(),
+  courseId:  objectId.required(),
   groupSize: Joi.number().integer().min(3).max(6).default(4),
   options:   Joi.object({
     attendanceThreshold: Joi.number().min(0).max(100).default(25),
@@ -21,9 +22,10 @@ const updateGroupSchema = Joi.object({
   'object.min': 'Provide at least one of: leaderId, addMemberIds, removeMemberIds',
 });
 
-// Query param for GET /api/groups?classId=
+// Query param for GET /api/groups?classId=&courseId=
 const classIdQuerySchema = Joi.object({
-  classId: objectId.required(),
+  classId:  objectId.required(),
+  courseId: objectId.required(),
 });
 
 // Route param :id

@@ -1,16 +1,43 @@
 const Workspace = require('../models/Workspace');
 
+// Populate spec used whenever workspace is returned to a client
+const GROUP_POPULATE = {
+  path: 'groupId',
+  populate: [
+    {
+      path: 'classId',
+      select: 'name semesterId',
+      populate: { path: 'semesterId', select: 'name year' },
+    },
+    { path: 'courseId', select: 'name code' },
+    {
+      path: 'leaderId',
+      select: 'fullName performanceCategory userId',
+      populate: { path: 'userId', select: 'studentId' },
+    },
+    {
+      path: 'memberIds',
+      select: 'fullName performanceCategory userId',
+      populate: { path: 'userId', select: 'studentId' },
+    },
+  ],
+};
+
 const workspaceRepository = {
   create(data) {
     return Workspace.create(data);
   },
 
+  findById(id) {
+    return Workspace.findById(id).populate(GROUP_POPULATE);
+  },
+
   findByGroupId(groupId) {
-    return Workspace.findOne({ groupId });
+    return Workspace.findOne({ groupId }).populate(GROUP_POPULATE);
   },
 
   findByGroupIds(groupIds) {
-    return Workspace.find({ groupId: { $in: groupIds } });
+    return Workspace.find({ groupId: { $in: groupIds } }).populate(GROUP_POPULATE);
   },
 
   deleteByGroupIds(groupIds) {

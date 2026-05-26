@@ -1,21 +1,16 @@
 const studentRepository = require('../repositories/studentRepository');
 const userService = require('../../user/services/userService');
 const classService = require('../../class/services/classService');
+const courseAssignmentService = require('../../courseAssignment/services/courseAssignmentService');
 const passwordGenerator = require('../../../common/utils/passwordGenerator');
 const { NotFoundError, ForbiddenError, ConflictError, BadRequestError } = require('../../../common/errors');
 
 // ── Ownership guard ───────────────────────────────────────────────────────────
-// Instructors may only access classes where they are the assigned instructor.
-// Admins bypass all ownership checks.
 async function assertClassAccess(classId, context) {
   const cls = await classService.getById(String(classId));
   if (context.role === 'admin') return cls;
-
-  // instructorId is populated (object) in classService.getById
-  const assignedId = cls.instructorId?._id?.toString() ?? cls.instructorId?.toString();
-  if (!assignedId || assignedId !== context.userId.toString()) {
-    throw new ForbiddenError('You do not have access to this class');
-  }
+  const allowed = await courseAssignmentService.hasAccess(context.userId, String(classId));
+  if (!allowed) throw new ForbiddenError('You do not have access to this class');
   return cls;
 }
 
@@ -33,8 +28,8 @@ const studentService = {
     return studentRepository.create(data);
   },
 
-  // ── Single manual creation (admin or instructor) ─────────────────────────────
-  async create({ classId, studentId, fullName, email, attendance, scores }, context) {
+  // ── Single manual creation (admin-only) ─────────────────────────────────────
+  async create({ classId, studentId, fullName, attendance, averageScore }, context) {
     await assertClassAccess(classId, context);
 
     const duplicate = await studentService.existsByStudentIdAndClass(studentId, classId);
@@ -49,7 +44,6 @@ const studentService = {
       user = await userService.createUser({
         studentId,
         fullName,
-        email: email || null,
         role: 'student',
         password: tempPassword,
         mustChangePassword: true,
@@ -63,11 +57,7 @@ const studentService = {
       classId,
       fullName,
       attendance: attendance ?? 0,
-      scores: {
-        midterm: scores?.midterm ?? null,
-        final: scores?.final ?? null,
-        coursework: scores?.coursework ?? null,
-      },
+      averageScore: averageScore ?? null,
     });
 
     const student = await studentRepository.findById(raw._id);
@@ -91,17 +81,7 @@ const studentService = {
 
   // ── Update student info ───────────────────────────────────────────────────────
   async update(id, updates, context) {
-    const student = await studentService.getById(id, context);
-
-    // Merge scores instead of replacing the whole sub-document
-    if (updates.scores) {
-      updates.scores = {
-        midterm: updates.scores.midterm ?? student.scores.midterm,
-        final: updates.scores.final ?? student.scores.final,
-        coursework: updates.scores.coursework ?? student.scores.coursework,
-      };
-    }
-
+    await studentService.getById(id, context);
     return studentRepository.updateById(id, updates);
   },
 

@@ -32,13 +32,14 @@ router.use(authenticate, requireRole('admin', 'instructor'));
 // ── Specific paths before parameterised routes ────────────────────────────────
 router.post(
   '/bulk-upload',
+  requireRole('admin'),           // upload is admin-only (MODEL_REVISION_v2 §8)
   upload.single('file'),
   validate(bulkUploadSchema),
   studentController.bulkUpload
 );
 
 // ── CRUD ─────────────────────────────────────────────────────────────────────
-router.post('/', validate(createStudentSchema), studentController.create);
+router.post('/', requireRole('admin'), validate(createStudentSchema), studentController.create);
 router.get('/', studentController.getAll);
 router.get('/:id', studentController.getById);
 router.patch('/:id', validate(updateStudentSchema), studentController.update);

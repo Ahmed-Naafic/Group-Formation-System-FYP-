@@ -7,6 +7,8 @@ const GroupGenerationService = require('../../grouping/services/GroupGenerationS
 const studentService         = require('../../student/services/studentService');
 const studentRepository      = require('../../student/repositories/studentRepository');
 const classService           = require('../../class/services/classService');
+const courseService          = require('../../course/services/courseService');
+const courseAssignmentService = require('../../courseAssignment/services/courseAssignmentService');
 const { ForbiddenError, BadRequestError, NotFoundError, ConflictError } = require('../../../common/errors');
 
 // ── Ownership guard ────────────────────────────────────────────────────────────
@@ -14,10 +16,8 @@ const { ForbiddenError, BadRequestError, NotFoundError, ConflictError } = requir
 async function assertClassAccess(classId, context) {
   const cls = await classService.getById(String(classId));
   if (context.role === 'admin') return cls;
-  const assignedId = cls.instructorId?._id?.toString() ?? cls.instructorId?.toString();
-  if (!assignedId || assignedId !== context.userId.toString()) {
-    throw new ForbiddenError('You do not have access to this class');
-  }
+  const allowed = await courseAssignmentService.hasAccess(context.userId, String(classId));
+  if (!allowed) throw new ForbiddenError('You do not have access to this class');
   return cls;
 }
 
@@ -25,7 +25,7 @@ async function assertClassAccess(classId, context) {
 
 // Writes assembled groups to the database (Groups → Workspaces → hasBeenLeader).
 // Does NOT handle rollback — the caller wraps this in try/catch.
-async function _persist(classId, assembledGroups, groupSize, options, context, generationId) {
+async function _persist(classId, courseId, courseName, assembledGroups, groupSize, options, context, generationId) {
   const now            = new Date();
   const createdGroupIds = [];
 
@@ -34,7 +34,8 @@ async function _persist(classId, assembledGroups, groupSize, options, context, g
     const { members, leaderId } = assembledGroups[i];
     const group = await groupRepository.create({
       classId,
-      name:      `Group ${i + 1}`,
+      courseId,
+      name:      `${courseName} Group ${i + 1}`,
       leaderId,
       memberIds: members.map(m => m._id),
       generatedAt:      now,
@@ -82,26 +83,27 @@ async function _rollback(generationId, archivedGroupIds) {
 // ── Service ────────────────────────────────────────────────────────────────────
 
 const groupService = {
-  // Creates groups for a class that has none yet.
+  // Creates groups for a class+course that has none yet.
   // Errors if active groups already exist — use regenerate to replace them.
-  async generate(classId, groupSize, options, context) {
+  async generate(classId, courseId, groupSize, options, context) {
     await assertClassAccess(classId, context);
+    const course = await courseService.getById(courseId);
 
-    const existing = await groupRepository.findActiveIdsByClass(classId);
+    const existing = await groupRepository.findActiveIdsByCourse(classId, courseId);
     if (existing.length > 0) {
       throw new ConflictError(
-        'This class already has active groups. Use /api/groups/regenerate to replace them.',
+        'This class already has active groups for this course. Use /api/groups/regenerate to replace them.',
       );
     }
 
     const { assembledGroups, summary } = await GroupGenerationService.generate(
-      classId, groupSize, options,
+      classId, courseId, groupSize, options,
     );
 
     const generationId = new mongoose.Types.ObjectId();
     let groups;
     try {
-      groups = await _persist(classId, assembledGroups, groupSize, options, context, generationId);
+      groups = await _persist(classId, courseId, course.name, assembledGroups, groupSize, options, context, generationId);
     } catch (err) {
       await _rollback(generationId, []);
       throw err;
@@ -110,12 +112,13 @@ const groupService = {
     return { groups, summary };
   },
 
-  // Archives the current active groups (writing them to history so the
-  // algorithm can avoid those pairs), then generates a fresh set.
-  async regenerate(classId, groupSize, options, context) {
+  // Archives the current active groups for this class+course (writing them to
+  // history so the algorithm can avoid those pairs), then generates a fresh set.
+  async regenerate(classId, courseId, groupSize, options, context) {
     await assertClassAccess(classId, context);
+    const course = await courseService.getById(courseId);
 
-    const currentGroups  = await groupRepository.findActiveIdsByClass(classId);
+    const currentGroups    = await groupRepository.findActiveIdsByCourse(classId, courseId);
     const archivedGroupIds = currentGroups.map(g => g._id);
 
     // Write current groups to GroupHistory BEFORE archiving so the algorithm
@@ -124,6 +127,7 @@ const groupService = {
       await groupHistoryRepository.insertMany(
         currentGroups.map(g => ({
           classId,
+          courseId,
           generationId:  g.generationId,
           memberIds:     g.memberIds,
           leaderId:      g.leaderId,
@@ -132,18 +136,18 @@ const groupService = {
           options:       g.generationOptions ?? {},
         })),
       );
-      await groupRepository.archiveByClass(classId);
+      await groupRepository.archiveByCourse(classId, courseId);
     }
 
     // Algorithm now reads history (which includes the just-written entries).
     const { assembledGroups, summary } = await GroupGenerationService.generate(
-      classId, groupSize, options,
+      classId, courseId, groupSize, options,
     );
 
     const generationId = new mongoose.Types.ObjectId();
     let groups;
     try {
-      groups = await _persist(classId, assembledGroups, groupSize, options, context, generationId);
+      groups = await _persist(classId, courseId, course.name, assembledGroups, groupSize, options, context, generationId);
     } catch (err) {
       // Groups failed — clean up new artifacts and restore old groups.
       // History entries for old groups remain (accurate record) but old groups
@@ -155,21 +159,22 @@ const groupService = {
     return { groups, summary };
   },
 
-  // Returns active groups for a class.
+  // Returns active groups for a class+course.
   // Students see only the group they belong to; admin/instructor see all.
-  async getByClass(classId, context) {
+  async getByClass(classId, courseId, context) {
     if (!classId) throw new BadRequestError('classId query parameter is required');
+    if (!courseId) throw new BadRequestError('courseId query parameter is required');
 
     if (context.role === 'student') {
       const studentRecord = await studentRepository.findOne({
         userId: context.userId, classId,
       });
       if (!studentRecord) return [];
-      return groupRepository.findByClassAndMemberId(classId, studentRecord._id);
+      return groupRepository.findByCourseAndMemberId(classId, courseId, studentRecord._id);
     }
 
     await assertClassAccess(classId, context);
-    return groupRepository.findByClass(classId);
+    return groupRepository.findByCourse(classId, courseId);
   },
 
   // Returns a single group.
@@ -228,8 +233,8 @@ const groupService = {
       if (newMemberIds.includes(sid)) {
         throw new ConflictError(`Student ${sid} is already a member of this group`);
       }
-      // Block if student is already in another active group in this class
-      const inOther = await groupRepository.findByClassAndMemberId(group.classId, sid);
+      // Block if student is already in another active group for this course
+      const inOther = await groupRepository.findByCourseAndMemberId(group.classId, group.courseId, sid);
       if (inOther.length > 0) {
         throw new ConflictError(
           `Student ${sid} is already in ${inOther[0].name} — remove them first`,

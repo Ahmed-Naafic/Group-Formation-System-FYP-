@@ -9,8 +9,8 @@ const groupHistoryRepository = {
     return GroupHistory.insertMany(docs);
   },
 
-  findByClass(classId) {
-    return GroupHistory.find({ classId }).sort({ generatedAt: -1 });
+  findByCourse(classId, courseId) {
+    return GroupHistory.find({ classId, courseId }).sort({ generatedAt: -1 });
   },
 
   deleteByGenerationId(generationId) {

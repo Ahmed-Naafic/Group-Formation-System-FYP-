@@ -25,6 +25,10 @@ const userRepository = {
     return User.findOne({ studentId }).select('+passwordHash');
   },
 
+  findAll(filter = {}) {
+    return User.find(filter).sort({ fullName: 1 });
+  },
+
   create(data) {
     return User.create(data);
   },

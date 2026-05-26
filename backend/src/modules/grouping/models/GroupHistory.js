@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const groupHistorySchema = new mongoose.Schema(
   {
     classId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Class',   required: true },
+    courseId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Course',  required: true },
     generationId: { type: mongoose.Schema.Types.ObjectId, required: true },
     memberIds:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }],
     leaderId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Student', default: null },
@@ -16,6 +17,6 @@ const groupHistorySchema = new mongoose.Schema(
   { timestamps: false },
 );
 
-groupHistorySchema.index({ classId: 1, generatedAt: -1 });
+groupHistorySchema.index({ classId: 1, courseId: 1, generatedAt: -1 });
 
 module.exports = mongoose.model('GroupHistory', groupHistorySchema);

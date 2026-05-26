@@ -36,7 +36,7 @@ const GroupGenerationService = {
 
   // Fetches data from DB then delegates to generateFromData.
   // Auth is checked by the caller (groupService) before this is invoked.
-  async generate(classId, groupSize, options = {}) {
+  async generate(classId, courseId, groupSize, options = {}) {
     const students = await studentService.getStudentsByClass(classId);
 
     if (students.length < 3) {
@@ -45,7 +45,7 @@ const GroupGenerationService = {
       );
     }
 
-    const historyDocs = await groupHistoryRepository.findByClass(classId);
+    const historyDocs = await groupHistoryRepository.findByCourse(classId, courseId);
     return this.generateFromData(students, historyDocs, groupSize, options);
   },
 };

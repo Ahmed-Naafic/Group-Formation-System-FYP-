@@ -1,0 +1,38 @@
+import { useState } from 'react';
+import { Outlet, useMatches } from 'react-router-dom';
+import Sidebar from './Sidebar';
+import Topbar from './Topbar';
+
+/**
+ * Main authenticated layout: fixed sidebar + scrollable content area.
+ * Each route may export a `handle.title` string for the topbar.
+ */
+export default function AppShell() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Read the page title from the nearest route's handle.title
+  const matches = useMatches();
+  const title   = [...matches].reverse().find((m) => m.handle?.title)?.handle?.title
+    ?? 'Dashboard';
+
+  return (
+    <div className="flex min-h-screen bg-background">
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      {/* Main content — offset by sidebar width on desktop */}
+      <div className="flex flex-1 flex-col lg:pl-60">
+        <Topbar
+          title={title}
+          onMenuClick={() => setSidebarOpen(true)}
+        />
+
+        <main className="flex-1 p-6">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
