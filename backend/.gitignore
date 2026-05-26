@@ -7,7 +7,7 @@
 node_modules/
 
 # Uploads (runtime-generated)
-src/uploads/
+uploads/
 
 # Logs
 logs/

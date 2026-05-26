@@ -33,9 +33,13 @@ mongoose.connection.once('open', async () => {
 
 connect();
 
+const { initSocket } = require('./src/sockets');
+
 const server = app.listen(PORT, () => {
   logger.info(`Server running`, { port: PORT, env: process.env.NODE_ENV });
 });
+
+initSocket(server);
 
 // Give the HTTP server a graceful shutdown path too
 process.on('SIGTERM', () => {

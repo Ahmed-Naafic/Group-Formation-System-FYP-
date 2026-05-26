@@ -71,6 +71,8 @@ app.use('/api',             require('./modules/attendance/routes/attendanceRoute
 app.use('/api/performance', require('./modules/performance/routes/performanceRoutes'));
 app.use('/api/groups',              require('./modules/group/routes/groupRoutes'));
 app.use('/api/workspaces',          require('./modules/workspace/routes/workspaceRoutes'));
+app.use('/api/workspaces/:workspaceId/messages', require('./modules/chat/routes/messageRoutes'));
+app.use('/api/workspaces/:workspaceId/files',    require('./modules/file/routes/fileRoutes'));
 app.use('/api/course-assignments',  require('./modules/courseAssignment/routes/courseAssignmentRoutes'));
 app.use('/api/users',               require('./modules/user/routes/userRoutes'));
 
