@@ -321,8 +321,8 @@ export default function StudentDetailPage() {
               {' · '}
               <span className="font-mono text-xs text-ink-400">{resetResult?.studentId}</span>
             </p>
-            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-4 py-3">
-              <span className="flex-1 font-mono text-sm font-semibold text-amber-900 dark:text-amber-200 select-all">
+            <div className="flex items-center gap-2 rounded-md border px-4 py-3 bg-[var(--surface-warning)] border-[var(--surface-warning-border)]">
+              <span className="flex-1 font-mono text-sm font-semibold text-[var(--fg-warning)] select-all">
                 {resetResult?.tempPassword}
               </span>
               <CopyButton text={resetResult?.tempPassword ?? ''} />

@@ -23,13 +23,17 @@ export default function Topbar({ title, onMenuClick }) {
 
   return (
     <header
-      className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-border bg-card px-6"
-      style={{ boxShadow: 'var(--shadow-xs)' }}
+      className="sticky top-0 z-10 flex h-14 items-center gap-4 px-6"
+      style={{
+        background:   'var(--topbar-bg)',
+        borderBottom: '1px solid var(--topbar-border)',
+        boxShadow:    'var(--shadow-xs)',
+      }}
     >
       {/* Mobile hamburger */}
       <button
         onClick={onMenuClick}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-muted hover:text-ink-800 transition-colors lg:hidden"
+        className="flex h-8 w-8 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white transition-colors lg:hidden"
         aria-label="Open navigation"
       >
         <Menu size={20} strokeWidth={1.75} />
@@ -37,7 +41,7 @@ export default function Topbar({ title, onMenuClick }) {
 
       {/* Page title */}
       <h1
-        className="flex-1 text-ink-900 font-semibold leading-none truncate"
+        className="flex-1 text-white font-semibold leading-none truncate"
         style={{ fontFamily: 'var(--font-serif)', fontSize: 'var(--fs-h4)' }}
       >
         {title}
@@ -46,12 +50,12 @@ export default function Topbar({ title, onMenuClick }) {
       {/* User info + actions */}
       <div className="flex items-center gap-2">
         <div className="hidden sm:flex flex-col items-end leading-none mr-1">
-          <span className="text-sm font-medium text-ink-800">
+          <span className="text-sm font-medium text-white">
             {user?.fullName ?? user?.email ?? 'User'}
           </span>
           <span
             className="capitalize mt-0.5"
-            style={{ fontSize: 'var(--fs-micro)', color: 'var(--fg-muted)' }}
+            style={{ fontSize: 'var(--fs-micro)', color: 'var(--topbar-fg-muted)' }}
           >
             {role}
           </span>
@@ -61,7 +65,7 @@ export default function Topbar({ title, onMenuClick }) {
           variant="ghost"
           size="sm"
           onClick={toggle}
-          className="h-8 w-8 p-0 text-ink-500 hover:text-ink-800"
+          className="h-8 w-8 p-0 text-white/60 hover:text-white hover:bg-white/10"
           aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {isDark
@@ -73,7 +77,7 @@ export default function Topbar({ title, onMenuClick }) {
           variant="ghost"
           size="sm"
           onClick={handleLogout}
-          className="gap-1.5 text-ink-500 hover:text-danger hover:bg-red-50"
+          className="gap-1.5 text-white/60 hover:text-white hover:bg-white/10"
         >
           <LogOut size={16} strokeWidth={1.75} />
           <span className="hidden sm:inline">Sign out</span>

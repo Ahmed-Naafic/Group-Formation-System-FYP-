@@ -334,9 +334,9 @@ export default function GroupsPage() {
 
       {/* Generation warning */}
       {genWarning && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-4 py-3">
-          <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-          <p className="text-sm text-amber-700 dark:text-amber-300">{genWarning}</p>
+        <div className="mb-5 flex items-start gap-2.5 rounded-lg border px-4 py-3 bg-[var(--surface-warning)] border-[var(--surface-warning-border)]">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[var(--fg-warning)]" />
+          <p className="text-sm text-[var(--fg-warning)]">{genWarning}</p>
         </div>
       )}
 

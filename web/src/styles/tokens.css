@@ -80,6 +80,43 @@
   --danger:  #B23A3A;
   --info:    #2E4FB0;
 
+  /* Danger extended — light surface shades for badge/callout */
+  --danger-50:  #FEF2F2;
+  --danger-200: #FECACA;
+
+  /* ---------- BADGE TOKENS ---------- */
+  --badge-blue-bg:    var(--just-blue-50);
+  --badge-blue-fg:    var(--just-blue-700);
+  --badge-blue-ring:  var(--just-blue-200);
+
+  --badge-neutral-bg:   var(--ink-100);
+  --badge-neutral-fg:   var(--ink-600);
+  --badge-neutral-ring: var(--ink-200);
+
+  --badge-success-bg:   var(--just-green-50);
+  --badge-success-fg:   var(--just-green-600);
+  --badge-success-ring: var(--just-green-200);
+
+  --badge-warning-bg:   var(--just-gold-50);
+  --badge-warning-fg:   var(--just-gold-600);
+  --badge-warning-ring: var(--just-gold-200);
+
+  --badge-danger-bg:   var(--danger-50);
+  --badge-danger-fg:   var(--danger);
+  --badge-danger-ring: var(--danger-200);
+
+  /* ---------- SIDEBAR + TOPBAR (shared frame) ---------- */
+  --sidebar-bg:      var(--just-blue-800);       /* #122253 — navy fill                   */
+  --sidebar-border:  transparent;                /* no right border in light mode          */
+  --topbar-bg:       var(--sidebar-bg);          /* same navy — continuous frame           */
+  --topbar-fg-muted: rgba(255,255,255,0.55);     /* muted white on navy (= sidebar style)  */
+  --topbar-border:   rgba(255,255,255,0.10);     /* subtle bottom separator on navy        */
+
+  /* ---------- WARNING SURFACE (callout boxes) ---------- */
+  --surface-warning:        var(--just-gold-50);
+  --surface-warning-border: var(--just-gold-300);
+  --fg-warning:             var(--just-gold-600);
+
   /* ---------- TYPOGRAPHY ---------- */
   --font-serif:  'Source Serif 4', 'Georgia', 'Times New Roman', serif;
   --font-sans:   'Source Sans 3', 'Cairo', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -160,55 +197,111 @@
 }
 
 /* ============================================================
-   Dark Mode Overrides
+   Dark Mode — token remapping only, no new colors.
+   Every hex value here is the same value already defined in
+   :root above, just used in the opposite semantic role.
    ============================================================ */
 .dark {
-  /* ---------- NEUTRALS ---------- */
-  --paper:   #0F1320;
-  --paper-2: #0B0F1D;
+  /* ── Neutrals: mirror the ramp — each dark value equals the
+     light value at the opposite end. No new hex codes. ── */
+  --paper:   #0E1320;   /* = :root --ink-900  main background    */
+  --paper-2: #1A2030;   /* = :root --ink-800  deeper surface     */
 
-  --ink-900: #EEF0F8;
-  --ink-800: #CDD2E4;
-  --ink-700: #9BA3BC;
-  --ink-600: #6B7390;
-  --ink-500: #4A5168;
-  --ink-400: #363C55;
-  --ink-300: #2A3048;
-  --ink-200: #1E2540;
-  --ink-100: #18203A;
-  --ink-50:  #121830;
+  --ink-900: #F5F6F9;   /* = :root --ink-50   near-white text    */
+  --ink-800: #ECEEF2;   /* = :root --ink-100                     */
+  --ink-700: #D9DCE3;   /* = :root --ink-200                     */
+  --ink-600: #B6BCC9;   /* = :root --ink-300                     */
+  --ink-500: #8A92A4;   /* = :root --ink-400                     */
+  --ink-400: #5F6779;   /* = :root --ink-500  mid-range          */
+  --ink-300: #424A5E;   /* = :root --ink-600                     */
+  --ink-200: #2A3142;   /* = :root --ink-700                     */
+  --ink-100: #1A2030;   /* = :root --ink-800                     */
+  --ink-50:  #0E1320;   /* = :root --ink-900  deepest surface    */
 
-  /* ---------- SEMANTIC ---------- */
-  --bg:         var(--paper);
-  --bg-elev:    #161C2D;
-  --bg-sunken:  var(--paper-2);
-  --bg-inverse: var(--just-blue-900);
+  /* ── Semantic ── */
+  --bg:          var(--paper);           /* #0E1320                          */
+  --bg-elev:     var(--paper-2);         /* #1A2030  cards, popovers         */
+  --bg-sunken:   var(--just-blue-900);   /* #0C1738  recessed areas          */
+  --bg-inverse:  var(--just-blue-500);   /* 600 is remapped; 500 (#2E4FB0) is not */
 
-  --fg:         var(--ink-900);
-  --fg-muted:   var(--ink-600);
-  --fg-subtle:  var(--ink-500);
-  --fg-inverse: #0F1320;
+  --fg:            var(--ink-900);         /* #F5F6F9  remapped near-white     */
+  --fg-muted:      var(--ink-600);         /* #B6BCC9                          */
+  --fg-subtle:     var(--ink-500);         /* #8A92A4                          */
+  --fg-inverse:    var(--white);
+  --fg-on-brand:   var(--white);
+  --fg-link:       var(--just-blue-300);   /* #7E94D6                          */
+  --fg-link-hover: var(--just-blue-200);   /* #ADBCE7                          */
 
-  --border:        var(--ink-200);
-  --border-strong: var(--ink-300);
-  --border-focus:  var(--just-blue-400);
+  --border:        var(--ink-200);         /* #2A3142                          */
+  --border-strong: var(--ink-300);         /* #424A5E                          */
+  --border-focus:  var(--just-blue-400);   /* #4F6CC2                          */
 
-  --brand-primary:   var(--just-blue-300);
-  --fg-link:         var(--just-blue-300);
-  --fg-link-hover:   var(--just-blue-200);
+  /* ── Brand: shift primary blue up the ramp for vibrance on dark ── */
+  --brand-primary:   var(--just-blue-400);  /* #4F6CC2  */
+  --brand-secondary: var(--just-green-400); /* #2BA45E  */
+  --brand-accent:    var(--just-gold-400);  /* #E8C547  gold shines on dark */
 
-  /* ---------- STATUS ---------- */
-  --success: #2BA45E;
-  --warning: #D4AD35;
-  --danger:  #D94F4F;
-  --info:    #4F6CC2;
+  /* ── Status: lighter shades for legibility on dark backgrounds ── */
+  --success: var(--just-green-400);    /* #2BA45E  */
+  --warning: var(--just-gold-400);     /* #E8C547  */
+  --danger:  #D94F4F;                  /* lightened from #B23A3A — JUST has no lighter red */
+  --info:    var(--just-blue-400);     /* #4F6CC2  */
 
-  /* ---------- ELEVATION ---------- */
-  --shadow-xs:    0 1px 2px rgba(0,0,0,0.5);
-  --shadow-sm:    0 1px 3px rgba(0,0,0,0.6), 0 1px 2px rgba(0,0,0,0.4);
-  --shadow-md:    0 4px 10px rgba(0,0,0,0.6), 0 2px 4px rgba(0,0,0,0.4);
-  --shadow-lg:    0 12px 28px rgba(0,0,0,0.65), 0 4px 10px rgba(0,0,0,0.4);
-  --shadow-xl:    0 24px 48px rgba(0,0,0,0.7), 0 8px 16px rgba(0,0,0,0.45);
-  --shadow-brand: 0 8px 24px rgba(46,79,176,0.35);
-  --shadow-focus: 0 0 0 3px rgba(79,108,194,0.40);
+  /* Danger extended */
+  --danger-50:  #450A0A;
+  --danger-200: #991B1B;
+  /* --badge-danger-* auto-updates via these tokens */
+
+  /* ── Badge tokens ── */
+  --badge-blue-bg:   var(--just-blue-900);  /* #0C1738  */
+  --badge-blue-fg:   var(--just-blue-300);  /* #7E94D6  */
+  --badge-blue-ring: var(--just-blue-700);  /* #182E6E  */
+
+  /* neutral badge auto-flips through the ink scale — no override needed */
+
+  --badge-success-bg:   var(--just-green-900); /* #042614  */
+  --badge-success-fg:   var(--just-green-300); /* #5BBC82  */
+  --badge-success-ring: var(--just-green-800); /* #073D1F  */
+
+  --badge-warning-bg:   var(--just-gold-700);  /* #735D17  */
+  --badge-warning-fg:   var(--just-gold-300);  /* #EDCD5A  */
+  --badge-warning-ring: var(--just-gold-500);  /* #C9A52B  */
+
+  /* ── Brand primitive remapping ──────────────────────────────────────────
+     Components using text-just-blue-6xx / bg-just-blue-50 etc. flip here.
+     Hex values are reused from :root — no new colors introduced.
+     Avoid var() references to avoid circular dependencies within .dark.    */
+
+  /* Blue: dark-end positions → light-end equivalents.
+     200 intentionally left unmapped — it's referenced by --fg-link-hover. */
+  --just-blue-50:  #0C1738;   /* ← root just-blue-900  chip/surface bg  */
+  --just-blue-600: #7E94D6;   /* ← root just-blue-300  link / btn text  */
+  --just-blue-700: #ADBCE7;   /* ← root just-blue-200  hover / label    */
+  --just-blue-800: #D6DEF3;   /* ← root just-blue-100  text on chip     */
+
+  /* Green: same mirroring for status/toast surfaces */
+  --just-green-50:  #042614;  /* ← root just-green-900  surface bg      */
+  --just-green-200: #0A552B;  /* ← root just-green-700  border          */
+  --just-green-800: #92D3AC;  /* ← root just-green-200  text on chip    */
+
+  /* ── Sidebar + Topbar ── */
+  --sidebar-bg:      var(--bg-elev);         /* #1A2030 — subtle panel lift over page bg  */
+  --sidebar-border:  var(--border-strong);   /* #424A5E — crisp 1px right edge            */
+  --topbar-bg:       var(--sidebar-bg);      /* same dark panel as sidebar                */
+  --topbar-fg-muted: var(--fg-muted);        /* #B6BCC9                                   */
+  --topbar-border:   var(--border);          /* #2A3142 — standard dark separator         */
+
+  /* ── Warning surface ── */
+  --surface-warning:        var(--just-gold-700);  /* #735D17  */
+  --surface-warning-border: var(--just-gold-600);  /* #9E8120  */
+  --fg-warning:             var(--just-gold-300);  /* #EDCD5A  */
+
+  /* ── Elevation: stronger shadows needed on dark ── */
+  --shadow-xs:    0 1px 2px rgba(0,0,0,0.40);
+  --shadow-sm:    0 1px 3px rgba(0,0,0,0.50), 0 1px 2px rgba(0,0,0,0.35);
+  --shadow-md:    0 4px 10px rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.35);
+  --shadow-lg:    0 12px 28px rgba(0,0,0,0.60), 0 4px 10px rgba(0,0,0,0.35);
+  --shadow-xl:    0 24px 48px rgba(0,0,0,0.65), 0 8px 16px rgba(0,0,0,0.40);
+  --shadow-brand: 0 8px 24px rgba(79,108,194,0.30);
+  --shadow-focus: 0 0 0 3px rgba(79,108,194,0.35);
 }

@@ -58,7 +58,7 @@ export default function Sidebar({ isOpen, onClose }) {
           'lg:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
-        style={{ background: 'var(--just-blue-800)' }}
+        style={{ background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}
       >
         {/* ── Logo ────────────────────────────────────────────── */}
         <div

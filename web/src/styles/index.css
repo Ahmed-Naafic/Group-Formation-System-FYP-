@@ -35,25 +35,16 @@
   }
 
   .dark {
-    --background:             var(--paper);
-    --foreground:             var(--ink-900);
-    --card:                   #161C2D;
-    --card-foreground:        var(--ink-900);
-    --popover:                #1C2338;
-    --popover-foreground:     var(--ink-900);
-    --primary:                var(--just-blue-400);
-    --primary-foreground:     #EEF0F8;
-    --secondary:              var(--just-green-600);
-    --secondary-foreground:   #EEF0F8;
-    --muted:                  var(--paper-2);
-    --muted-foreground:       var(--ink-600);
-    --accent:                 var(--just-gold-400);
-    --accent-foreground:      var(--ink-900);
-    --destructive:            var(--danger);
-    --destructive-foreground: #EEF0F8;
-    --border:                 var(--ink-200);
-    --input:                  var(--ink-200);
-    --ring:                   var(--just-blue-400);
+    /* shadcn vars that reference fixed values in :root get explicit dark overrides here.
+       All values reference JUST semantic tokens (which are already remapped in tokens.css .dark). */
+    --card:               var(--bg-elev);
+    --card-foreground:    var(--fg);
+    --popover:            var(--bg-elev);
+    --popover-foreground: var(--fg);
+    --primary:            var(--brand-primary);
+    --primary-foreground: var(--white);
+    --destructive:        var(--danger);
+    --ring:               var(--border-focus);
   }
 
   * {
@@ -95,10 +86,11 @@
   .text-pretty  { text-wrap: pretty; }
 }
 
-/* ── Dark mode: remap bg-white to card surface ──────────────────────────
-   Applied after @tailwind utilities so dark: variants can still override
-   this (e.g. dark:bg-white in sidebar logo).
+/* ── bg-white surfaces use the elevated card token in dark mode ─────────
+   The app uses bg-white for card shells; this single rule makes them flip
+   without touching every component. bg-white/XX opacity variants are not
+   affected (e.g. sidebar nav items), which is correct.
    ─────────────────────────────────────────────────────────────────────── */
 .dark .bg-white {
-  background-color: var(--card);
+  background-color: var(--bg-elev);
 }
