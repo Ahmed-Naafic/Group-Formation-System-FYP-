@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   Building2, Layers, BookOpen, Calendar, Users, Users2,
-  BarChart2, Loader2, Crown,
+  BarChart2, Loader2, Crown, UserCheck, ClipboardList,
 } from 'lucide-react';
 import { selectCurrentUser, selectRole } from '@/features/auth/authSlice';
 import { useGetFacultiesQuery }   from '@/features/faculty/facultyApi';
@@ -14,10 +14,12 @@ import { useGetMyWorkspacesQuery } from '@/features/workspace/workspaceApi';
 import { Badge } from '@/components/ui/badge';
 import { useGetClassesQuery }     from '@/features/class/classApi';
 import { useGetCourseAssignmentsQuery } from '@/features/courseAssignment/courseAssignmentApi';
+import { useGetDashboardStatsQuery }    from '@/features/dashboard/dashboardApi';
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 // ── Shared stat card ──────────────────────────────────────────────────────────
 
@@ -45,6 +47,76 @@ function StatCard({ icon: Icon, label, count, to, iconBg, iconColor }) {
   );
 }
 
+// ── Submission breakdown ──────────────────────────────────────────────────────
+
+const SUB_STATUS = [
+  { key: 'draft',     label: 'Draft',     color: 'text-ink-500',           bg: 'bg-ink-100'        },
+  { key: 'submitted', label: 'Submitted', color: 'text-just-blue-700',     bg: 'bg-just-blue-50'   },
+  { key: 'late',      label: 'Late',      color: 'text-[var(--fg-warning)]', bg: 'bg-[var(--surface-warning)]' },
+  { key: 'reviewed',  label: 'Reviewed',  color: 'text-success',           bg: 'bg-success/10'     },
+];
+
+function SubmissionBreakdown({ stats }) {
+  return (
+    <div className="grid grid-cols-4 gap-3">
+      {SUB_STATUS.map(({ key, label, color, bg }) => (
+        <div key={key} className={cn('rounded-lg px-3 py-3 text-center', bg)}>
+          <p className={cn('text-2xl font-bold leading-none', color)}>
+            {stats?.[key] ?? 0}
+          </p>
+          <p className={cn('text-[11px] font-semibold mt-1 uppercase tracking-wide', color)}>
+            {label}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Recent activity ───────────────────────────────────────────────────────────
+
+const ACTION_COLORS = {
+  GROUP_GENERATED:   'bg-just-blue-100 text-just-blue-700',
+  TASK_CREATED:      'bg-amber-100 text-amber-700',
+  SUBMISSION_GRADED: 'bg-success/15 text-success',
+  PASSWORD_RESET:    'bg-ink-100 text-ink-600',
+};
+
+function timeAgo(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function RecentActivity({ entries }) {
+  if (!entries?.length) {
+    return <p className="text-sm text-ink-400 py-4 text-center">No recent activity.</p>;
+  }
+  return (
+    <div className="divide-y divide-border">
+      {entries.map((entry) => (
+        <div key={entry._id} className="flex items-center gap-3 py-2.5">
+          <span className={cn(
+            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap',
+            ACTION_COLORS[entry.action] ?? 'bg-ink-100 text-ink-600',
+          )}>
+            {entry.action.replace(/_/g, ' ')}
+          </span>
+          <span className="flex-1 text-sm text-ink-700 truncate min-w-0">
+            {entry.actorId?.fullName ?? '—'}
+            <span className="text-ink-400 font-normal"> · {entry.entityKind}</span>
+          </span>
+          <span className="shrink-0 text-xs text-ink-400">{timeAgo(entry.timestamp)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Admin dashboard ───────────────────────────────────────────────────────────
 
 function AdminDashboard({ user }) {
@@ -53,9 +125,9 @@ function AdminDashboard({ user }) {
   const { data: courses     = [], isLoading: lC  } = useGetCoursesQuery();
   const { data: semesters   = [], isLoading: lS  } = useGetSemestersQuery();
   const { data: classes     = [], isLoading: lCl } = useGetClassesQuery();
+  const { data: dash,             isLoading: lDash } = useGetDashboardStatsQuery();
 
-  const semesterMap = useMemo(() => Object.fromEntries(semesters.map((s) => [s._id, s])), [semesters]);
-
+  const semesterMap  = useMemo(() => Object.fromEntries(semesters.map((s) => [s._id, s])), [semesters]);
   const recentClasses = classes.slice(0, 8);
 
   return (
@@ -68,33 +140,55 @@ function AdminDashboard({ user }) {
         System overview — all figures are live from the database.
       </p>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-        <StatCard
-          icon={Building2}  label="Faculties"
-          count={lF  ? null : faculties.length}   to="/faculties"
-          iconBg="var(--just-blue-50)"    iconColor="var(--just-blue-600)"
-        />
-        <StatCard
-          icon={Layers}     label="Departments"
-          count={lD  ? null : departments.length} to="/departments"
-          iconBg="var(--just-blue-50)"    iconColor="var(--just-blue-600)"
-        />
-        <StatCard
-          icon={BookOpen}   label="Courses"
-          count={lC  ? null : courses.length}     to="/courses"
-          iconBg="rgba(18,138,71,0.08)"   iconColor="var(--just-green-600)"
-        />
-        <StatCard
-          icon={Calendar}   label="Semesters"
-          count={lS  ? null : semesters.length}   to="/semesters"
-          iconBg="rgba(232,197,71,0.12)"  iconColor="var(--just-gold-400)"
-        />
-        <StatCard
-          icon={Users}      label="Classes"
-          count={lCl ? null : classes.length}     to="/classes"
-          iconBg="var(--just-blue-50)"    iconColor="var(--just-blue-600)"
-        />
+      {/* Row 1 — Academic structure */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
+        <StatCard icon={Building2} label="Faculties"   count={lF   ? null : faculties.length}   to="/faculties"   iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
+        <StatCard icon={Layers}    label="Departments" count={lD   ? null : departments.length} to="/departments" iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
+        <StatCard icon={BookOpen}  label="Courses"     count={lC   ? null : courses.length}     to="/courses"     iconBg="rgba(18,138,71,0.08)" iconColor="var(--just-green-600)" />
+        <StatCard icon={Calendar}  label="Semesters"   count={lS   ? null : semesters.length}   to="/semesters"   iconBg="rgba(232,197,71,0.12)" iconColor="var(--just-gold-400)" />
+        <StatCard icon={Users}     label="Classes"     count={lCl  ? null : classes.length}     to="/classes"     iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
+      </div>
+
+      {/* Row 2 — Live stats from dashboard API */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        <StatCard icon={UserCheck}     label="Active Users"    count={lDash ? null : dash?.counts?.users}        iconBg="rgba(18,138,71,0.08)"  iconColor="var(--just-green-600)" />
+        <StatCard icon={Users2}        label="Students"        count={lDash ? null : dash?.counts?.students}     iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
+        <StatCard icon={Users2}        label="Active Groups"   count={lDash ? null : dash?.counts?.activeGroups} iconBg="rgba(232,197,71,0.12)" iconColor="var(--just-gold-500)" />
+        <StatCard icon={ClipboardList} label="Submissions"     count={lDash ? null : dash?.counts?.submissions}  iconBg="rgba(18,138,71,0.08)"  iconColor="var(--just-green-600)" />
+      </div>
+
+      {/* Submission breakdown + Recent activity — two columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+        {/* Submission status breakdown */}
+        <div>
+          <h3 className="text-ink-800 mb-3" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
+            Submissions by Status
+          </h3>
+          {lDash ? (
+            <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-ink-300" /></div>
+          ) : (
+            <SubmissionBreakdown stats={dash?.submissions} />
+          )}
+        </div>
+
+        {/* Recent activity */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-ink-800" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
+              Recent Activity
+            </h3>
+            <Link to="/audit" className="text-xs text-just-blue-600 hover:underline">
+              View all →
+            </Link>
+          </div>
+          <div className="rounded-lg border border-border bg-white shadow-xs px-4 py-1">
+            {lDash
+              ? <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-ink-300" /></div>
+              : <RecentActivity entries={dash?.recentActivity} />
+            }
+          </div>
+        </div>
       </div>
 
       {/* Classes table */}
@@ -116,9 +210,7 @@ function AdminDashboard({ user }) {
       ) : classes.length === 0 ? (
         <div className="rounded-lg border border-border bg-white p-10 text-center">
           <p className="text-sm text-ink-400 mb-3">No classes yet.</p>
-          <Button size="sm" asChild>
-            <Link to="/classes">Create first class</Link>
-          </Button>
+          <Button size="sm" asChild><Link to="/classes">Create first class</Link></Button>
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-white shadow-xs overflow-hidden">
@@ -152,29 +244,15 @@ function AdminDashboard({ user }) {
                       )}
                     </TableCell>
                     <TableCell className="text-ink-500">
-                      {semester
-                        ? `${semester.name} · ${semester.year}`
-                        : <span className="text-ink-300 text-xs">—</span>}
+                      {semester ? `${semester.name} · ${semester.year}` : <span className="text-ink-300 text-xs">—</span>}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost" size="sm"
-                          className="h-7 text-xs gap-1 text-just-blue-600"
-                          asChild
-                        >
-                          <Link to={`/classes/${cls._id}/students`}>
-                            <Users size={12} /> Students
-                          </Link>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600" asChild>
+                          <Link to={`/classes/${cls._id}/students`}><Users size={12} /> Students</Link>
                         </Button>
-                        <Button
-                          variant="ghost" size="sm"
-                          className="h-7 text-xs gap-1 text-just-blue-600"
-                          asChild
-                        >
-                          <Link to={`/classes/${cls._id}/groups`}>
-                            <Users2 size={12} /> Groups
-                          </Link>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600" asChild>
+                          <Link to={`/classes/${cls._id}/groups`}><Users2 size={12} /> Groups</Link>
                         </Button>
                       </div>
                     </TableCell>
