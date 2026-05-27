@@ -130,6 +130,17 @@ const submissionService = {
   },
 
   /**
+   * Returns the calling student's group submission for a task, or null if not started.
+   */
+  async getMySubmission(taskId, context) {
+    const task = await taskRepository.findById(taskId);
+    if (!task) throw new NotFoundError('Task not found');
+    const { group } = await resolveStudentGroup(task, context);
+    const submission = await submissionRepository.findOne({ taskId, groupId: group._id });
+    return submission ?? null;
+  },
+
+  /**
    * Instructor grades a submission.  Grade 0–100; status moves to 'reviewed'.
    */
   async grade(id, grade, context) {

@@ -48,6 +48,35 @@ export const taskApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data.submission,
       invalidatesTags: (result, error, { id }) => [{ type: 'Submission', id }, 'Submission'],
     }),
+
+    // Student: get their group's current submission for a task (null = not started)
+    getMySubmission: build.query({
+      query: (taskId) => `/api/tasks/${taskId}/my-submission`,
+      transformResponse: (res) => res.data.submission,
+      providesTags: (result, error, taskId) => [{ type: 'Submission', id: `my-${taskId}` }],
+    }),
+
+    // Student: save draft
+    saveDraft: build.mutation({
+      query: ({ taskId, notes }) => ({
+        url: `/api/tasks/${taskId}/draft`,
+        method: 'POST',
+        body: { notes: notes || undefined },
+      }),
+      transformResponse: (res) => res.data.submission,
+      invalidatesTags: (result, error, { taskId }) => [{ type: 'Submission', id: `my-${taskId}` }],
+    }),
+
+    // Student: submit
+    submitTask: build.mutation({
+      query: ({ taskId, notes }) => ({
+        url: `/api/tasks/${taskId}/submit`,
+        method: 'POST',
+        body: { notes: notes || undefined },
+      }),
+      transformResponse: (res) => res.data.submission,
+      invalidatesTags: (result, error, { taskId }) => [{ type: 'Submission', id: `my-${taskId}` }],
+    }),
   }),
   overrideExisting: false,
 });
@@ -60,4 +89,7 @@ export const {
   useDeleteTaskMutation,
   useGetTaskSubmissionsQuery,
   useGradeSubmissionMutation,
+  useGetMySubmissionQuery,
+  useSaveDraftMutation,
+  useSubmitTaskMutation,
 } = taskApi;

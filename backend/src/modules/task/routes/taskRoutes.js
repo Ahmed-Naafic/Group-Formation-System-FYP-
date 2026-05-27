@@ -49,6 +49,14 @@ router.delete(
 
 // ── Submission sub-resources (nested under task) ───────────────────────────────
 
+// Student: get their group's submission for a task (null if not started)
+router.get(
+  '/:taskId/my-submission',
+  authenticate, requireRole('student'),
+  validate(submissionValidation.taskIdParam, 'params'),
+  submissionController.getMySubmission,
+);
+
 // Student finalises submission
 router.post(
   '/:taskId/submit',

@@ -78,14 +78,14 @@ export const router = createBrowserRouter([
       // ── Classes (admin + instructor) ────────────────────────────────────
       {
         path: '/classes',
-        element: <ClassesPage />,
+        element: <ProtectedRoute roles={['admin', 'instructor']}><ClassesPage /></ProtectedRoute>,
         handle: { title: 'Classes' },
       },
 
       // ── Students (admin + instructor, scoped by class) ──────────────────
       {
         path: '/classes/:classId/students',
-        element: <StudentsPage />,
+        element: <ProtectedRoute roles={['admin', 'instructor']}><StudentsPage /></ProtectedRoute>,
         handle: { title: 'Students' },
       },
       {
@@ -95,38 +95,38 @@ export const router = createBrowserRouter([
       },
       {
         path: '/students/:id',
-        element: <StudentDetailPage />,
+        element: <ProtectedRoute roles={['admin', 'instructor']}><StudentDetailPage /></ProtectedRoute>,
         handle: { title: 'Student' },
       },
 
       // ── Groups (admin + instructor, scoped by class) ──────────────────
       {
         path: '/classes/:classId/groups',
-        element: <GroupsPage />,
+        element: <ProtectedRoute roles={['admin', 'instructor']}><GroupsPage /></ProtectedRoute>,
         handle: { title: 'Groups' },
       },
       {
         path: '/groups/:id',
-        element: <GroupDetailPage />,
+        element: <ProtectedRoute roles={['admin', 'instructor']}><GroupDetailPage /></ProtectedRoute>,
         handle: { title: 'Group' },
       },
 
       // ── Tasks & Submissions (admin + instructor, scoped by class) ──────
       {
         path: '/classes/:classId/tasks',
-        element: <TasksPage />,
+        element: <ProtectedRoute roles={['admin', 'instructor']}><TasksPage /></ProtectedRoute>,
         handle: { title: 'Tasks' },
       },
       {
         path: '/tasks/:taskId/submissions',
-        element: <TaskSubmissionsPage />,
+        element: <ProtectedRoute roles={['admin', 'instructor']}><TaskSubmissionsPage /></ProtectedRoute>,
         handle: { title: 'Submissions' },
       },
 
       // ── Scores & Attendance (admin + instructor, scoped by class) ──────
       {
         path: '/classes/:classId/scores',
-        element: <ScoresPage />,
+        element: <ProtectedRoute roles={['admin', 'instructor']}><ScoresPage /></ProtectedRoute>,
         handle: { title: 'Scores' },
       },
 

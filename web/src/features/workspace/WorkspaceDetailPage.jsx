@@ -3,13 +3,19 @@ import { Link, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   Loader2, Crown, ArrowLeft, Send, Paperclip, Download, Trash2,
-  File as FileIcon, FileText, FileImage,
+  File as FileIcon, FileText, FileImage, ClipboardList, Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { selectRole, selectCurrentUser, selectCurrentToken } from '@/features/auth/authSlice';
 import { useGetWorkspaceByIdQuery, useGetMessagesQuery } from './workspaceApi';
 import { useGetFilesQuery, useUploadFileMutation, useDeleteFileMutation } from './fileApi';
 import { useChatSocket } from './useChatSocket';
+import {
+  useGetTasksQuery,
+  useGetMySubmissionQuery,
+  useSaveDraftMutation,
+  useSubmitTaskMutation,
+} from '@/features/task/taskApi';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -44,6 +50,7 @@ function fileTypeIcon(mimeType) {
 
 const TABS = [
   { key: 'members', label: 'Members' },
+  { key: 'tasks',   label: 'Tasks'   },
   { key: 'chat',    label: 'Chat'    },
   { key: 'files',   label: 'Files'   },
 ];
@@ -209,6 +216,178 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Tasks tab ─────────────────────────────────────────────────────────────────
+
+const SUBMISSION_STATUS = {
+  draft:     { label: 'Draft',         variant: 'secondary' },
+  submitted: { label: 'Submitted',     variant: 'default'   },
+  late:      { label: 'Late',          variant: 'warning'   },
+  reviewed:  { label: 'Reviewed',      variant: 'success'   },
+};
+
+function deadlineColor(deadline) {
+  if (!deadline) return 'text-ink-400';
+  const diff = Math.round((new Date(deadline) - Date.now()) / 86400000);
+  if (diff < 0)  return 'text-danger';
+  if (diff <= 3) return 'text-[var(--fg-warning)]';
+  return 'text-ink-400';
+}
+
+function formatDeadline(deadline) {
+  if (!deadline) return null;
+  return new Date(deadline).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function StudentTaskCard({ task }) {
+  const { data: submission, isLoading: loadingSub } = useGetMySubmissionQuery(task._id);
+  const [saveDraft,   { isLoading: saving }]    = useSaveDraftMutation();
+  const [submitTask,  { isLoading: submitting }] = useSubmitTaskMutation();
+  const [notes, setNotes] = useState('');
+
+  // Pre-fill notes from existing draft when it loads
+  useEffect(() => {
+    if (submission?.notes) setNotes(submission.notes);
+  }, [submission?.notes]);
+
+  const isLocked = submission && ['submitted', 'late', 'reviewed'].includes(submission.status);
+  const taskOpen = task.status === 'open';
+
+  async function handleSaveDraft() {
+    try {
+      await saveDraft({ taskId: task._id, notes }).unwrap();
+      toast.success('Draft saved');
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to save draft');
+    }
+  }
+
+  async function handleSubmit() {
+    try {
+      await submitTask({ taskId: task._id, notes }).unwrap();
+      toast.success('Task submitted');
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to submit');
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-white shadow-xs px-5 py-4">
+      {/* Task header */}
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-ink-800 text-sm">{task.title}</span>
+            <Badge variant={task.status === 'open' ? 'success' : 'secondary'} className="text-[10px]">
+              {task.status === 'open' ? 'Open' : 'Closed'}
+            </Badge>
+            {/* Submission status */}
+            {loadingSub ? (
+              <Loader2 size={11} className="animate-spin text-ink-300" />
+            ) : submission ? (
+              <Badge variant={SUBMISSION_STATUS[submission.status]?.variant ?? 'secondary'}>
+                {SUBMISSION_STATUS[submission.status]?.label ?? submission.status}
+              </Badge>
+            ) : (
+              <Badge variant="secondary">Not Started</Badge>
+            )}
+          </div>
+          {task.description && (
+            <p className="text-xs text-ink-500 mt-1 line-clamp-2">{task.description}</p>
+          )}
+          {task.deadline && (
+            <p className={cn('inline-flex items-center gap-1 text-xs mt-1', deadlineColor(task.deadline))}>
+              <Calendar size={11} />
+              Due {formatDeadline(task.deadline)}
+            </p>
+          )}
+        </div>
+        {/* Grade pill */}
+        {submission?.grade != null && (
+          <span className="shrink-0 text-sm font-bold text-success">
+            {submission.grade}/100
+          </span>
+        )}
+      </div>
+
+      {/* Notes + actions — only when task is open and not locked */}
+      {taskOpen && !isLocked && (
+        <div className="mt-3 space-y-2">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="Add notes for your submission (optional)…"
+            className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+          />
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveDraft}
+              disabled={saving || submitting}
+            >
+              {saving && <Loader2 size={13} className="animate-spin" />}
+              Save Draft
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSubmit}
+              disabled={saving || submitting}
+            >
+              {submitting && <Loader2 size={13} className="animate-spin" />}
+              Submit
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Show saved notes read-only after submission */}
+      {isLocked && submission?.notes && (
+        <div className="mt-3 rounded-md bg-ink-50 px-3 py-2 text-sm text-ink-600">
+          <p className="text-[11px] font-semibold text-ink-400 uppercase tracking-wide mb-1">Your notes</p>
+          {submission.notes}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StudentTasksTab({ classId }) {
+  const { data: tasks = [], isLoading, error } = useGetTasksQuery(classId);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 size={20} className="animate-spin text-ink-300" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <p className="text-sm text-danger">{error?.data?.error?.message ?? 'Failed to load tasks.'}</p>;
+  }
+
+  if (tasks.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-white py-14 flex flex-col items-center gap-2">
+        <ClipboardList size={28} className="text-ink-200" />
+        <p className="text-sm text-ink-400">No tasks assigned to your group yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {tasks.map((task) => (
+        <StudentTaskCard key={task._id} task={task} />
+      ))}
     </div>
   );
 }
@@ -412,6 +591,10 @@ export default function WorkspaceDetailPage() {
       <TabBar active={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'members' && <MembersTab workspace={workspace} />}
+
+      {activeTab === 'tasks' && (
+        <StudentTasksTab classId={String(group?.classId?._id ?? group?.classId)} />
+      )}
 
       {activeTab === 'chat' && (
         <ChatTab

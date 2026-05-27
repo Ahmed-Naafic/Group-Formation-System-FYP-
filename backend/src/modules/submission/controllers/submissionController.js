@@ -35,6 +35,12 @@ const submissionController = {
     return sendSuccess(res, { data: { submission } });
   }),
 
+  // GET /api/tasks/:taskId/my-submission  — student's own submission (null if not started)
+  getMySubmission: asyncHandler(async (req, res) => {
+    const submission = await submissionService.getMySubmission(req.params.taskId, req.context);
+    return sendSuccess(res, { data: { submission } });
+  }),
+
   // PATCH /api/submissions/:id/grade
   grade: asyncHandler(async (req, res) => {
     const submission = await submissionService.grade(req.params.id, req.body.grade, req.context);
