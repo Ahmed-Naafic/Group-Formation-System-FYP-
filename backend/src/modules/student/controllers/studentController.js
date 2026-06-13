@@ -55,7 +55,7 @@ const studentController = {
 
   // POST /api/students/bulk-upload
   bulkUpload: asyncHandler(async (req, res) => {
-    const { classId } = req.body;
+    const { classId, confirmTransfers } = req.body;
 
     if (!req.file) {
       throw new BadRequestError('No file uploaded — attach a .csv or .xlsx file as field "file"');
@@ -66,11 +66,12 @@ const studentController = {
       req.file.buffer,
       req.file.mimetype,
       req.file.originalname,
-      req.context
+      confirmTransfers,
+      req.context,
     );
 
     return sendSuccess(res, {
-      message: `Upload complete: ${result.created.length} created, ${result.skipped.length} skipped, ${result.failed.length} failed`,
+      message: `Upload complete: ${result.created.length} created, ${result.transferred.length} transferred, ${result.skipped.length} skipped, ${result.failed.length} failed`,
       data: result,
     });
   }),

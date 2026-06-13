@@ -1,12 +1,16 @@
 import { useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Upload, FileSpreadsheet, X, Download, Copy, Check, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, Download, Copy, Check, Loader2, AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBulkUploadStudentsMutation } from './studentApi';
 import { useGetClassByIdQuery } from '@/features/class/classApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -82,10 +86,11 @@ export default function BulkUploadPage() {
   const { data: cls } = useGetClassByIdQuery(classId);
   const [bulkUpload, { isLoading: uploading }] = useBulkUploadStudentsMutation();
 
-  const [file, setFile]       = useState(null);
-  const [dragging, setDragging] = useState(false);
-  const [result, setResult]   = useState(null); // { created, skipped, failed }
-  const [activeTab, setActiveTab] = useState('created');
+  const [file, setFile]             = useState(null);
+  const [dragging, setDragging]     = useState(false);
+  const [result, setResult]         = useState(null);
+  const [activeTab, setActiveTab]   = useState('created');
+  const [pendingTransfers, setPendingTransfers] = useState(null); // { wouldTransfer, totalTransfers }
   const inputRef = useRef(null);
 
   const className = cls?.name ?? 'Class';
@@ -108,16 +113,26 @@ export default function BulkUploadPage() {
 
   // ── Upload ──────────────────────────────────────────────────────────────
 
-  async function handleUpload() {
+  async function handleUpload(confirmTransfers = false) {
     if (!file) return;
     try {
-      const data = await bulkUpload({ classId, file }).unwrap();
+      const data = await bulkUpload({ classId, file, confirmTransfers }).unwrap();
       setResult(data);
-      setActiveTab('created');
+      // Default to the transferred tab if there were any transfers, else created
+      setActiveTab((data.transferred?.length ?? 0) > 0 ? 'transferred' : 'created');
+      setPendingTransfers(null);
+      const t = data.transferred?.length ?? 0;
       toast.success(
-        `${data.created.length} created, ${data.skipped.length} skipped, ${data.failed.length} failed`
+        `${data.created.length} created` +
+        (t > 0 ? `, ${t} transferred` : '') +
+        `, ${data.skipped.length} skipped, ${data.failed.length} failed`,
       );
     } catch (err) {
+      // Server is asking for explicit confirmation before transferring students
+      if (err?.data?.error?.code === 'TRANSFER_CONFIRMATION_REQUIRED') {
+        setPendingTransfers(err.data.data);
+        return;
+      }
       toast.error(err?.data?.error?.message ?? 'Upload failed');
     }
   }
@@ -131,9 +146,10 @@ export default function BulkUploadPage() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   const tabs = result ? [
-    { id: 'created', label: 'Created',  count: result.created.length },
-    { id: 'skipped', label: 'Skipped',  count: result.skipped.length },
-    { id: 'failed',  label: 'Failed',   count: result.failed.length  },
+    { id: 'created',     label: 'Created',     count: result.created.length },
+    { id: 'transferred', label: 'Transferred', count: result.transferred?.length ?? 0 },
+    { id: 'skipped',     label: 'Skipped',     count: result.skipped.length },
+    { id: 'failed',      label: 'Failed',      count: result.failed.length  },
   ] : [];
 
   return (
@@ -223,7 +239,7 @@ export default function BulkUploadPage() {
             <Button variant="outline" asChild>
               <Link to={`/classes/${classId}/students`}>Cancel</Link>
             </Button>
-            <Button onClick={handleUpload} disabled={!file || uploading}>
+            <Button onClick={() => handleUpload()} disabled={!file || uploading}>
               {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
               {uploading ? 'Uploading…' : 'Upload'}
             </Button>
@@ -233,11 +249,17 @@ export default function BulkUploadPage() {
         /* ── Result view ──────────────────────────────────────────────────── */
         <div className="rounded-lg border border-border bg-white shadow-xs overflow-hidden">
           {/* Summary banner */}
-          <div className="flex items-center gap-6 px-5 py-4 border-b border-border bg-ink-50/50">
+          <div className="flex flex-wrap items-center gap-4 px-5 py-4 border-b border-border bg-ink-50/50">
             <div className="flex items-center gap-2">
               <CheckCircle2 size={16} className="text-success" />
               <span className="text-sm font-semibold text-ink-700">{result.created.length} created</span>
             </div>
+            {(result.transferred?.length ?? 0) > 0 && (
+              <div className="flex items-center gap-2">
+                <ArrowRight size={16} className="text-just-blue-500" />
+                <span className="text-sm font-semibold text-just-blue-700">{result.transferred.length} transferred</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <AlertTriangle size={16} className="text-amber-500" />
               <span className="text-sm text-ink-500">{result.skipped.length} skipped</span>
@@ -310,6 +332,38 @@ export default function BulkUploadPage() {
               )
             )}
 
+            {activeTab === 'transferred' && (
+              (result.transferred?.length ?? 0) === 0 ? (
+                <p className="p-6 text-sm text-ink-400 text-center">No students were transferred.</p>
+              ) : (
+                <>
+                  <div className="px-4 py-2.5 bg-just-blue-50 border-b border-just-blue-100">
+                    <p className="text-xs text-just-blue-700 font-medium">
+                      These students were moved from another class. Their previous enrollment has been archived.
+                    </p>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student ID</TableHead>
+                        <TableHead>Full Name</TableHead>
+                        <TableHead>Transferred From</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {result.transferred.map((r, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-mono text-xs text-ink-500">{r.studentId}</TableCell>
+                          <TableCell className="font-medium text-ink-800">{r.fullName}</TableCell>
+                          <TableCell className="text-ink-500 text-sm">{r.fromClassName}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </>
+              )
+            )}
+
             {activeTab === 'skipped' && (
               result.skipped.length === 0 ? (
                 <p className="p-6 text-sm text-ink-400 text-center">No rows were skipped.</p>
@@ -370,6 +424,44 @@ export default function BulkUploadPage() {
           </div>
         </div>
       )}
+
+      {/* ── Transfer confirmation dialog ────────────────────────────────────── */}
+      <AlertDialog open={!!pendingTransfers} onOpenChange={(v) => !v && setPendingTransfers(null)}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Student Transfers</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingTransfers?.totalTransfers} student(s) are currently enrolled in other
+              classes. Proceeding will move them to{' '}
+              <span className="font-semibold text-ink-800">{className}</span>. Their previous
+              enrollment will be archived.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="my-1 max-h-52 overflow-y-auto rounded-md border border-border divide-y divide-border text-sm">
+            {pendingTransfers?.wouldTransfer.map((t) => (
+              <div key={t.studentId} className="flex items-center gap-2 px-3 py-2">
+                <span className="font-mono text-xs text-ink-400 shrink-0 w-20">{t.studentId}</span>
+                <span className="text-ink-800 flex-1 truncate">{t.fullName}</span>
+                <span className="text-xs text-ink-400 shrink-0">{t.fromClassName}</span>
+                <ArrowRight size={11} className="text-ink-300 shrink-0" />
+                <span className="text-xs font-medium text-just-blue-700 shrink-0">{t.toClassName}</span>
+              </div>
+            ))}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => handleUpload(true)}
+              disabled={uploading}
+            >
+              {uploading && <Loader2 size={13} className="animate-spin" />}
+              Confirm Transfer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

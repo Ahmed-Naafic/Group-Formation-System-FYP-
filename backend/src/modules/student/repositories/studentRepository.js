@@ -33,6 +33,16 @@ const studentRepository = {
     );
   },
 
+  countByClass(classId) {
+    return Student.countDocuments({ classId });
+  },
+
+  // Returns the single active (non-deleted) Student record for this user in any
+  // class OTHER than excludeClassId. Used by the transfer-detection logic.
+  // The softDelete pre-hook automatically filters deletedAt: null.
+  findActiveByUserId(userId, excludeClassId) {
+    return Student.findOne({ userId, classId: { $ne: excludeClassId } });
+  },
 };
 
 module.exports = studentRepository;

@@ -105,6 +105,17 @@ const studentService = {
     return studentRepository.markAsLeader(studentId);
   },
 
+  // Internal — called by enrollmentService to detect cross-class transfers.
+  // Returns the active Student record for userId in any class except excludeClassId, or null.
+  findActiveInOtherClass(userId, excludeClassId) {
+    return studentRepository.findActiveByUserId(userId, excludeClassId);
+  },
+
+  // Internal — called by enrollmentService to archive the old record on transfer.
+  archiveRecord(studentDoc, deletedBy) {
+    return studentDoc.softDelete(deletedBy);
+  },
+
   // ── Instructor-initiated password reset (Section 2.14.5) ─────────────────────
   async resetPassword(id, context) {
     const student = await studentService.getById(id, context);

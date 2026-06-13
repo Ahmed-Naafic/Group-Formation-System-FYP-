@@ -40,10 +40,11 @@ export const studentApi = baseApi.injectEndpoints({
     }),
 
     bulkUploadStudents: build.mutation({
-      query: ({ classId, file }) => {
+      query: ({ classId, file, confirmTransfers = false }) => {
         const formData = new FormData();
         formData.append('classId', classId);
         formData.append('file', file);
+        if (confirmTransfers) formData.append('confirmTransfers', 'true');
         return { url: '/api/students/bulk-upload', method: 'POST', body: formData };
       },
       transformResponse: (res) => res.data,

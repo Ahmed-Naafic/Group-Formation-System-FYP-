@@ -5,7 +5,7 @@ const userService = require('../../user/services/userService');
 const studentService = require('../../student/services/studentService');
 const performanceService = require('../../performance/services/performanceService');
 const passwordGenerator = require('../../../common/utils/passwordGenerator');
-const { ForbiddenError, BadRequestError } = require('../../../common/errors');
+const { ForbiddenError, BadRequestError, TransferConfirmationError } = require('../../../common/errors');
 
 // averageScore is 0–100; blank/invalid → null (UNGRADED)
 function parseAverageScore(val) {
@@ -32,8 +32,8 @@ async function assertClassAccess(classId, context) {
 }
 
 const enrollmentService = {
-  async bulkUpload(classId, buffer, mimetype, originalname, context) {
-    await assertClassAccess(classId, context);
+  async bulkUpload(classId, buffer, mimetype, originalname, confirmTransfers, context) {
+    const targetClass = await assertClassAccess(classId, context);
 
     let rawRows;
     try {
@@ -42,12 +42,52 @@ const enrollmentService = {
       throw new BadRequestError(`Could not parse file: ${err.message}`);
     }
 
-    // Fetch thresholds once for the whole batch
+    // ── First pass: detect any cross-class transfers ────────────────────────
+    // We scan the whole batch BEFORE writing anything. If transfers are found
+    // and the caller has not explicitly confirmed, we abort with a 409 listing
+    // exactly which students would be moved and from which class.
+    const wouldTransfer = [];
+
+    for (const row of rawRows) {
+      const studentId = row.studentId != null ? String(row.studentId).trim() : '';
+      const fullName  = row.fullName  != null ? String(row.fullName).trim()  : '';
+      if (!studentId) continue;
+
+      try {
+        // Already in this class → will be skipped, not a transfer concern
+        const isDuplicate = await studentService.existsByStudentIdAndClass(studentId, classId);
+        if (isDuplicate) continue;
+
+        const user = await userService.findByStudentId(studentId);
+        if (!user) continue; // brand-new student → no existing record anywhere
+
+        const existing = await studentService.findActiveInOtherClass(user._id, classId);
+        if (existing) {
+          const fromClass = await classService.getById(String(existing.classId));
+          wouldTransfer.push({
+            studentId,
+            fullName: fullName || existing.fullName,
+            fromClassName: fromClass.name,
+            toClassName: targetClass.name,
+          });
+        }
+      } catch {
+        // If we can't determine transfer status for a row, skip it here.
+        // The second pass will either process or fail it.
+      }
+    }
+
+    if (wouldTransfer.length > 0 && !confirmTransfers) {
+      throw new TransferConfirmationError(wouldTransfer);
+    }
+
+    // ── Second pass: process rows ───────────────────────────────────────────
     const { thresholds } = await performanceService.getSettings();
 
-    const created = [];
-    const skipped = [];
-    const failed  = [];
+    const created     = [];
+    const skipped     = [];
+    const transferred = [];
+    const failed      = [];
 
     for (let i = 0; i < rawRows.length; i++) {
       const rowNum = i + 2; // row 1 = header
@@ -65,18 +105,18 @@ const enrollmentService = {
           continue;
         }
 
-        // Idempotency — same studentId already enrolled in this class
+        // Idempotency — already enrolled in this class
         const isDuplicate = await studentService.existsByStudentIdAndClass(studentId, classId);
         if (isDuplicate) {
           skipped.push({ studentId, fullName, reason: 'already exists in this class' });
           continue;
         }
 
-        const averageScore       = parseAverageScore(row.averageScore);
-        const attendance         = parseAttendance(row.attendance);
+        const averageScore        = parseAverageScore(row.averageScore);
+        const attendance          = parseAttendance(row.attendance);
         const performanceCategory = performanceService.mapToCategory(averageScore, thresholds);
 
-        // Find-or-create User by studentId — prevents duplicate logins
+        // Find or create the User account
         let user = await userService.findByStudentId(studentId);
         let tempPassword = null;
 
@@ -91,23 +131,46 @@ const enrollmentService = {
           });
         }
 
-        await studentService.createRecord({
-          userId: user._id,
-          classId,
-          fullName,
-          averageScore,
-          attendance,
-          performanceCategory,
-        });
+        // Check for an active Student record in a different class
+        const existing = await studentService.findActiveInOtherClass(user._id, classId);
 
-        // tempPassword is null when reusing an existing account
-        created.push({ studentId, fullName, tempPassword });
+        if (existing) {
+          // TRANSFER: archive the old record, create the new one
+          const fromClass = await classService.getById(String(existing.classId));
+          await studentService.archiveRecord(existing, context.userId);
+          await studentService.createRecord({
+            userId: user._id,
+            classId,
+            fullName,
+            averageScore,
+            attendance,
+            performanceCategory,
+          });
+          transferred.push({
+            studentId,
+            fullName,
+            fromClassId:   String(existing.classId),
+            fromClassName: fromClass.name,
+          });
+        } else {
+          // Normal new enrollment
+          await studentService.createRecord({
+            userId: user._id,
+            classId,
+            fullName,
+            averageScore,
+            attendance,
+            performanceCategory,
+          });
+          // tempPassword is null when reusing an existing account
+          created.push({ studentId, fullName, tempPassword });
+        }
       } catch (err) {
         failed.push({ row: rowNum, reason: err.message });
       }
     }
 
-    return { created, skipped, failed };
+    return { created, skipped, transferred, failed };
   },
 };
 

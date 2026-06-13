@@ -20,6 +20,8 @@ const bulkUploadSchema = Joi.object({
   classId: objectId.required().messages({
     'any.required': 'classId is required as a form field',
   }),
+  // Sent as string 'true'/'false' by multipart/form-data clients
+  confirmTransfers: Joi.boolean().truthy('true').falsy('false').sensitive(false).default(false),
 });
 
 module.exports = { createStudentSchema, updateStudentSchema, bulkUploadSchema };

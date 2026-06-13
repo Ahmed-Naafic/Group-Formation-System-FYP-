@@ -43,6 +43,20 @@ class InternalError extends AppError {
   }
 }
 
+// Thrown when a bulk upload would silently move students between classes.
+// Carries responseData so the error handler can include a top-level `data`
+// field in the 409 response with the list of would-be transfers.
+class TransferConfirmationError extends AppError {
+  constructor(wouldTransfer) {
+    super(
+      `${wouldTransfer.length} student(s) are enrolled in other classes and would be transferred. Resubmit with confirmTransfers=true to proceed.`,
+      409,
+      E.TRANSFER_CONFIRMATION_REQUIRED,
+    );
+    this.responseData = { wouldTransfer, totalTransfers: wouldTransfer.length };
+  }
+}
+
 module.exports = {
   AppError,
   BadRequestError,
@@ -52,4 +66,5 @@ module.exports = {
   NotFoundError,
   ConflictError,
   InternalError,
+  TransferConfirmationError,
 };

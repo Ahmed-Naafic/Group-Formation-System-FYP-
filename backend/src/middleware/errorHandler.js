@@ -20,14 +20,14 @@ function errorHandler(err, req, res, _next) {
     if (err.statusCode >= 500) {
       logger.error(err.message, { stack: err.stack });
     }
-    return res.status(err.statusCode).json({
+    const body = {
       success: false,
-      error: {
-        code: err.errorCode,
-        message: err.message,
-        details: err.details,
-      },
-    });
+      error: { code: err.errorCode, message: err.message, details: err.details },
+    };
+    // Some errors (e.g. TransferConfirmationError) attach a responseData payload
+    // that the client needs alongside the error envelope.
+    if (err.responseData !== undefined) body.data = err.responseData;
+    return res.status(err.statusCode).json(body);
   }
 
   // Mongoose validation errors

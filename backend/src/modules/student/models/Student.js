@@ -22,6 +22,13 @@ const studentSchema = new mongoose.Schema(
 // One student record per class per user account
 studentSchema.index({ userId: 1, classId: 1 }, { unique: true });
 
+// Enforce one ACTIVE Student record per user across all classes.
+// Soft-deleted records (deletedAt != null) are excluded so historical records accumulate freely.
+studentSchema.index(
+  { userId: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
+
 studentSchema.plugin(softDeletePlugin);
 
 module.exports = mongoose.model('Student', studentSchema);
