@@ -1,7 +1,9 @@
-const classRepository = require('../repositories/classRepository');
-const courseService = require('../../course/services/courseService');
-const semesterService = require('../../semester/services/semesterService');
-const { NotFoundError } = require('../../../common/errors');
+const classRepository   = require('../repositories/classRepository');
+const courseService     = require('../../course/services/courseService');
+const semesterService   = require('../../semester/services/semesterService');
+const studentRepository = require('../../student/repositories/studentRepository');
+const groupRepository   = require('../../group/repositories/groupRepository');
+const { NotFoundError, ConflictError } = require('../../../common/errors');
 
 const classService = {
   async create(data) {
@@ -31,6 +33,18 @@ const classService = {
 
   async softDelete(id, userId) {
     const cls = await classService.getById(id);
+    const [studentCount, groupCount] = await Promise.all([
+      studentRepository.countByClass(id),
+      groupRepository.countActiveByClass(id),
+    ]);
+    const parts = [];
+    if (studentCount > 0) parts.push(`${studentCount} student(s)`);
+    if (groupCount > 0)   parts.push(`${groupCount} active group(s)`);
+    if (parts.length > 0) {
+      throw new ConflictError(
+        `Cannot delete class — it has ${parts.join(' and ')}. Remove them first.`,
+      );
+    }
     return cls.softDelete(userId);
   },
 };

@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import {
   Building2, Layers, BookOpen, Calendar, Users, Users2,
   BarChart2, Loader2, Crown, UserCheck, ClipboardList,
+  Clock, AlertTriangle, AlertCircle,
 } from 'lucide-react';
 import { selectCurrentUser, selectRole } from '@/features/auth/authSlice';
 import { useGetFacultiesQuery }   from '@/features/faculty/facultyApi';
@@ -13,8 +14,10 @@ import { useGetSemestersQuery }   from '@/features/semester/semesterApi';
 import { useGetMyWorkspacesQuery } from '@/features/workspace/workspaceApi';
 import { Badge } from '@/components/ui/badge';
 import { useGetClassesQuery }     from '@/features/class/classApi';
-import { useGetCourseAssignmentsQuery } from '@/features/courseAssignment/courseAssignmentApi';
-import { useGetDashboardStatsQuery }    from '@/features/dashboard/dashboardApi';
+import {
+  useGetDashboardStatsQuery,
+  useGetInstructorDashboardStatsQuery,
+} from '@/features/dashboard/dashboardApi';
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table';
@@ -279,30 +282,9 @@ function AdminDashboard({ user }) {
 const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
 
 function InstructorDashboard({ user }) {
-  const { data: assignments = [], isLoading } = useGetCourseAssignmentsQuery();
-  const { data: semesters   = [] }            = useGetSemestersQuery();
-
-  const semesterMap = useMemo(() => Object.fromEntries(semesters.map((s) => [s._id, s])), [semesters]);
-
-  // Group assignments by class — each class can have multiple assigned courses
-  const myClasses = useMemo(() => {
-    const classMap = new Map();
-    assignments.forEach((a) => {
-      const cls = a.classId;
-      if (!cls) return;
-      const cid = String(cls._id ?? cls);
-      if (!classMap.has(cid)) {
-        classMap.set(cid, {
-          _id:        cid,
-          name:       cls.name,
-          semesterId: cls.semesterId,
-          courses:    [],
-        });
-      }
-      if (a.courseId) classMap.get(cid).courses.push(a.courseId);
-    });
-    return [...classMap.values()];
-  }, [assignments]);
+  const { data: dash, isLoading } = useGetInstructorDashboardStatsQuery();
+  const counts         = dash?.counts         ?? {};
+  const classSummaries = dash?.classSummaries ?? [];
 
   return (
     <div className="max-w-5xl">
@@ -311,20 +293,70 @@ function InstructorDashboard({ user }) {
         Welcome back, {user?.fullName?.split(' ')[0] ?? 'there'}
       </h2>
       <p className="text-ink-500 mb-8" style={{ fontSize: 'var(--fs-small)' }}>
-        Manage your classes, scores, and student groups from here.
+        Manage your classes, tasks, and student groups from here.
       </p>
 
-      {/* My classes count */}
-      <div className="mb-6 w-40">
+      {/* Stats row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <StatCard
           icon={Users}
           label="My Classes"
-          count={isLoading ? null : myClasses.length}
+          count={isLoading ? null : counts.classes}
           iconBg="var(--just-blue-50)"
           iconColor="var(--just-blue-600)"
         />
+        <StatCard
+          icon={Users2}
+          label="My Students"
+          count={isLoading ? null : counts.students}
+          iconBg="var(--just-blue-50)"
+          iconColor="var(--just-blue-600)"
+        />
+        <StatCard
+          icon={Users2}
+          label="Active Groups"
+          count={isLoading ? null : counts.activeGroups}
+          iconBg="rgba(232,197,71,0.12)"
+          iconColor="var(--just-gold-500)"
+        />
+        <StatCard
+          icon={ClipboardList}
+          label="Pending Reviews"
+          count={isLoading ? null : counts.pendingReviews}
+          iconBg={counts.pendingReviews > 0 ? 'rgba(217,119,6,0.1)' : 'rgba(0,0,0,0.04)'}
+          iconColor={counts.pendingReviews > 0 ? 'rgb(180,83,9)' : 'var(--ink-400)'}
+        />
       </div>
 
+      {/* Tasks overview banner */}
+      <div className="flex items-center gap-4 mb-8 px-4 py-3 rounded-lg border border-border bg-white shadow-xs flex-wrap">
+        <span className="text-sm font-semibold text-ink-700 shrink-0">Tasks</span>
+        <div className="flex gap-3 flex-wrap">
+          <span className={cn(
+            'inline-flex items-center gap-1.5 text-xs font-medium rounded px-2 py-1',
+            'bg-just-blue-50 text-just-blue-700',
+          )}>
+            <ClipboardList size={11} />
+            {isLoading ? '—' : counts.openTasks ?? 0} open
+          </span>
+          <span className={cn(
+            'inline-flex items-center gap-1.5 text-xs font-medium rounded px-2 py-1',
+            counts.dueSoon > 0 ? 'bg-amber-100 text-amber-700' : 'bg-ink-100 text-ink-500',
+          )}>
+            <Clock size={11} />
+            {isLoading ? '—' : counts.dueSoon ?? 0} due this week
+          </span>
+          <span className={cn(
+            'inline-flex items-center gap-1.5 text-xs font-medium rounded px-2 py-1',
+            counts.overdue > 0 ? 'bg-red-100 text-red-700' : 'bg-ink-100 text-ink-500',
+          )}>
+            <AlertTriangle size={11} />
+            {isLoading ? '—' : counts.overdue ?? 0} overdue
+          </span>
+        </div>
+      </div>
+
+      {/* Class cards */}
       <h3 className="text-ink-800 mb-3" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
         My Classes
       </h3>
@@ -333,66 +365,114 @@ function InstructorDashboard({ user }) {
         <div className="flex justify-center py-10">
           <Loader2 size={20} className="animate-spin text-ink-300" />
         </div>
-      ) : myClasses.length === 0 ? (
+      ) : classSummaries.length === 0 ? (
         <div className="rounded-lg border border-border bg-white p-10 text-center">
           <p className="text-sm text-ink-400">No classes assigned to you yet.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {myClasses.map((cls) => {
-            const semester = semesterMap[cls.semesterId];
-            return (
-              <div
-                key={cls._id}
-                className="rounded-lg border border-border bg-white shadow-xs p-5 flex flex-col"
-              >
-                <div className="flex-1 mb-3">
-                  <p className="font-semibold text-ink-800 text-base leading-snug mb-1">
-                    {cls.name}
+          {classSummaries.map((cls) => (
+            <div
+              key={String(cls._id)}
+              className="rounded-lg border border-border bg-white shadow-xs p-5 flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex-1 mb-3">
+                <p className="font-semibold text-ink-800 text-base leading-snug mb-0.5">
+                  {cls.name}
+                </p>
+                {cls.semester && (
+                  <p className="text-xs text-ink-400 mb-1">
+                    {cls.semester.name} · {cls.semester.year}
                   </p>
-                  {cls.courses.map((c) => (
-                    <p key={String(c._id ?? c)} className="text-sm text-ink-500">
-                      {c.code && <span className="font-mono text-xs text-ink-400 mr-1">{c.code}</span>}
-                      {c.name}
-                    </p>
-                  ))}
-                  {semester && (
-                    <p className="text-xs text-ink-400 mt-0.5">
-                      {semester.name} · {semester.year}
-                    </p>
+                )}
+                {cls.courses.map((c) => (
+                  <p key={String(c._id ?? c)} className="text-sm text-ink-500">
+                    {c.code && <span className="font-mono text-xs text-ink-400 mr-1">{c.code}</span>}
+                    {c.name}
+                  </p>
+                ))}
+              </div>
+
+              {/* Per-class counts */}
+              <div className="flex items-center gap-2 text-xs text-ink-500 mb-3">
+                <span>{cls.students} student{cls.students !== 1 ? 's' : ''}</span>
+                <span className="text-ink-300">·</span>
+                <span>{cls.activeGroups} group{cls.activeGroups !== 1 ? 's' : ''}</span>
+              </div>
+
+              {/* Task / review chips */}
+              {(cls.openTasks > 0 || cls.pendingReviews > 0) && (
+                <div className="flex gap-2 flex-wrap mb-3">
+                  {cls.openTasks > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium bg-just-blue-50 text-just-blue-700">
+                      <ClipboardList size={10} /> {cls.openTasks} open task{cls.openTasks !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {cls.pendingReviews > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium bg-amber-100 text-amber-700">
+                      <AlertCircle size={10} /> {cls.pendingReviews} to review
+                    </span>
                   )}
                 </div>
+              )}
 
-                <div className="flex gap-1.5 flex-wrap pt-3 border-t border-border">
-                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
-                    <Link to={`/classes/${cls._id}/students`}>
-                      <Users size={12} /> Students
-                    </Link>
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
-                    <Link to={`/classes/${cls._id}/scores`}>
-                      <BarChart2 size={12} /> Scores
-                    </Link>
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
-                    <Link to={`/classes/${cls._id}/groups`}>
-                      <Users2 size={12} /> Groups
-                    </Link>
-                  </Button>
-                </div>
+              {/* Action buttons */}
+              <div className="flex gap-1.5 flex-wrap pt-3 border-t border-border">
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
+                  <Link to={`/classes/${cls._id}/students`}><Users size={12} /> Students</Link>
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
+                  <Link to={`/classes/${cls._id}/groups`}><Users2 size={12} /> Groups</Link>
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
+                  <Link to={`/classes/${cls._id}/tasks`}><ClipboardList size={12} /> Tasks</Link>
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
+                  <Link to={`/classes/${cls._id}/scores`}><BarChart2 size={12} /> Scores</Link>
+                </Button>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
+// ── Student dashboard helpers ─────────────────────────────────────────────────
+
+function initials(name) {
+  const parts = (name ?? '').trim().split(/\s+/);
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (parts[0]?.[0] ?? '?').toUpperCase();
+}
+
+const AVATAR_PALETTE = [
+  'bg-just-blue-100 text-just-blue-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-amber-100 text-amber-700',
+  'bg-purple-100 text-purple-700',
+  'bg-rose-100 text-rose-700',
+  'bg-cyan-100 text-cyan-700',
+];
+
+function avatarColor(name) {
+  let h = 0;
+  for (const c of name ?? '') h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+
 // ── Student dashboard ─────────────────────────────────────────────────────────
 
 function StudentDashboard({ user }) {
   const { data: workspaces = [], isLoading } = useGetMyWorkspacesQuery();
+
+  const totalTasks   = workspaces.reduce((s, ws) => s + (ws.taskSummary?.total   ?? 0), 0);
+  const totalDone    = workspaces.reduce((s, ws) => s + (ws.taskSummary?.done    ?? 0), 0);
+  const totalPending = workspaces.reduce((s, ws) => s + (ws.taskSummary?.pending ?? 0), 0);
+  const totalDueSoon = workspaces.reduce((s, ws) => s + (ws.taskSummary?.dueSoon ?? 0), 0);
 
   return (
     <div className="max-w-4xl">
@@ -401,8 +481,42 @@ function StudentDashboard({ user }) {
         Welcome, {user?.fullName?.split(' ')[0] ?? 'there'}
       </h2>
       <p className="text-ink-500 mb-8" style={{ fontSize: 'var(--fs-small)' }}>
-        Your active group workspaces are listed below.
+        Your active group workspaces and task progress.
       </p>
+
+      {/* Stats row */}
+      {!isLoading && workspaces.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          <StatCard
+            icon={Users2}
+            label="My Groups"
+            count={workspaces.length}
+            iconBg="var(--just-blue-50)"
+            iconColor="var(--just-blue-600)"
+          />
+          <StatCard
+            icon={ClipboardList}
+            label="Total Tasks"
+            count={totalTasks}
+            iconBg="var(--just-blue-50)"
+            iconColor="var(--just-blue-600)"
+          />
+          <StatCard
+            icon={UserCheck}
+            label="Completed"
+            count={totalDone}
+            iconBg="rgba(18,138,71,0.08)"
+            iconColor="var(--just-green-600)"
+          />
+          <StatCard
+            icon={Clock}
+            label="Due This Week"
+            count={totalDueSoon}
+            iconBg={totalDueSoon > 0 ? 'rgba(217,119,6,0.1)' : 'rgba(0,0,0,0.04)'}
+            iconColor={totalDueSoon > 0 ? 'rgb(180,83,9)' : 'var(--ink-400)'}
+          />
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-20">
@@ -410,74 +524,126 @@ function StudentDashboard({ user }) {
         </div>
       ) : workspaces.length === 0 ? (
         <div className="rounded-lg border border-border bg-white p-12 text-center">
-          <p className="text-sm text-ink-400">You have not been assigned to any group yet.</p>
+          <Users2 size={32} className="mx-auto text-ink-200 mb-3" />
+          <p className="text-sm text-ink-500 font-medium">Not in a group yet</p>
           <p className="text-xs text-ink-300 mt-1">Check back after your instructor generates groups.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {workspaces.map((ws) => {
-            const group    = ws.groupId;
-            const cls      = group?.classId;
-            const course   = group?.courseId;
-            const semester = cls?.semesterId;
-            const leaderId = String(group?.leaderId?._id ?? group?.leaderId);
+        <>
+          <h3 className="text-ink-800 mb-3" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
+            My Workspaces
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {workspaces.map((ws) => {
+              const group    = ws.groupId;
+              const cls      = group?.classId;
+              const course   = group?.courseId;
+              const semester = cls?.semesterId;
+              const leaderId = String(group?.leaderId?._id ?? group?.leaderId);
+              const members  = group?.memberIds ?? [];
+              const summary  = ws.taskSummary ?? { total: 0, done: 0, pending: 0, dueSoon: 0 };
+              const pct      = summary.total > 0 ? Math.round((summary.done / summary.total) * 100) : 0;
+              const MAX_SHOWN = 4;
+              const shown    = members.slice(0, MAX_SHOWN);
+              const overflow = members.length - MAX_SHOWN;
 
-            return (
-              <div
-                key={ws._id}
-                className="rounded-lg border border-border bg-white shadow-xs p-5 flex flex-col"
-              >
-                {/* Header */}
-                <div className="mb-3">
-                  <p className="text-xs text-ink-400 mb-0.5">
-                    {cls?.name ?? '—'}
-                    {semester && <> · {semester.name} {semester.year}</>}
-                  </p>
-                  <p className="font-semibold text-ink-800 text-base leading-snug">
-                    {group?.name ?? '—'}
-                  </p>
-                  {course && (
-                    <p className="text-sm text-ink-500 mt-0.5">
-                      {course.code && <span className="font-mono text-xs text-ink-400 mr-1">{course.code}</span>}
-                      {course.name}
-                    </p>
-                  )}
-                </div>
-
-                {/* Members */}
-                <div className="flex-1 divide-y divide-border border-t border-border mt-2 pt-2">
-                  {group?.memberIds?.map((m) => {
-                    const isLeader = String(m._id) === leaderId;
-                    return (
-                      <div key={m._id} className="flex items-center gap-2 py-1.5 text-sm">
-                        <span className="w-4 shrink-0 flex items-center">
-                          {isLeader && <Crown size={11} style={{ color: 'var(--just-gold-400)' }} />}
+              return (
+                <div
+                  key={ws._id}
+                  className="rounded-lg border border-border bg-white shadow-xs p-5 flex flex-col gap-4"
+                >
+                  {/* Header */}
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-0.5">
+                      <p className="font-semibold text-ink-800 text-base leading-snug">
+                        {group?.name ?? '—'}
+                      </p>
+                      {summary.dueSoon > 0 && (
+                        <span className="inline-flex items-center gap-1 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 uppercase tracking-wide">
+                          <Clock size={9} /> {summary.dueSoon} due soon
                         </span>
-                        <span className="flex-1 text-ink-800 truncate">{m.fullName}</span>
-                        <Badge
-                          variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}
-                          className="text-[10px] px-1.5 py-0 h-4 shrink-0"
-                        >
-                          {m.performanceCategory ?? 'UNG'}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-ink-400">
+                      {cls?.name ?? '—'}
+                      {semester && <> · {semester.name} {semester.year}</>}
+                    </p>
+                    {course && (
+                      <p className="text-xs text-ink-500 mt-0.5">
+                        {course.code && <span className="font-mono text-ink-400 mr-1">{course.code}</span>}
+                        {course.name}
+                      </p>
+                    )}
+                  </div>
 
-                {/* Link */}
-                <div className="pt-3 mt-3 border-t border-border">
-                  <Link
-                    to={`/workspaces/${ws._id}`}
-                    className="text-sm font-medium text-just-blue-600 hover:text-just-blue-700 hover:underline transition-colors"
-                  >
-                    Open workspace →
-                  </Link>
+                  {/* Task progress */}
+                  {summary.total > 0 ? (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-ink-500 font-medium">Tasks</span>
+                        <span className="text-xs text-ink-500">
+                          <span className={cn('font-semibold', pct === 100 ? 'text-success' : 'text-ink-800')}>
+                            {summary.done}
+                          </span>
+                          /{summary.total} done
+                          {summary.pending > 0 && (
+                            <span className="text-ink-400"> · {summary.pending} pending</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-ink-100 overflow-hidden">
+                        <div
+                          className={cn(
+                            'h-full rounded-full transition-all',
+                            pct === 100 ? 'bg-success' : 'bg-just-blue-500',
+                          )}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-ink-300">No tasks assigned yet.</p>
+                  )}
+
+                  {/* Member avatars */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex -space-x-2">
+                      {shown.map((m) => {
+                        const isLeader = String(m._id) === leaderId;
+                        return (
+                          <div
+                            key={m._id}
+                            title={`${m.fullName}${isLeader ? ' (leader)' : ''}`}
+                            className={cn(
+                              'flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold border-2 border-white',
+                              avatarColor(m.fullName),
+                              isLeader && 'ring-2 ring-offset-1 ring-amber-300',
+                            )}
+                          >
+                            {initials(m.fullName)}
+                          </div>
+                        );
+                      })}
+                      {overflow > 0 && (
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-ink-100 text-[11px] font-semibold text-ink-500">
+                          +{overflow}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-xs text-ink-400">
+                      {members.length} member{members.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {/* CTA */}
+                  <Button size="sm" className="w-full mt-auto" asChild>
+                    <Link to={`/workspaces/${ws._id}`}>Open Workspace →</Link>
+                  </Button>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

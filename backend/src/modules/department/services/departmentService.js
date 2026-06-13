@@ -1,6 +1,7 @@
 const departmentRepository = require('../repositories/departmentRepository');
-const facultyService = require('../../faculty/services/facultyService');
-const { NotFoundError } = require('../../../common/errors');
+const facultyService       = require('../../faculty/services/facultyService');
+const courseRepository     = require('../../course/repositories/courseRepository');
+const { NotFoundError, ConflictError } = require('../../../common/errors');
 
 const departmentService = {
   async create(data) {
@@ -29,6 +30,12 @@ const departmentService = {
 
   async softDelete(id, userId) {
     const department = await departmentService.getById(id);
+    const courseCount = await courseRepository.countByDepartment(id);
+    if (courseCount > 0) {
+      throw new ConflictError(
+        `Cannot delete department — it has ${courseCount} course(s). Delete them first.`,
+      );
+    }
     return department.softDelete(userId);
   },
 };

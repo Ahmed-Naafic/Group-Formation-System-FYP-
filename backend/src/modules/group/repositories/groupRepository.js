@@ -58,6 +58,10 @@ const groupRepository = {
   deleteByGenerationId(generationId) {
     return Group.deleteMany({ generationId });
   },
+
+  countActiveByClass(classId) {
+    return Group.countDocuments({ classId, status: 'active' });
+  },
 };
 
 module.exports = groupRepository;

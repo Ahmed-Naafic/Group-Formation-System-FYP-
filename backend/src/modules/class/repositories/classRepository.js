@@ -20,6 +20,15 @@ const classRepository = {
   updateById(id, updates) {
     return Class.findByIdAndUpdate(id, updates, { new: true }).populate('courseIds', 'name code');
   },
+
+  // Count active classes that include this course in their courseIds array.
+  countByCourse(courseId) {
+    return Class.countDocuments({ courseIds: courseId });
+  },
+
+  countBySemester(semesterId) {
+    return Class.countDocuments({ semesterId });
+  },
 };
 
 module.exports = classRepository;

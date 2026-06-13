@@ -1,5 +1,6 @@
-const courseRepository = require('../repositories/courseRepository');
+const courseRepository  = require('../repositories/courseRepository');
 const departmentService = require('../../department/services/departmentService');
+const classRepository   = require('../../class/repositories/classRepository');
 const { NotFoundError, ConflictError } = require('../../../common/errors');
 
 const courseService = {
@@ -49,6 +50,12 @@ const courseService = {
 
   async softDelete(id, userId) {
     const course = await courseService.getById(id);
+    const classCount = await classRepository.countByCourse(id);
+    if (classCount > 0) {
+      throw new ConflictError(
+        `Cannot delete course — ${classCount} class(es) are using it. Remove it from those classes first.`,
+      );
+    }
     return course.softDelete(userId);
   },
 };

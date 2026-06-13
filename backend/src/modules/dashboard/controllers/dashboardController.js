@@ -8,6 +8,12 @@ const dashboardController = {
     const stats = await dashboardService.getStats();
     return sendSuccess(res, { data: stats });
   }),
+
+  // GET /api/dashboard/instructor
+  getInstructorStats: asyncHandler(async (req, res) => {
+    const stats = await dashboardService.getInstructorStats(req.context.userId);
+    return sendSuccess(res, { data: stats });
+  }),
 };
 
 module.exports = dashboardController;

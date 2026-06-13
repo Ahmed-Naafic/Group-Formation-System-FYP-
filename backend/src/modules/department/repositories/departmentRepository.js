@@ -20,6 +20,10 @@ const departmentRepository = {
   updateById(id, updates) {
     return Department.findByIdAndUpdate(id, updates, { new: true });
   },
+
+  countByFaculty(facultyId) {
+    return Department.countDocuments({ facultyId });
+  },
 };
 
 module.exports = departmentRepository;

@@ -1,13 +1,19 @@
 import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
-import { Plus, Trash2, Loader2, UserCheck, UserPlus, Pencil } from 'lucide-react';
+import { Plus, Trash2, Loader2, UserCheck, UserPlus, Pencil, ShieldOff, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetCourseAssignmentsQuery,
   useCreateCourseAssignmentMutation,
   useDeleteCourseAssignmentMutation,
 } from './courseAssignmentApi';
-import { useGetUsersQuery, useCreateInstructorMutation } from '@/features/user/userApi';
+import {
+  useGetUsersQuery,
+  useCreateInstructorMutation,
+  useUpdateInstructorMutation,
+  useActivateInstructorMutation,
+  useDeactivateInstructorMutation,
+} from '@/features/user/userApi';
 import { useGetClassesQuery } from '@/features/class/classApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -28,16 +34,68 @@ export default function InstructorsPage() {
   const { data: instructors = [], isLoading: loadingInstructors } = useGetUsersQuery({ role: 'instructor' });
   const { data: classes     = [] }                                = useGetClassesQuery();
 
-  const [createInstructor, { isLoading: registering }] = useCreateInstructorMutation();
-  const [createAssignment, { isLoading: assigning }]   = useCreateCourseAssignmentMutation();
-  const [deleteAssignment, { isLoading: deleting }]    = useDeleteCourseAssignmentMutation();
+  const [createInstructor,  { isLoading: registering }] = useCreateInstructorMutation();
+  const [updateInstructor,  { isLoading: updating }]    = useUpdateInstructorMutation();
+  const [activateUser,      { isLoading: activating }]  = useActivateInstructorMutation();
+  const [deactivateUser,    { isLoading: deactivating }] = useDeactivateInstructorMutation();
+  const [createAssignment,  { isLoading: assigning }]   = useCreateCourseAssignmentMutation();
+  const [deleteAssignment,  { isLoading: deleting }]    = useDeleteCourseAssignmentMutation();
 
   // ── Dialog state ──────────────────────────────────────────────────────────
-  const [registerOpen,      setRegisterOpen]      = useState(false);
-  const [assignOpen,        setAssignOpen]         = useState(false);
-  const [editingGroup,      setEditingGroup]       = useState(null); // { instructorId, instructorName, classId, className, assignments[] }
-  const [editCourseIds,     setEditCourseIds]      = useState([]);
-  const [deleteGroupTarget, setDeleteGroupTarget]  = useState(null);
+  const [registerOpen,        setRegisterOpen]      = useState(false);
+  const [assignOpen,          setAssignOpen]         = useState(false);
+  const [editingGroup,        setEditingGroup]       = useState(null);
+  const [editCourseIds,       setEditCourseIds]      = useState([]);
+  const [deleteGroupTarget,   setDeleteGroupTarget]  = useState(null);
+  const [deactivateTarget,    setDeactivateTarget]   = useState(null); // instructor user object
+  const [editTarget,          setEditTarget]         = useState(null); // instructor user object
+
+  // ── Edit instructor form ──────────────────────────────────────────────────
+  const {
+    register: regEdit,
+    handleSubmit: submitEdit,
+    reset: resetEdit,
+    formState: { errors: errEdit },
+  } = useForm();
+
+  function openEdit(instructor) {
+    setEditTarget(instructor);
+    resetEdit({ fullName: instructor.fullName, email: instructor.email, password: '' });
+  }
+
+  async function onEditSaveInstructor(data) {
+    const payload = { id: editTarget._id, fullName: data.fullName, email: data.email };
+    if (data.password) payload.password = data.password;
+    try {
+      await updateInstructor(payload).unwrap();
+      toast.success('Instructor updated');
+      setEditTarget(null);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to update instructor');
+    }
+  }
+
+  // ── Activate / deactivate ─────────────────────────────────────────────────
+  async function onActivate(instructor) {
+    try {
+      await activateUser(instructor._id).unwrap();
+      toast.success(`${instructor.fullName} reactivated`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to activate');
+    }
+  }
+
+  async function onDeactivateConfirmed() {
+    if (!deactivateTarget) return;
+    try {
+      await deactivateUser(deactivateTarget._id).unwrap();
+      toast.success(`${deactivateTarget.fullName} deactivated`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to deactivate');
+    } finally {
+      setDeactivateTarget(null);
+    }
+  }
 
   // ── Group assignments by instructor + class ────────────────────────────────
   const assignmentGroups = useMemo(() => {
@@ -229,22 +287,72 @@ export default function InstructorsPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead className="w-32">Assignments</TableHead>
+                  <TableHead className="w-28">Assignments</TableHead>
+                  <TableHead className="w-28">Status</TableHead>
+                  <TableHead className="w-32" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {instructors.map((u) => {
-                  const count = assignments.filter(
+                  const count    = assignments.filter(
                     (a) => String(a.instructorId?._id ?? a.instructorId) === u._id,
                   ).length;
+                  const isActive = u.isActive !== false;
+                  const busy     = activating || deactivating;
                   return (
-                    <TableRow key={u._id}>
+                    <TableRow key={u._id} className={!isActive ? 'opacity-60' : ''}>
                       <TableCell className="font-medium text-ink-800">{u.fullName}</TableCell>
                       <TableCell className="text-ink-500 text-sm">{u.email}</TableCell>
                       <TableCell>
                         <Badge variant={count > 0 ? 'default' : 'secondary'}>
                           {count} {count === 1 ? 'course' : 'courses'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {isActive ? (
+                          <Badge variant="success" className="gap-1">
+                            <ShieldCheck size={11} /> Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="gap-1">
+                            <ShieldOff size={11} /> Deactivated
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="Edit instructor"
+                            onClick={() => openEdit(u)}
+                          >
+                            <Pencil size={13} />
+                          </Button>
+                          {isActive ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-danger hover:text-danger hover:bg-danger/10 gap-1"
+                              disabled={busy}
+                              onClick={() => setDeactivateTarget(u)}
+                            >
+                              <ShieldOff size={12} /> Deactivate
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-success hover:text-success hover:bg-success/10 gap-1"
+                              disabled={busy}
+                              onClick={() => onActivate(u)}
+                            >
+                              {activating ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
+                              Activate
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -291,9 +399,21 @@ export default function InstructorsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {assignmentGroups.map((group) => (
+                {assignmentGroups.map((group) => {
+                  const instructor   = instructors.find((u) => u._id === group.instructorId);
+                  const isInactive   = instructor && instructor.isActive === false;
+                  return (
                   <TableRow key={group.key}>
-                    <TableCell className="font-medium text-ink-800">{group.instructorName}</TableCell>
+                    <TableCell className="font-medium text-ink-800">
+                      <span className="flex items-center gap-1.5">
+                        {group.instructorName}
+                        {isInactive && (
+                          <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 uppercase tracking-wide">
+                            <AlertTriangle size={9} /> Deactivated
+                          </span>
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-ink-700">{group.className}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -329,7 +449,8 @@ export default function InstructorsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -549,6 +670,90 @@ export default function InstructorsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Edit instructor dialog ───────────────────────────────────────── */}
+      <Dialog open={!!editTarget} onOpenChange={(v) => { if (!v) setEditTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Instructor</DialogTitle>
+            <DialogDescription>
+              Update name, email, or set a new password.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitEdit(onEditSaveInstructor)} className="space-y-4" noValidate>
+            <div className="space-y-1.5">
+              <Label htmlFor="e-name">Full Name <span className="text-danger">*</span></Label>
+              <Input
+                id="e-name"
+                {...regEdit('fullName', { required: 'Required', minLength: { value: 2, message: 'At least 2 characters' } })}
+                aria-invalid={!!errEdit.fullName}
+              />
+              {errEdit.fullName && <p className="text-xs text-danger">{errEdit.fullName.message}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="e-email">Email <span className="text-danger">*</span></Label>
+              <Input
+                id="e-email"
+                type="email"
+                {...regEdit('email', {
+                  required: 'Required',
+                  pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email' },
+                })}
+                aria-invalid={!!errEdit.email}
+              />
+              {errEdit.email && <p className="text-xs text-danger">{errEdit.email.message}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="e-pw">
+                New Password
+                <span className="ml-1.5 text-xs font-normal text-ink-400">(leave blank to keep current)</span>
+              </Label>
+              <Input
+                id="e-pw"
+                type="password"
+                placeholder="Min 6 characters"
+                {...regEdit('password', {
+                  minLength: { value: 6, message: 'At least 6 characters' },
+                })}
+                aria-invalid={!!errEdit.password}
+              />
+              {errEdit.password && <p className="text-xs text-danger">{errEdit.password.message}</p>}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+              <Button type="submit" disabled={updating}>
+                {updating && <Loader2 size={14} className="animate-spin" />}
+                Save changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Deactivate instructor confirm ─────────────────────────────────── */}
+      <AlertDialog open={!!deactivateTarget} onOpenChange={(v) => !v && setDeactivateTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate Instructor</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-semibold text-ink-800">{deactivateTarget?.fullName}</span> will
+              no longer be able to log in. Their course assignments and data are kept — reactivating
+              them will restore full access immediately. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger hover:bg-danger/90 text-white"
+              onClick={onDeactivateConfirmed}
+              disabled={deactivating}
+            >
+              {deactivating && <Loader2 size={14} className="animate-spin" />}
+              Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Delete group confirm ──────────────────────────────────────────── */}
       <AlertDialog open={!!deleteGroupTarget} onOpenChange={(v) => !v && setDeleteGroupTarget(null)}>

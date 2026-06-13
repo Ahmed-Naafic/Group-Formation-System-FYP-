@@ -1,5 +1,6 @@
 const semesterRepository = require('../repositories/semesterRepository');
-const { NotFoundError, BadRequestError } = require('../../../common/errors');
+const classRepository    = require('../../class/repositories/classRepository');
+const { NotFoundError, BadRequestError, ConflictError } = require('../../../common/errors');
 
 const semesterService = {
   async create(data) {
@@ -31,6 +32,12 @@ const semesterService = {
 
   async softDelete(id, userId) {
     const semester = await semesterService.getById(id);
+    const classCount = await classRepository.countBySemester(id);
+    if (classCount > 0) {
+      throw new ConflictError(
+        `Cannot delete semester — it has ${classCount} class(es). Delete them first.`,
+      );
+    }
     return semester.softDelete(userId);
   },
 };

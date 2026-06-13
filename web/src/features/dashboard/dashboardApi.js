@@ -5,12 +5,17 @@ export const dashboardApi = baseApi.injectEndpoints({
     getDashboardStats: build.query({
       query: () => '/api/dashboard',
       transformResponse: (res) => res.data,
-      // counts: { users, students, classes, activeGroups, submissions }
-      // submissions: { draft, submitted, late, reviewed }
-      // recentActivity: [...auditLog entries]
+    }),
+
+    getInstructorDashboardStats: build.query({
+      query: () => '/api/dashboard/instructor',
+      transformResponse: (res) => res.data,
     }),
   }),
   overrideExisting: false,
 });
 
-export const { useGetDashboardStatsQuery } = dashboardApi;
+export const {
+  useGetDashboardStatsQuery,
+  useGetInstructorDashboardStatsQuery,
+} = dashboardApi;

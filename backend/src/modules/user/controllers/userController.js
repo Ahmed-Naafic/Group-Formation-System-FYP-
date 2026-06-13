@@ -22,6 +22,24 @@ const userController = {
     const user = await userService.createUser({ fullName, email, role: 'instructor', password });
     return sendSuccess(res, { status: 201, message: 'Instructor registered', data: { user } });
   }),
+
+  // PATCH /api/users/:id
+  update: asyncHandler(async (req, res) => {
+    const user = await userService.updateInstructor(req.params.id, req.body);
+    return sendSuccess(res, { message: 'Instructor updated', data: { user } });
+  }),
+
+  // PATCH /api/users/:id/activate
+  activate: asyncHandler(async (req, res) => {
+    const user = await userService.setActive(req.params.id, true, req.context.userId);
+    return sendSuccess(res, { message: 'Instructor activated', data: { user } });
+  }),
+
+  // PATCH /api/users/:id/deactivate
+  deactivate: asyncHandler(async (req, res) => {
+    const user = await userService.setActive(req.params.id, false, req.context.userId);
+    return sendSuccess(res, { message: 'Instructor deactivated', data: { user } });
+  }),
 };
 
 module.exports = userController;
