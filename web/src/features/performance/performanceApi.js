@@ -21,12 +21,12 @@ export const performanceApi = baseApi.injectEndpoints({
       invalidatesTags: ['Student'],
     }),
     updateAttendance: build.mutation({
-      query: (body) => ({ url: '/api/attendance', method: 'POST', body }),
+      query: (body) => ({ url: '/api/performance/attendance', method: 'POST', body }),
       transformResponse: (res) => res.data,
       invalidatesTags: ['Student'],
     }),
     updateScores: build.mutation({
-      query: (body) => ({ url: '/api/scores', method: 'POST', body }),
+      query: (body) => ({ url: '/api/performance/scores', method: 'POST', body }),
       transformResponse: (res) => res.data,
       invalidatesTags: ['Student'],
     }),

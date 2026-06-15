@@ -32,6 +32,20 @@ const performanceController = {
       data: result,
     });
   }),
+
+  // POST /api/performance/attendance  — update Student.attendance field
+  updateAttendance: asyncHandler(async (req, res) => {
+    const { studentId, attendance } = req.body;
+    const student = await performanceService.updateStudentAttendance(studentId, attendance, req.context);
+    return sendSuccess(res, { message: 'Attendance updated', data: { student } });
+  }),
+
+  // POST /api/performance/scores  — update Student.averageScore field
+  updateScores: asyncHandler(async (req, res) => {
+    const { studentId, averageScore } = req.body;
+    const student = await performanceService.updateStudentScores(studentId, averageScore, req.context);
+    return sendSuccess(res, { message: 'Scores updated', data: { student } });
+  }),
 };
 
 module.exports = performanceController;

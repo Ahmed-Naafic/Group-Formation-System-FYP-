@@ -66,6 +66,23 @@ const performanceService = {
     return studentRepository.updateById(student._id, { performanceCategory });
   },
 
+  // Updates Student.attendance field (moved from old attendanceService).
+  async updateStudentAttendance(studentRecordId, attendance, context) {
+    const student = await studentRepository.findById(studentRecordId);
+    if (!student) throw new NotFoundError('Student not found');
+    await assertClassAccess(student.classId, context);
+    return studentRepository.updateById(studentRecordId, { attendance });
+  },
+
+  // Updates Student.averageScore and auto-recalculates performanceCategory.
+  async updateStudentScores(studentRecordId, averageScore, context) {
+    const student = await studentRepository.findById(studentRecordId);
+    if (!student) throw new NotFoundError('Student not found');
+    await assertClassAccess(student.classId, context);
+    await studentRepository.updateById(studentRecordId, { averageScore });
+    return performanceService.recalculate(studentRecordId);
+  },
+
   // Batch-recomputes all students in a class.
   async calculateForClass(classId, context) {
     await assertClassAccess(classId, context);

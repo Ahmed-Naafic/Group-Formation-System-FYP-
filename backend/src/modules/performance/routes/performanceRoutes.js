@@ -6,6 +6,8 @@ const {
   updateSettingsSchema,
   studentParamSchema,
   classParamSchema,
+  updateStudentAttendanceSchema,
+  updateStudentScoresSchema,
 } = require('../validations/performanceValidation');
 const performanceController = require('../controllers/performanceController');
 
@@ -34,6 +36,20 @@ router.post(
   authenticate, requireRole('admin', 'instructor'),
   validate(classParamSchema, 'params'),
   performanceController.recalculateClass
+);
+
+router.post(
+  '/attendance',
+  authenticate, requireRole('admin', 'instructor'),
+  validate(updateStudentAttendanceSchema),
+  performanceController.updateAttendance,
+);
+
+router.post(
+  '/scores',
+  authenticate, requireRole('admin', 'instructor'),
+  validate(updateStudentScoresSchema),
+  performanceController.updateScores,
 );
 
 module.exports = router;
