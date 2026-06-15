@@ -535,6 +535,18 @@ Old `userId_1_classId_1` index dropped manually; new `userId_1_cohortId_1` parti
 **Step 6 — Update Group, GroupHistory, and groupService**
 Groups detach from Class and attach to CourseOffering.
 
+> **DUAL-ATTENDANCE CLEANUP (required at end of Step 6):** Phase A (Step 3) created a bridge:
+> the old `Student.attendance` field still exists and is still written by `POST /api/performance/attendance`.
+> The new `Attendance` collection is wired into the grouping engine in this step (replacing `Student.attendance`).
+> Once Step 6 is complete and the grouping engine reads from `attendanceRepository.findByCourseOffering()`,
+> the following must be removed in the SAME commit as Step 6 (not deferred):
+> - `Student.attendance` field from `student/models/Student.js` and its index
+> - `performanceService.updateStudentAttendance()` and the `POST /api/performance/attendance` route
+> - The `updateStudentAttendanceSchema` from performanceValidation.js
+> - The `updateAttendance` mutation from `web/src/features/performance/performanceApi.js`
+> - The attendance column from `ScoresPage.jsx` (attendance is now per-offering, not per-student)
+> Failure to remove these in Step 6 means two parallel attendance systems ship together.
+
 Files modified:
 - `backend/src/modules/group/models/Group.js` — remove `classId, courseId`; add `courseOfferingId`; update index
 - `backend/src/modules/grouping/models/GroupHistory.js` — same swap

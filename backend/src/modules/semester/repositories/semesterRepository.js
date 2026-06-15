@@ -6,25 +6,26 @@ const semesterRepository = {
   },
 
   findAll(filter = {}) {
-    return Semester.find(filter).sort({ year: -1, startDate: -1 });
+    return Semester.find(filter)
+      .populate('academicYearId', 'name')
+      .sort({ startDate: -1 });
   },
 
   findById(id) {
-    return Semester.findById(id);
+    return Semester.findById(id).populate('academicYearId', 'name');
   },
 
   updateById(id, updates) {
     return Semester.findByIdAndUpdate(id, updates, { new: true });
   },
 
-  findActiveByNameAndYear(name, year) {
-    return Semester.findOne({ name, year });
+  findActiveByNameAndAcademicYear(name, academicYearId) {
+    return Semester.findOne({ name, academicYearId, deletedAt: null });
   },
 
   // Used by AcademicYear cascade-delete guard.
-  // Returns 0 until Step 4 adds academicYearId to Semester documents.
   countByAcademicYear(academicYearId) {
-    return Semester.countDocuments({ academicYearId });
+    return Semester.countDocuments({ academicYearId, deletedAt: null });
   },
 };
 
