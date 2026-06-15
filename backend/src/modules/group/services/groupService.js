@@ -174,6 +174,15 @@ const groupService = {
     return { groups, summary };
   },
 
+  // Archives all active groups for a class+course in one shot.
+  // Used for manual "delete all groups" — does NOT write to GroupHistory,
+  // so the next generate starts with a clean slate.
+  async archiveForCourse(classId, courseId, context) {
+    await assertClassAccess(classId, context, courseId);
+    const result = await groupRepository.archiveByCourse(classId, courseId);
+    return result.modifiedCount;
+  },
+
   // Returns active groups for a class+course.
   // Students see only the group they belong to; admin/instructor see all.
   async getByClass(classId, courseId, context) {

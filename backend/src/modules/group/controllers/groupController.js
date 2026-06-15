@@ -35,6 +35,16 @@ const groupController = {
     });
   }),
 
+  // DELETE /api/groups?classId=&courseId=
+  archiveForCourse: asyncHandler(async (req, res) => {
+    const { classId, courseId } = req.query;
+    const count = await groupService.archiveForCourse(classId, courseId, req.context);
+    return sendSuccess(res, {
+      message: `${count} group${count !== 1 ? 's' : ''} archived`,
+      data: { archived: count },
+    });
+  }),
+
   // GET /api/groups?classId=&courseId=
   getByClass: asyncHandler(async (req, res) => {
     const groups = await groupService.getByClass(req.query.classId, req.query.courseId, req.context);

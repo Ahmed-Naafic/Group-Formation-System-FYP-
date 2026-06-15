@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, Copy, Check, BarChart2, Users2 } from 'lucide-react';
+import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, Copy, Check, BarChart2, Users2, UserX } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
 import {
@@ -10,6 +10,7 @@ import {
   useUpdateStudentMutation,
   useDeleteStudentMutation,
   useResetStudentPasswordMutation,
+  useClearRosterMutation,
 } from './studentApi';
 import { useGetClassByIdQuery } from '@/features/class/classApi';
 import { useUpdateScoresMutation } from '@/features/performance/performanceApi';
@@ -69,14 +70,16 @@ export default function StudentsPage() {
   const [updateStudent, { isLoading: updating }]      = useUpdateStudentMutation();
   const [deleteStudent, { isLoading: deleting }]      = useDeleteStudentMutation();
   const [resetPassword, { isLoading: resetting }]     = useResetStudentPasswordMutation();
+  const [clearRoster,   { isLoading: clearing }]      = useClearRosterMutation();
   const [updateScores]                                = useUpdateScoresMutation();
 
-  const [createOpen, setCreateOpen]       = useState(false);
-  const [editing, setEditing]             = useState(null);
-  const [deleteTarget, setDeleteTarget]   = useState(null);
-  const [resetTarget, setResetTarget]     = useState(null);
-  const [createdResult, setCreatedResult] = useState(null);
-  const [resetResult, setResetResult]     = useState(null);
+  const [createOpen, setCreateOpen]         = useState(false);
+  const [editing, setEditing]               = useState(null);
+  const [deleteTarget, setDeleteTarget]     = useState(null);
+  const [resetTarget, setResetTarget]       = useState(null);
+  const [createdResult, setCreatedResult]   = useState(null);
+  const [resetResult, setResetResult]       = useState(null);
+  const [clearConfirm, setClearConfirm]     = useState(false);
 
   const { register: regCreate, handleSubmit: submitCreate, reset: resetCreate, formState: { errors: errCreate } } = useForm({
     defaultValues: { attendance: 0 },
@@ -161,6 +164,16 @@ export default function StudentsPage() {
     }
   }
 
+  async function confirmClearRoster() {
+    try {
+      const result = await clearRoster(classId).unwrap();
+      setClearConfirm(false);
+      toast.success(`${result.removed} student${result.removed !== 1 ? 's' : ''} removed from class`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to clear roster');
+    }
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const className = cls?.name ?? (loadingClass ? '…' : 'Class');
@@ -195,6 +208,16 @@ export default function StudentsPage() {
           </Button>
           {isAdmin && (
             <>
+              {students.length > 0 && (
+                <Button
+                  variant="outline"
+                  className="text-danger hover:text-danger hover:bg-danger/10 border-danger/30"
+                  onClick={() => setClearConfirm(true)}
+                >
+                  <UserX size={15} />
+                  Clear Roster
+                </Button>
+              )}
               <Button variant="outline" asChild>
                 <Link to={`/classes/${classId}/students/upload`}>
                   <Upload size={15} />
@@ -469,6 +492,33 @@ export default function StudentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Clear roster confirm ─────────────────────────────────────────── */}
+      <AlertDialog open={clearConfirm} onOpenChange={(v) => !v && setClearConfirm(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear Entire Roster</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all{' '}
+              <span className="font-semibold text-ink-800">{students.length} student{students.length !== 1 ? 's' : ''}</span>{' '}
+              from <span className="font-semibold text-ink-800">{className}</span>. Student user
+              accounts are preserved — only their enrollment in this class is removed.
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger hover:bg-danger/90 text-white"
+              onClick={confirmClearRoster}
+              disabled={clearing}
+            >
+              {clearing && <Loader2 size={14} className="animate-spin" />}
+              Remove All Students
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Reset result — temp password display ─────────────────────────── */}
       <Dialog open={!!resetResult} onOpenChange={(v) => !v && setResetResult(null)}>

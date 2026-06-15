@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, BookOpen, ClipboardList,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, BookOpen, ClipboardList, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
@@ -10,6 +10,7 @@ import {
   useGetGroupsQuery,
   useGenerateGroupsMutation,
   useRegenerateGroupsMutation,
+  useDeleteGroupsMutation,
 } from './groupApi';
 import { useGetClassByIdQuery } from '@/features/class/classApi';
 import { useGetCourseAssignmentsQuery } from '@/features/courseAssignment/courseAssignmentApi';
@@ -23,6 +24,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
@@ -215,9 +220,11 @@ export default function GroupsPage() {
   );
   const [generateGroups,   { isLoading: generating }]  = useGenerateGroupsMutation();
   const [regenerateGroups, { isLoading: regenerating }] = useRegenerateGroupsMutation();
+  const [deleteGroups,     { isLoading: deleting }]     = useDeleteGroupsMutation();
 
-  const [regenOpen,  setRegenOpen]  = useState(false);
-  const [genWarning, setGenWarning] = useState(null);
+  const [regenOpen,      setRegenOpen]      = useState(false);
+  const [deleteOpen,     setDeleteOpen]     = useState(false);
+  const [genWarning,     setGenWarning]     = useState(null);
 
   const hasGroups = groups.length > 0;
   const lastOpts  = groups[0]?.generationOptions;
@@ -254,6 +261,17 @@ export default function GroupsPage() {
       toast.success(`${result.groups.length} groups generated`);
     } catch (err) {
       toast.error(err?.data?.error?.message ?? 'Generation failed');
+    }
+  }
+
+  async function handleDeleteAll() {
+    try {
+      const result = await deleteGroups({ classId, courseId: selectedCourseId }).unwrap();
+      setDeleteOpen(false);
+      setGenWarning(null);
+      toast.success(`${result.archived} group${result.archived !== 1 ? 's' : ''} deleted`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to delete groups');
     }
   }
 
@@ -303,10 +321,21 @@ export default function GroupsPage() {
             Tasks
           </Button>
           {hasGroups && (
-            <Button variant="outline" size="sm" onClick={() => setRegenOpen(true)}>
-              <RefreshCw size={15} />
-              Regenerate
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-danger hover:text-danger hover:bg-danger/10 border-danger/30"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 size={15} />
+                Delete All
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setRegenOpen(true)}>
+                <RefreshCw size={15} />
+                Regenerate
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -395,6 +424,32 @@ export default function GroupsPage() {
         </>
 
       )}
+
+      {/* Delete all groups confirm */}
+      <AlertDialog open={deleteOpen} onOpenChange={(v) => !v && setDeleteOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete All Groups</AlertDialogTitle>
+            <AlertDialogDescription>
+              Archive all{' '}
+              <span className="font-semibold text-ink-800">{groups.length} group{groups.length !== 1 ? 's' : ''}</span>{' '}
+              for <span className="font-semibold text-ink-800">{selectedCourseName}</span>?
+              Group history and workspaces are preserved. You can generate fresh groups afterwards.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger hover:bg-danger/90 text-white"
+              onClick={handleDeleteAll}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 size={14} className="animate-spin" />}
+              Delete All Groups
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Regenerate dialog */}
       <Dialog open={regenOpen} onOpenChange={(v) => !v && setRegenOpen(false)}>

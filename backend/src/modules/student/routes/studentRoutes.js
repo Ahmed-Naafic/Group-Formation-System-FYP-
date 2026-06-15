@@ -8,6 +8,7 @@ const {
   createStudentSchema,
   updateStudentSchema,
   bulkUploadSchema,
+  clearByClassSchema,
 } = require('../validations/studentValidation');
 const studentController = require('../controllers/studentController');
 
@@ -43,6 +44,7 @@ router.post('/', requireRole('admin'), validate(createStudentSchema), studentCon
 router.get('/', studentController.getAll);
 router.get('/:id', studentController.getById);
 router.patch('/:id', validate(updateStudentSchema), studentController.update);
+router.delete('/', requireRole('admin'), validate(clearByClassSchema, 'query'), studentController.clearByClass);
 router.delete('/:id', studentController.remove);
 
 // ── Password reset ────────────────────────────────────────────────────────────

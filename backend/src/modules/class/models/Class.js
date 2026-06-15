@@ -12,6 +12,13 @@ const classSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Class name must be globally unique among active records — no two classes
+// anywhere in the system can share a name at the same time.
+classSchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
+
 classSchema.plugin(softDeletePlugin);
 
 module.exports = mongoose.model('Class', classSchema);

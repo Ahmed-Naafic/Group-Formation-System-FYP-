@@ -26,6 +26,14 @@ router.post(
   groupController.regenerate,
 );
 
+// Archive all active groups for a class+course (manual delete-all)
+router.delete(
+  '/',
+  authenticate, requireRole('admin', 'instructor'),
+  validate(classIdQuerySchema, 'query'),
+  groupController.archiveForCourse,
+);
+
 // List groups for a class (students see only their own group)
 router.get(
   '/',

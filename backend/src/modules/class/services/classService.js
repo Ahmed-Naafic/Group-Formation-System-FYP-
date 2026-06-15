@@ -9,6 +9,10 @@ const classService = {
   async create(data) {
     for (const cid of data.courseIds ?? []) await courseService.getById(cid);
     await semesterService.getById(data.semesterId);
+    const duplicate = await classRepository.findActiveByName(data.name);
+    if (duplicate) {
+      throw new ConflictError(`A class named "${data.name}" already exists.`);
+    }
     return classRepository.create(data);
   },
 
@@ -23,11 +27,17 @@ const classService = {
   },
 
   async update(id, updates) {
-    await classService.getById(id);
+    const cls = await classService.getById(id);
     if (updates.courseIds) {
       for (const cid of updates.courseIds) await courseService.getById(cid);
     }
     if (updates.semesterId) await semesterService.getById(updates.semesterId);
+    if (updates.name) {
+      const duplicate = await classRepository.findActiveByName(updates.name);
+      if (duplicate && String(duplicate._id) !== id) {
+        throw new ConflictError(`A class named "${updates.name}" already exists.`);
+      }
+    }
     return classRepository.updateById(id, updates);
   },
 

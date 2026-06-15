@@ -105,6 +105,12 @@ const studentService = {
     return studentRepository.markAsLeader(studentId);
   },
 
+  // Soft-deletes every active Student in the class in a single updateMany.
+  async clearByClass(classId, context) {
+    await assertClassAccess(classId, context);
+    return studentRepository.softDeleteAllByClass(classId, context.userId);
+  },
+
   // Internal — called by enrollmentService to detect cross-class transfers.
   // Returns the active Student record for userId in any class except excludeClassId, or null.
   findActiveInOtherClass(userId, excludeClassId) {

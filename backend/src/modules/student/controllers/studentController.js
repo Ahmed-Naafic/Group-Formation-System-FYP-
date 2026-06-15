@@ -1,6 +1,6 @@
 const asyncHandler = require('../../../common/utils/asyncHandler');
 const { sendSuccess } = require('../../../common/responses/apiResponse');
-const { BadRequestError } = require('../../../common/errors');
+const { BadRequestError, NotFoundError } = require('../../../common/errors');
 const studentService = require('../services/studentService');
 const enrollmentService = require('../../enrollment/services/enrollmentService');
 
@@ -50,6 +50,16 @@ const studentController = {
     return sendSuccess(res, {
       message: 'Password reset — share the temp password with the student immediately',
       data: result,
+    });
+  }),
+
+  // DELETE /api/students?classId=  — remove every student in a class at once
+  clearByClass: asyncHandler(async (req, res) => {
+    const { classId } = req.query;
+    const count = await studentService.clearByClass(classId, req.context);
+    return sendSuccess(res, {
+      message: `${count} student${count !== 1 ? 's' : ''} removed from class`,
+      data: { removed: count },
     });
   }),
 

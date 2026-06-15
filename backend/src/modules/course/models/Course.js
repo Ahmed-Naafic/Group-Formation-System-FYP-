@@ -15,6 +15,12 @@ const courseSchema = new mongoose.Schema(
 // Code is unique within a department, not globally
 courseSchema.index({ departmentId: 1, code: 1 }, { unique: true });
 
+// Name is also unique within a department among active records
+courseSchema.index(
+  { departmentId: 1, name: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
+
 courseSchema.plugin(softDeletePlugin);
 
 module.exports = mongoose.model('Course', courseSchema);

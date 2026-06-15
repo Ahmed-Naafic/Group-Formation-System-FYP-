@@ -16,6 +16,12 @@ const updateStudentSchema = Joi.object({
   averageScore: Joi.number().min(0).max(100).allow(null),
 }).min(1);
 
+const clearByClassSchema = Joi.object({
+  classId: objectId.required().messages({
+    'any.required': 'classId is required as a query parameter',
+  }),
+});
+
 const bulkUploadSchema = Joi.object({
   classId: objectId.required().messages({
     'any.required': 'classId is required as a form field',
@@ -24,4 +30,4 @@ const bulkUploadSchema = Joi.object({
   confirmTransfers: Joi.boolean().truthy('true').falsy('false').sensitive(false).default(false),
 });
 
-module.exports = { createStudentSchema, updateStudentSchema, bulkUploadSchema };
+module.exports = { createStudentSchema, updateStudentSchema, bulkUploadSchema, clearByClassSchema };

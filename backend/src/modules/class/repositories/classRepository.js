@@ -29,6 +29,10 @@ const classRepository = {
   countBySemester(semesterId) {
     return Class.countDocuments({ semesterId });
   },
+
+  findActiveByName(name) {
+    return Class.findOne({ name });
+  },
 };
 
 module.exports = classRepository;

@@ -19,11 +19,14 @@ const studentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// One student record per class per user account
-studentSchema.index({ userId: 1, classId: 1 }, { unique: true });
+// One ACTIVE enrollment per (user, class) pair — allows soft-deleted records to coexist
+// so a cleared/transferred student can be re-enrolled in the same class later.
+studentSchema.index(
+  { userId: 1, classId: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
 
-// Enforce one ACTIVE Student record per user across all classes.
-// Soft-deleted records (deletedAt != null) are excluded so historical records accumulate freely.
+// One ACTIVE Student record per user across ALL classes (one-active-class rule).
 studentSchema.index(
   { userId: 1 },
   { unique: true, partialFilterExpression: { deletedAt: null } },

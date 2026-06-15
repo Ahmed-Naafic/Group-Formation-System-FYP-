@@ -13,6 +13,13 @@ const semesterSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Same semester name allowed in different years ("Semester 1" in 2026 and 2027),
+// but not the same name+year combination.
+semesterSchema.index(
+  { name: 1, year: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
+
 semesterSchema.plugin(softDeletePlugin);
 
 module.exports = mongoose.model('Semester', semesterSchema);

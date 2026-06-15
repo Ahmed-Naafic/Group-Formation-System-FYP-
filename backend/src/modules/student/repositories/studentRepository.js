@@ -37,6 +37,17 @@ const studentRepository = {
     return Student.countDocuments({ classId });
   },
 
+  async softDeleteAllByClass(classId, deletedBy) {
+    const now = new Date();
+    // The softDelete plugin pre-hook does NOT run on updateMany, so we must
+    // explicitly filter { deletedAt: null } to touch only active records.
+    const result = await Student.updateMany(
+      { classId, deletedAt: null },
+      { $set: { deletedAt: now, deletedBy } }
+    );
+    return result.modifiedCount;
+  },
+
   // Returns the single active (non-deleted) Student record for this user in any
   // class OTHER than excludeClassId. Used by the transfer-detection logic.
   // The softDelete pre-hook automatically filters deletedAt: null.

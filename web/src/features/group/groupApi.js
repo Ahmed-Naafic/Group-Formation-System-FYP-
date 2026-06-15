@@ -34,6 +34,15 @@ export const groupApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data.group,
       invalidatesTags: (result, error, { id }) => [{ type: 'Group', id }, 'Group'],
     }),
+
+    deleteGroups: build.mutation({
+      query: ({ classId, courseId }) => ({
+        url: `/api/groups?classId=${classId}&courseId=${courseId}`,
+        method: 'DELETE',
+      }),
+      transformResponse: (res) => res.data,
+      invalidatesTags: ['Group'],
+    }),
   }),
   overrideExisting: false,
 });
@@ -44,4 +53,5 @@ export const {
   useGenerateGroupsMutation,
   useRegenerateGroupsMutation,
   useUpdateGroupMutation,
+  useDeleteGroupsMutation,
 } = groupApi;

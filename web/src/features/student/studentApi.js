@@ -39,6 +39,12 @@ export const studentApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data,
     }),
 
+    clearRoster: build.mutation({
+      query: (classId) => ({ url: `/api/students?classId=${classId}`, method: 'DELETE' }),
+      transformResponse: (res) => res.data,
+      invalidatesTags: ['Student'],
+    }),
+
     bulkUploadStudents: build.mutation({
       query: ({ classId, file, confirmTransfers = false }) => {
         const formData = new FormData();
@@ -61,4 +67,5 @@ export const {
   useDeleteStudentMutation,
   useResetStudentPasswordMutation,
   useBulkUploadStudentsMutation,
+  useClearRosterMutation,
 } = studentApi;

@@ -23,6 +23,7 @@ const updateGroupSchema = Joi.object({
 });
 
 // Query param for GET /api/groups?classId=&courseId=
+// and DELETE /api/groups?classId=&courseId=
 const classIdQuerySchema = Joi.object({
   classId:  objectId.required(),
   courseId: objectId.required(),
