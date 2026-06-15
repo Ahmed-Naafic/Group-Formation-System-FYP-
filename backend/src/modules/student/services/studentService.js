@@ -1,25 +1,31 @@
-const studentRepository = require('../repositories/studentRepository');
-const userService = require('../../user/services/userService');
-const classService = require('../../class/services/classService');
-const courseAssignmentService = require('../../courseAssignment/services/courseAssignmentService');
-const passwordGenerator = require('../../../common/utils/passwordGenerator');
+const studentRepository       = require('../repositories/studentRepository');
+const userService             = require('../../user/services/userService');
+const cohortService           = require('../../cohort/services/cohortService');
+const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
+const passwordGenerator       = require('../../../common/utils/passwordGenerator');
 const { NotFoundError, ForbiddenError, ConflictError, BadRequestError } = require('../../../common/errors');
 
-// ── Ownership guard ───────────────────────────────────────────────────────────
-async function assertClassAccess(classId, context) {
-  const cls = await classService.getById(String(classId));
-  if (context.role === 'admin') return cls;
-  const allowed = await courseAssignmentService.hasAccess(context.userId, String(classId));
-  if (!allowed) throw new ForbiddenError('You do not have access to this class');
-  return cls;
+// Admin: unrestricted. Instructor: must have at least one active offering for this cohort.
+async function assertCohortAccess(cohortId, context) {
+  const cohort = await cohortService.getById(cohortId);
+  if (context.role === 'admin') return cohort;
+  const offerings = await courseOfferingRepository.findAll({
+    cohortId,
+    instructorId: context.userId,
+    status: 'active',
+  });
+  if (!offerings || offerings.length === 0) {
+    throw new ForbiddenError('You do not have access to this cohort');
+  }
+  return cohort;
 }
 
 const studentService = {
-  // ── Called by enrollmentService to check duplicates before creating ─────────
-  async existsByStudentIdAndClass(studentId, classId) {
+  // ── Called by enrollmentService to check duplicates before creating ──────────
+  async existsByStudentIdAndCohort(studentId, cohortId) {
     const user = await userService.findByStudentId(studentId);
     if (!user) return false;
-    const existing = await studentRepository.findOne({ userId: user._id, classId });
+    const existing = await studentRepository.findOne({ userId: user._id, cohortId, deletedAt: null });
     return !!existing;
   },
 
@@ -29,13 +35,12 @@ const studentService = {
   },
 
   // ── Single manual creation (admin-only) ─────────────────────────────────────
-  async create({ classId, studentId, fullName, attendance, averageScore }, context) {
-    await assertClassAccess(classId, context);
+  async create({ cohortId, studentId, fullName, averageScore }, context) {
+    await assertCohortAccess(cohortId, context);
 
-    const duplicate = await studentService.existsByStudentIdAndClass(studentId, classId);
-    if (duplicate) throw new ConflictError(`Student ${studentId} already exists in this class`);
+    const duplicate = await studentService.existsByStudentIdAndCohort(studentId, cohortId);
+    if (duplicate) throw new ConflictError(`Student ${studentId} already exists in this cohort`);
 
-    // Reuse an existing User account if the student is already in another class
     let user = await userService.findByStudentId(studentId);
     let tempPassword = null;
 
@@ -54,9 +59,8 @@ const studentService = {
 
     const raw = await studentRepository.create({
       userId: user._id,
-      classId,
+      cohortId,
       fullName,
-      attendance: attendance ?? 0,
       averageScore: averageScore ?? null,
     });
 
@@ -64,25 +68,24 @@ const studentService = {
     return { student, tempPassword };
   },
 
-  // ── List all students in a class ─────────────────────────────────────────────
-  async getAll(classId, context) {
-    if (!classId) throw new BadRequestError('classId query parameter is required');
-    await assertClassAccess(classId, context);
-    return studentRepository.findAll({ classId });
+  // ── List all students in a cohort ─────────────────────────────────────────
+  async getAll(cohortId, context) {
+    if (!cohortId) throw new BadRequestError('cohortId query parameter is required');
+    await assertCohortAccess(cohortId, context);
+    return studentRepository.findAll({ cohortId, deletedAt: null });
   },
 
-  // ── Get one student ───────────────────────────────────────────────────────────
+  // ── Get one student ───────────────────────────────────────────────────────
   async getById(id, context) {
     const student = await studentRepository.findById(id);
     if (!student) throw new NotFoundError('Student not found');
-    await assertClassAccess(student.classId, context);
+    await assertCohortAccess(student.cohortId, context);
     return student;
   },
 
-  // ── Update student info ───────────────────────────────────────────────────────
+  // ── Update student info ───────────────────────────────────────────────────
   async update(id, updates, context) {
     await studentService.getById(id, context);
-    // averageScore is admin-only — instructors may only update attendance / fullName
     if (context.role !== 'admin') {
       const { averageScore: _dropped, ...safeUpdates } = updates;
       return studentRepository.updateById(id, safeUpdates);
@@ -90,31 +93,30 @@ const studentService = {
     return studentRepository.updateById(id, updates);
   },
 
-  // ── Soft delete ───────────────────────────────────────────────────────────────
+  // ── Soft delete ───────────────────────────────────────────────────────────
   async softDelete(id, userId, context) {
     const student = await studentService.getById(id, context);
     return student.softDelete(userId);
   },
 
-  // ── Internal — called by the grouping engine (auth already verified by caller) ─
-  getStudentsByClass(classId) {
-    return studentRepository.findAll({ classId });
+  // ── Internal — called by the grouping engine ─────────────────────────────
+  getStudentsByCohort(cohortId) {
+    return studentRepository.findAll({ cohortId, deletedAt: null });
   },
 
   markAsLeader(studentId) {
     return studentRepository.markAsLeader(studentId);
   },
 
-  // Soft-deletes every active Student in the class in a single updateMany.
-  async clearByClass(classId, context) {
-    await assertClassAccess(classId, context);
-    return studentRepository.softDeleteAllByClass(classId, context.userId);
+  // Soft-deletes every active Student in the cohort in a single updateMany.
+  async clearByCohort(cohortId, context) {
+    await assertCohortAccess(cohortId, context);
+    return studentRepository.softDeleteAllByCohort(cohortId, context.userId);
   },
 
-  // Internal — called by enrollmentService to detect cross-class transfers.
-  // Returns the active Student record for userId in any class except excludeClassId, or null.
-  findActiveInOtherClass(userId, excludeClassId) {
-    return studentRepository.findActiveByUserId(userId, excludeClassId);
+  // Internal — called by enrollmentService to detect cross-cohort transfers.
+  findActiveInOtherCohort(userId, excludeCohortId) {
+    return studentRepository.findActiveByUserId(userId, excludeCohortId);
   },
 
   // Internal — called by enrollmentService to archive the old record on transfer.
@@ -122,7 +124,7 @@ const studentService = {
     return studentDoc.softDelete(deletedBy);
   },
 
-  // ── Instructor-initiated password reset (Section 2.14.5) ─────────────────────
+  // ── Instructor-initiated password reset ──────────────────────────────────
   async resetPassword(id, context) {
     const student = await studentService.getById(id, context);
     const tempPassword = passwordGenerator.generate();

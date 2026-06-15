@@ -3,11 +3,10 @@ const softDeletePlugin = require('../../../common/plugins/softDelete');
 
 const studentSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
-    fullName: { type: String, required: true, trim: true },
+    userId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User',   required: true },
+    cohortId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Cohort', required: true },
+    fullName:  { type: String, required: true, trim: true },
     averageScore: { type: Number, min: 0, max: 100, default: null },
-    attendance: { type: Number, min: 0, max: 100, default: 0 },
     performanceCategory: {
       type: String,
       enum: ['HIGH', 'MEDIUM', 'LOW', null],
@@ -19,14 +18,14 @@ const studentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// One ACTIVE enrollment per (user, class) pair — allows soft-deleted records to coexist
-// so a cleared/transferred student can be re-enrolled in the same class later.
+// One ACTIVE enrollment per (user, cohort) pair.
+// NOTE: drop old userId_1_classId_1 index manually before first restart.
 studentSchema.index(
-  { userId: 1, classId: 1 },
+  { userId: 1, cohortId: 1 },
   { unique: true, partialFilterExpression: { deletedAt: null } },
 );
 
-// One ACTIVE Student record per user across ALL classes (one-active-class rule).
+// One ACTIVE Student record per user across ALL cohorts (one-active-cohort rule).
 studentSchema.index(
   { userId: 1 },
   { unique: true, partialFilterExpression: { deletedAt: null } },

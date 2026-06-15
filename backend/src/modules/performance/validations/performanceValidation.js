@@ -20,13 +20,8 @@ const studentParamSchema = Joi.object({
   studentId: objectId.required(),
 });
 
-const classParamSchema = Joi.object({
-  classId: objectId.required(),
-});
-
-const updateStudentAttendanceSchema = Joi.object({
-  studentId:  objectId.required(),
-  attendance: Joi.number().min(0).max(100).required(),
+const cohortParamSchema = Joi.object({
+  cohortId: objectId.required(),
 });
 
 const updateStudentScoresSchema = Joi.object({
@@ -37,7 +32,6 @@ const updateStudentScoresSchema = Joi.object({
 module.exports = {
   updateSettingsSchema,
   studentParamSchema,
-  classParamSchema,
-  updateStudentAttendanceSchema,
+  cohortParamSchema,
   updateStudentScoresSchema,
 };

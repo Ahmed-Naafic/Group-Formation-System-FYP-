@@ -24,7 +24,6 @@ const studentRepository = {
   },
 
   // Atomically sets hasBeenLeader and increments leaderCount in one operation.
-  // Uses separate $set/$inc operators — cannot go through updateById's $set wrapper.
   markAsLeader(id) {
     return Student.findByIdAndUpdate(
       id,
@@ -33,26 +32,25 @@ const studentRepository = {
     );
   },
 
-  countByClass(classId) {
-    return Student.countDocuments({ classId });
+  countByCohort(cohortId) {
+    return Student.countDocuments({ cohortId, deletedAt: null });
   },
 
-  async softDeleteAllByClass(classId, deletedBy) {
+  async softDeleteAllByCohort(cohortId, deletedBy) {
     const now = new Date();
     // The softDelete plugin pre-hook does NOT run on updateMany, so we must
     // explicitly filter { deletedAt: null } to touch only active records.
     const result = await Student.updateMany(
-      { classId, deletedAt: null },
-      { $set: { deletedAt: now, deletedBy } }
+      { cohortId, deletedAt: null },
+      { $set: { deletedAt: now, deletedBy } },
     );
     return result.modifiedCount;
   },
 
-  // Returns the single active (non-deleted) Student record for this user in any
-  // class OTHER than excludeClassId. Used by the transfer-detection logic.
-  // The softDelete pre-hook automatically filters deletedAt: null.
-  findActiveByUserId(userId, excludeClassId) {
-    return Student.findOne({ userId, classId: { $ne: excludeClassId } });
+  // Returns the single active Student record for this user in any cohort
+  // OTHER than excludeCohortId. Used by the transfer-detection logic.
+  findActiveByUserId(userId, excludeCohortId) {
+    return Student.findOne({ userId, cohortId: { $ne: excludeCohortId } });
   },
 };
 

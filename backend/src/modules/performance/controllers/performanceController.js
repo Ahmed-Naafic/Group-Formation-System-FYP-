@@ -24,20 +24,13 @@ const performanceController = {
     return sendSuccess(res, { message: 'Performance recalculated', data: { student } });
   }),
 
-  // POST /api/performance/recalculate/class/:classId
-  recalculateClass: asyncHandler(async (req, res) => {
-    const result = await performanceService.calculateForClass(req.params.classId, req.context);
+  // POST /api/performance/recalculate/cohort/:cohortId
+  recalculateCohort: asyncHandler(async (req, res) => {
+    const result = await performanceService.calculateForCohort(req.params.cohortId, req.context);
     return sendSuccess(res, {
       message: `Recalculated ${result.updated} students`,
       data: result,
     });
-  }),
-
-  // POST /api/performance/attendance  — update Student.attendance field
-  updateAttendance: asyncHandler(async (req, res) => {
-    const { studentId, attendance } = req.body;
-    const student = await performanceService.updateStudentAttendance(studentId, attendance, req.context);
-    return sendSuccess(res, { message: 'Attendance updated', data: { student } });
   }),
 
   // POST /api/performance/scores  — update Student.averageScore field

@@ -5,8 +5,7 @@ const validate = require('../../../common/validators/validate');
 const {
   updateSettingsSchema,
   studentParamSchema,
-  classParamSchema,
-  updateStudentAttendanceSchema,
+  cohortParamSchema,
   updateStudentScoresSchema,
 } = require('../validations/performanceValidation');
 const performanceController = require('../controllers/performanceController');
@@ -14,35 +13,28 @@ const performanceController = require('../controllers/performanceController');
 router.get(
   '/settings',
   authenticate, requireRole('admin', 'instructor'),
-  performanceController.getSettings
+  performanceController.getSettings,
 );
 
 router.put(
   '/settings',
   authenticate, requireRole('admin'),
   validate(updateSettingsSchema),
-  performanceController.updateSettings
+  performanceController.updateSettings,
 );
 
 router.post(
   '/recalculate/student/:studentId',
   authenticate, requireRole('admin', 'instructor'),
   validate(studentParamSchema, 'params'),
-  performanceController.recalculateStudent
+  performanceController.recalculateStudent,
 );
 
 router.post(
-  '/recalculate/class/:classId',
+  '/recalculate/cohort/:cohortId',
   authenticate, requireRole('admin', 'instructor'),
-  validate(classParamSchema, 'params'),
-  performanceController.recalculateClass
-);
-
-router.post(
-  '/attendance',
-  authenticate, requireRole('admin', 'instructor'),
-  validate(updateStudentAttendanceSchema),
-  performanceController.updateAttendance,
+  validate(cohortParamSchema, 'params'),
+  performanceController.recalculateCohort,
 );
 
 router.post(
