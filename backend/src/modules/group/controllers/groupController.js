@@ -1,12 +1,12 @@
-const asyncHandler  = require('../../../common/utils/asyncHandler');
+const asyncHandler    = require('../../../common/utils/asyncHandler');
 const { sendSuccess } = require('../../../common/responses/apiResponse');
-const groupService  = require('../services/groupService');
+const groupService    = require('../services/groupService');
 
 const groupController = {
   // POST /api/groups/generate
   generate: asyncHandler(async (req, res) => {
-    const { classId, courseId, groupSize, options } = req.body;
-    const { groups, summary } = await groupService.generate(classId, courseId, groupSize, options, req.context);
+    const { courseOfferingId, groupSize, options } = req.body;
+    const { groups, summary } = await groupService.generate(courseOfferingId, groupSize, options, req.context);
 
     const data = { groups, summary };
     if (summary.ungraded > 0) {
@@ -21,8 +21,8 @@ const groupController = {
 
   // POST /api/groups/regenerate
   regenerate: asyncHandler(async (req, res) => {
-    const { classId, courseId, groupSize, options } = req.body;
-    const { groups, summary } = await groupService.regenerate(classId, courseId, groupSize, options, req.context);
+    const { courseOfferingId, groupSize, options } = req.body;
+    const { groups, summary } = await groupService.regenerate(courseOfferingId, groupSize, options, req.context);
 
     const data = { groups, summary };
     if (summary.ungraded > 0) {
@@ -35,19 +35,19 @@ const groupController = {
     });
   }),
 
-  // DELETE /api/groups?classId=&courseId=
-  archiveForCourse: asyncHandler(async (req, res) => {
-    const { classId, courseId } = req.query;
-    const count = await groupService.archiveForCourse(classId, courseId, req.context);
+  // DELETE /api/groups?courseOfferingId=
+  archiveForOffering: asyncHandler(async (req, res) => {
+    const { courseOfferingId } = req.query;
+    const count = await groupService.archiveForOffering(courseOfferingId, req.context);
     return sendSuccess(res, {
       message: `${count} group${count !== 1 ? 's' : ''} archived`,
       data: { archived: count },
     });
   }),
 
-  // GET /api/groups?classId=&courseId=
-  getByClass: asyncHandler(async (req, res) => {
-    const groups = await groupService.getByClass(req.query.classId, req.query.courseId, req.context);
+  // GET /api/groups?courseOfferingId=
+  getByOffering: asyncHandler(async (req, res) => {
+    const groups = await groupService.getByOffering(req.query.courseOfferingId, req.context);
     return sendSuccess(res, { data: { groups } });
   }),
 

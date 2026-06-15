@@ -9,8 +9,11 @@ const groupHistoryRepository = {
     return GroupHistory.insertMany(docs);
   },
 
-  findByCourse(classId, courseId) {
-    return GroupHistory.find({ classId, courseId }).sort({ generatedAt: -1 });
+  // Reads ALL prior group history for a cohort across every offering.
+  // This is the pair-avoidance query: we avoid re-pairing students who shared
+  // a group in ANY previous offering for this cohort (Q3 design decision).
+  findByCohort(cohortId) {
+    return GroupHistory.find({ cohortId }).sort({ generatedAt: -1 });
   },
 
   deleteByGenerationId(generationId) {

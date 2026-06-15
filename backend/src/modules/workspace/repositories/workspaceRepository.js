@@ -1,15 +1,16 @@
 const Workspace = require('../models/Workspace');
 
-// Populate spec used whenever workspace is returned to a client
 const GROUP_POPULATE = {
   path: 'groupId',
   populate: [
     {
-      path: 'classId',
-      select: 'name semesterId',
-      populate: { path: 'semesterId', select: 'name year' },
+      path: 'courseOfferingId',
+      populate: [
+        { path: 'courseId',   select: 'name code' },
+        { path: 'cohortId',   select: 'name' },
+        { path: 'semesterId', select: 'name' },
+      ],
     },
-    { path: 'courseId', select: 'name code' },
     {
       path: 'leaderId',
       select: 'fullName performanceCategory userId',
