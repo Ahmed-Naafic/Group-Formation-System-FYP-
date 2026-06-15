@@ -563,18 +563,103 @@ Files modified:
 
 ---
 
-**Step 7 — Update Task model and workspaceService**
-Task detaches from Class.
+**Step 7 — Update Task, Submission, Feedback, Report; courseService cascade**
 
-Files modified:
-- `backend/src/modules/task/models/Task.js` — `classId → courseOfferingId`
-- `backend/src/modules/task/repositories/taskRepository.js` — filter by `courseOfferingId`
-- `backend/src/modules/task/services/taskService.js` — access check via CourseOffering
-- `backend/src/modules/task/validations/taskValidation.js` — swap field name
+Scope is broader than originally planned. Step 6 completed Group/GroupHistory migration,
+which revealed that feedbackService reads `group.classId` (removed in Step 6) and is
+**currently broken at runtime**. All four modules below must be fixed together.
 
-Also update `courseService.softDelete` — cascade-delete check now blocks if active `CourseOffering` records reference the course (not Class records).
+#### Step 7 Audit (produced at end of Step 6 session, 2026-06-15)
 
-**Proof step works:** POST `/api/tasks` with `courseOfferingId` → 201. GET tasks for an offering → list returned.
+Every `classId`/`Class` reference across task/submission/feedback/report was catalogued.
+Classification: **(a)** field swap, **(b)** access-check swap, **(c)** other.
+
+---
+
+##### TASK module
+
+| File | Lines | Class | Fix |
+|---|---|---|---|
+| `Task.js:16` | `classId: ObjectId, ref:'Class'` | (a) | `courseOfferingId: ObjectId, ref:'CourseOffering'` |
+| `taskRepository.js:5` | `populate { path:'courseId' }` on assignedGroups | (a) stale populate | Group has no `courseId` after Step 6 — remove nested courseId populate |
+| `taskRepository.js:17-18` | `findByClass(classId)` / `find({ classId })` | (a) | `findByOffering(courseOfferingId)` / filter `{ courseOfferingId }` |
+| `taskService.js:3` | `require classService` | (b) | Replace with `courseOfferingService` |
+| `taskService.js:10-13` | `assertWriteAccess(classId)` / `courseAssignmentService.hasAccess` | (b) | `assertCourseOfferingAccess(courseOfferingId)` via `courseOfferingService.getById(id, context)` |
+| `taskService.js:18` | `classService.getById(data.classId)` | (b) | Drop — existence confirmed inside `assertCourseOfferingAccess` |
+| `taskService.js:26-27` | `group.classId !== data.classId` validation | (a) | `group.courseOfferingId !== data.courseOfferingId` |
+| `taskService.js:33` | `classId: data.classId` in create | (a) | `courseOfferingId: data.courseOfferingId` |
+| `taskService.js:64-77` | `list(classId)` — student path uses `findAll({ userId, classId })` | (a+b) | Student path: load offering → find student by cohortId → find groups in offering → `findByGroupIds`; admin/instructor: `findByOffering(courseOfferingId)` |
+| `taskService.js:94,103,121` | `assertWriteAccess(task.classId)` | (b) | `assertCourseOfferingAccess(task.courseOfferingId, context)` |
+| `taskValidation.js:7,24` | `classId: objectId.required()` in both schemas | (a) | `courseOfferingId: objectId.required()` |
+| `taskController.js:12,14` | `req.query.classId` / `taskService.list(req.query.classId)` | (a) | `req.query.courseOfferingId` |
+
+---
+
+##### SUBMISSION module
+
+Submission model is **UNCHANGED** — carries `taskId` + `groupId`, no `classId`. The service
+derives class context by reading off the Task. After Step 7, it reads `task.courseOfferingId`.
+
+| File | Lines | Class | Fix |
+|---|---|---|---|
+| `submissionService.js:6` | `require courseAssignmentService` | (b) | Replace with `courseOfferingService` or `courseOfferingRepository` |
+| `submissionService.js:14-16` | `resolveStudentGroup`: `findAll({ userId, classId: task.classId })` | (a+b) | Load offering from `task.courseOfferingId` → get cohortId → `findOne({ userId, cohortId, deletedAt:null })` |
+| `submissionService.js:18` | `'You are not enrolled in this class'` | (c) string | `'You are not enrolled in this cohort'` |
+| `submissionService.js:29-32` | `assertInstructorAccess(classId)` / `courseAssignmentService.hasAccess` | (b) | `assertCourseOfferingAccess(task.courseOfferingId, context)` |
+| `submissionService.js:105,126,151` | `assertInstructorAccess(task.classId, context)` | (b) | `assertCourseOfferingAccess(task.courseOfferingId, context)` |
+
+---
+
+##### FEEDBACK module
+
+> **CURRENTLY BROKEN** — `feedbackService` reads `group.classId` which was removed in Step 6.
+> Instructor access checks fail at runtime until this is fixed.
+
+| File | Lines | Class | Fix |
+|---|---|---|---|
+| `feedbackService.js:5` | `require courseAssignmentService` | (b) | Replace with `courseOfferingService` |
+| `feedbackService.js:18-19` | `group.classId` → `courseAssignmentService.hasAccess` | (b) | Read `group.courseOfferingId`; pass to `courseOfferingService.getById(id, context)` |
+| `feedbackService.js:36-38` | `task.classId !== group.classId` validation | (a) | `task.courseOfferingId !== group.courseOfferingId` |
+
+---
+
+##### REPORT module
+
+| File | Lines | Class | Fix |
+|---|---|---|---|
+| `reportService.js:3-4` | `require classService` + `require courseAssignmentService` | (b) | Remove both; add `courseOfferingService` |
+| `reportService.js:7-10` | `assertAccess(classId)` / `courseAssignmentService.hasAccess` | (b) | `courseOfferingService.getById(id, context)` |
+| `reportService.js:20-25,85-90` | `buildGroupReport/Csv(classId, courseId, context)` | (a) | Signature → `(courseOfferingId, context)`; `groupRepository.findByCourse` → `findByCourseOffering` |
+| `reportService.js:59,103` | `m.attendance` on student row | (c) removed field | Load `attendanceRepository.getAttendanceMap(courseOfferingId)` once; join per student `_id` |
+| `reportController.js:18-24` | `classId + courseId` query params | (a) | Single `courseOfferingId` param |
+
+---
+
+##### COURSE service cascade
+
+`courseService.softDelete` currently checks **both** `classRepository.countByCourse` AND
+`courseOfferingRepository.countByCourse`. Step 7 removes the Class check and `classRepository`
+import, leaving only the offering guard.
+
+---
+
+#### Files to modify in Step 7
+
+- `backend/src/modules/task/models/Task.js`
+- `backend/src/modules/task/repositories/taskRepository.js`
+- `backend/src/modules/task/services/taskService.js`
+- `backend/src/modules/task/validations/taskValidation.js`
+- `backend/src/modules/task/controllers/taskController.js` (query param only)
+- `backend/src/modules/submission/services/submissionService.js`
+- `backend/src/modules/feedback/services/feedbackService.js`
+- `backend/src/modules/report/services/reportService.js`
+- `backend/src/modules/report/controllers/reportController.js`
+- `backend/src/modules/course/services/courseService.js`
+
+**Proof step works:**
+- Server boots clean; grep confirms zero `classId`/`Class` refs in all ten modules
+- POST `/api/tasks` with `courseOfferingId` → 201
+- `courseService.softDelete` blocks on active CourseOfferings (409)
 
 ---
 
