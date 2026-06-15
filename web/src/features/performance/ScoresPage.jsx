@@ -5,7 +5,7 @@ import { Loader2, RefreshCw, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { selectRole } from '@/features/auth/authSlice';
 import { useGetStudentsQuery } from '@/features/student/studentApi';
-import { useGetClassByIdQuery } from '@/features/class/classApi';
+import { useGetCohortByIdQuery } from '@/features/cohort/cohortApi';
 import {
   useRecalculateCohortMutation,
   useUpdateScoresMutation,
@@ -80,17 +80,17 @@ function ScoreRow({ student, isAdmin }) {
 }
 
 export default function ScoresPage() {
-  const { classId } = useParams();
+  const { cohortId } = useParams();
   const isAdmin = useSelector(selectRole) === 'admin';
-  const { data: cls, isLoading: loadingClass } = useGetClassByIdQuery(classId);
-  const { data: students = [], isLoading, error } = useGetStudentsQuery(classId);
+  const { data: cohort, isLoading: loadingCohort } = useGetCohortByIdQuery(cohortId);
+  const { data: students = [], isLoading, error } = useGetStudentsQuery(cohortId);
   const [recalculate, { isLoading: recalculating }] = useRecalculateCohortMutation();
 
-  const className = cls?.name ?? (loadingClass ? '…' : 'Class');
+  const cohortName = cohort?.name ?? (loadingCohort ? '…' : 'Cohort');
 
   async function handleRecalculate() {
     try {
-      const result = await recalculate(classId).unwrap();
+      const result = await recalculate(cohortId).unwrap();
       toast.success(`Recalculated ${result.updated} student${result.updated !== 1 ? 's' : ''}`);
     } catch (err) {
       toast.error(err?.data?.error?.message ?? 'Recalculation failed');
@@ -102,9 +102,9 @@ export default function ScoresPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="eyebrow mb-1">
-            <Link to="/classes" className="hover:underline">Classes</Link>
+            <Link to="/cohorts" className="hover:underline">Cohorts</Link>
             {' / '}
-            <Link to={`/classes/${classId}/students`} className="hover:underline">{className}</Link>
+            <Link to={`/cohorts/${cohortId}/students`} className="hover:underline">{cohortName}</Link>
             {' / '}
             Grades
           </p>
@@ -132,8 +132,8 @@ export default function ScoresPage() {
         ) : students.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 text-center">
             <p className="text-ink-400 text-sm">
-              No students in this class yet.{' '}
-              <Link to={`/classes/${classId}/students`} className="text-just-blue-600 hover:underline">
+              No students in this cohort yet.{' '}
+              <Link to={`/cohorts/${cohortId}/students`} className="text-just-blue-600 hover:underline">
                 Add students first.
               </Link>
             </p>

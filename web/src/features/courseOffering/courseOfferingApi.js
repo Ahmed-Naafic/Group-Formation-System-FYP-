@@ -17,6 +17,12 @@ export const courseOfferingApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data.offering,
       invalidatesTags: ['CourseOffering'],
     }),
+    getCourseOfferingById: build.query({
+      query: (id) => `/api/course-offerings/${id}`,
+      transformResponse: (res) => res.data.offering,
+      providesTags: (result, error, id) => [{ type: 'CourseOffering', id }],
+    }),
+
     deleteCourseOffering: build.mutation({
       query: (id) => ({ url: `/api/course-offerings/${id}`, method: 'DELETE' }),
       invalidatesTags: ['CourseOffering'],
@@ -27,6 +33,7 @@ export const courseOfferingApi = baseApi.injectEndpoints({
 
 export const {
   useGetCourseOfferingsQuery,
+  useGetCourseOfferingByIdQuery,
   useCreateCourseOfferingMutation,
   useUpdateCourseOfferingMutation,
   useDeleteCourseOfferingMutation,

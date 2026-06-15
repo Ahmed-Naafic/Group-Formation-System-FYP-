@@ -3,7 +3,7 @@ import { baseApi } from '@/lib/api';
 export const groupApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     getGroups: build.query({
-      query: ({ classId, courseId }) => ({ url: '/api/groups', params: { classId, courseId } }),
+      query: ({ courseOfferingId }) => ({ url: '/api/groups', params: { courseOfferingId } }),
       transformResponse: (res) => res.data.groups,
       providesTags: (result) =>
         result
@@ -36,8 +36,8 @@ export const groupApi = baseApi.injectEndpoints({
     }),
 
     deleteGroups: build.mutation({
-      query: ({ classId, courseId }) => ({
-        url: `/api/groups?classId=${classId}&courseId=${courseId}`,
+      query: ({ courseOfferingId }) => ({
+        url: `/api/groups?courseOfferingId=${courseOfferingId}`,
         method: 'DELETE',
       }),
       transformResponse: (res) => res.data,

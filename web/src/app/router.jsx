@@ -88,7 +88,36 @@ export const router = createBrowserRouter([
         handle: { title: 'Classes' },
       },
 
-      // ── Students (scoped by class — rewired to cohort in Step 9) ────────
+      // ── Students (cohort-scoped — Step 9) ─────────────────────────────────
+      {
+        path: '/cohorts/:cohortId/students',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><StudentsPage /></ProtectedRoute>,
+        handle: { title: 'Students' },
+      },
+      {
+        path: '/cohorts/:cohortId/students/upload',
+        element: <ProtectedRoute roles={['admin']}><BulkUploadPage /></ProtectedRoute>,
+        handle: { title: 'Upload Students' },
+      },
+      {
+        path: '/students/:id',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><StudentDetailPage /></ProtectedRoute>,
+        handle: { title: 'Student' },
+      },
+
+      // ── Groups (offering-scoped — Step 9) ──────────────────────────────
+      {
+        path: '/course-offerings/:offeringId/groups',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><GroupsPage /></ProtectedRoute>,
+        handle: { title: 'Groups' },
+      },
+      {
+        path: '/groups/:id',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><GroupDetailPage /></ProtectedRoute>,
+        handle: { title: 'Group' },
+      },
+
+      // ── Legacy class-scoped routes (removed in Step 10) ────────────────
       {
         path: '/classes/:classId/students',
         element: <ProtectedRoute roles={['admin', 'instructor']}><StudentsPage /></ProtectedRoute>,
@@ -100,21 +129,9 @@ export const router = createBrowserRouter([
         handle: { title: 'Upload Students' },
       },
       {
-        path: '/students/:id',
-        element: <ProtectedRoute roles={['admin', 'instructor']}><StudentDetailPage /></ProtectedRoute>,
-        handle: { title: 'Student' },
-      },
-
-      // ── Groups (rewired to courseOfferingId in Step 9) ──────────────────
-      {
         path: '/classes/:classId/groups',
         element: <ProtectedRoute roles={['admin', 'instructor']}><GroupsPage /></ProtectedRoute>,
         handle: { title: 'Groups' },
-      },
-      {
-        path: '/groups/:id',
-        element: <ProtectedRoute roles={['admin', 'instructor']}><GroupDetailPage /></ProtectedRoute>,
-        handle: { title: 'Group' },
       },
 
       // ── Tasks & Submissions ─────────────────────────────────────────────
@@ -129,7 +146,13 @@ export const router = createBrowserRouter([
         handle: { title: 'Submissions' },
       },
 
-      // ── Scores (rewired to cohort in Step 9) ────────────────────────────
+      // ── Scores (cohort-scoped — Step 9) ─────────────────────────────────
+      {
+        path: '/cohorts/:cohortId/scores',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><ScoresPage /></ProtectedRoute>,
+        handle: { title: 'Scores' },
+      },
+      // Legacy (removed in Step 10)
       {
         path: '/classes/:classId/scores',
         element: <ProtectedRoute roles={['admin', 'instructor']}><ScoresPage /></ProtectedRoute>,

@@ -17,6 +17,12 @@ export const cohortApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data.cohort,
       invalidatesTags: ['Cohort'],
     }),
+    getCohortById: build.query({
+      query: (id) => `/api/cohorts/${id}`,
+      transformResponse: (res) => res.data.cohort,
+      providesTags: (result, error, id) => [{ type: 'Cohort', id }],
+    }),
+
     deleteCohort: build.mutation({
       query: (id) => ({ url: `/api/cohorts/${id}`, method: 'DELETE' }),
       invalidatesTags: ['Cohort'],
@@ -27,6 +33,7 @@ export const cohortApi = baseApi.injectEndpoints({
 
 export const {
   useGetCohortsQuery,
+  useGetCohortByIdQuery,
   useCreateCohortMutation,
   useUpdateCohortMutation,
   useDeleteCohortMutation,
