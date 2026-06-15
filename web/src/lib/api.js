@@ -24,8 +24,10 @@ export const baseApi = createApi({
   baseQuery: baseQueryWithLogout,
   tagTypes: [
     'Faculty', 'Department', 'Course', 'Semester', 'Class',
+    'AcademicYear', 'Cohort', 'CourseOffering',
     'Student', 'Performance', 'Group', 'Workspace', 'User',
     'Task', 'Submission', 'Notification', 'Message', 'File',
+    'Attendance',
   ],
   endpoints: () => ({}),
 });

@@ -7,7 +7,10 @@ import DashboardPage         from '@/pages/DashboardPage';
 import FacultiesPage         from '@/features/faculty/FacultiesPage';
 import DepartmentsPage       from '@/features/department/DepartmentsPage';
 import CoursesPage           from '@/features/course/CoursesPage';
+import AcademicYearsPage     from '@/features/academicYear/AcademicYearsPage';
 import SemestersPage         from '@/features/semester/SemestersPage';
+import CohortsPage           from '@/features/cohort/CohortsPage';
+import CourseOfferingsPage   from '@/features/courseOffering/CourseOfferingsPage';
 import ClassesPage           from '@/features/class/ClassesPage';
 import StudentsPage          from '@/features/student/StudentsPage';
 import BulkUploadPage        from '@/features/student/BulkUploadPage';
@@ -24,15 +27,6 @@ import NotificationsPage       from '@/features/notification/NotificationsPage';
 import AuditLogPage            from '@/features/auditLog/AuditLogPage';
 import ReportsPage             from '@/features/report/ReportsPage';
 
-function ComingSoon({ title }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <p className="eyebrow mb-2">{title}</p>
-      <p className="text-ink-400 text-sm">This section will be available in a future phase.</p>
-    </div>
-  );
-}
-
 export const router = createBrowserRouter([
   // ── Public ─────────────────────────────────────────────────────────────
   { path: '/login',           element: <LoginPage /> },
@@ -46,12 +40,7 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      // Dashboard
-      {
-        index: true,
-        element: <DashboardPage />,
-        handle: { title: 'Dashboard' },
-      },
+      { index: true, element: <DashboardPage />, handle: { title: 'Dashboard' } },
 
       // ── Academic Structure (admin) ──────────────────────────────────────
       {
@@ -70,19 +59,36 @@ export const router = createBrowserRouter([
         handle: { title: 'Courses' },
       },
       {
+        path: '/academic-years',
+        element: <ProtectedRoute roles={['admin']}><AcademicYearsPage /></ProtectedRoute>,
+        handle: { title: 'Academic Years' },
+      },
+      {
         path: '/semesters',
         element: <ProtectedRoute roles={['admin']}><SemestersPage /></ProtectedRoute>,
         handle: { title: 'Semesters' },
       },
 
-      // ── Classes (admin + instructor) ────────────────────────────────────
+      // ── Operations (admin + instructor) ────────────────────────────────
+      {
+        path: '/cohorts',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><CohortsPage /></ProtectedRoute>,
+        handle: { title: 'Cohorts' },
+      },
+      {
+        path: '/course-offerings',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><CourseOfferingsPage /></ProtectedRoute>,
+        handle: { title: 'Course Offerings' },
+      },
+
+      // ── Classes (legacy — removed in Step 10) ──────────────────────────
       {
         path: '/classes',
         element: <ProtectedRoute roles={['admin', 'instructor']}><ClassesPage /></ProtectedRoute>,
         handle: { title: 'Classes' },
       },
 
-      // ── Students (admin + instructor, scoped by class) ──────────────────
+      // ── Students (scoped by class — rewired to cohort in Step 9) ────────
       {
         path: '/classes/:classId/students',
         element: <ProtectedRoute roles={['admin', 'instructor']}><StudentsPage /></ProtectedRoute>,
@@ -99,7 +105,7 @@ export const router = createBrowserRouter([
         handle: { title: 'Student' },
       },
 
-      // ── Groups (admin + instructor, scoped by class) ──────────────────
+      // ── Groups (rewired to courseOfferingId in Step 9) ──────────────────
       {
         path: '/classes/:classId/groups',
         element: <ProtectedRoute roles={['admin', 'instructor']}><GroupsPage /></ProtectedRoute>,
@@ -111,7 +117,7 @@ export const router = createBrowserRouter([
         handle: { title: 'Group' },
       },
 
-      // ── Tasks & Submissions (admin + instructor, scoped by class) ──────
+      // ── Tasks & Submissions ─────────────────────────────────────────────
       {
         path: '/classes/:classId/tasks',
         element: <ProtectedRoute roles={['admin', 'instructor']}><TasksPage /></ProtectedRoute>,
@@ -123,54 +129,45 @@ export const router = createBrowserRouter([
         handle: { title: 'Submissions' },
       },
 
-      // ── Scores & Attendance (admin + instructor, scoped by class) ──────
+      // ── Scores (rewired to cohort in Step 9) ────────────────────────────
       {
         path: '/classes/:classId/scores',
         element: <ProtectedRoute roles={['admin', 'instructor']}><ScoresPage /></ProtectedRoute>,
         handle: { title: 'Scores' },
       },
 
-      // ── Settings (admin) ───────────────────────────────────────────────
+      // ── Settings ────────────────────────────────────────────────────────
       {
         path: '/settings/performance',
         element: <ProtectedRoute roles={['admin']}><PerformanceSettingsPage /></ProtectedRoute>,
         handle: { title: 'Performance Settings' },
       },
-
-      // ── Reports (admin + instructor) ──────────────────────────────────
       {
         path: '/reports',
         element: <ProtectedRoute roles={['admin', 'instructor']}><ReportsPage /></ProtectedRoute>,
         handle: { title: 'Reports' },
       },
-
-      // ── Audit log (admin) ──────────────────────────────────────────────
       {
         path: '/audit',
         element: <ProtectedRoute roles={['admin']}><AuditLogPage /></ProtectedRoute>,
         handle: { title: 'Audit Log' },
       },
 
-      // ── Instructor assignments (admin) ─────────────────────────────────
+      // ── Users ────────────────────────────────────────────────────────────
       {
         path: '/instructors',
         element: <ProtectedRoute roles={['admin']}><InstructorsPage /></ProtectedRoute>,
         handle: { title: 'Instructors' },
       },
 
-      // ── Notifications (all roles) ─────────────────────────────────────
+      // ── Notifications ─────────────────────────────────────────────────
       {
         path: '/notifications',
         element: <NotificationsPage />,
         handle: { title: 'Notifications' },
       },
 
-      // ── Student workspaces ─────────────────────────────────────────────
-      {
-        path: '/workspaces',
-        element: <ProtectedRoute roles={['student']}><DashboardPage /></ProtectedRoute>,
-        handle: { title: 'My Groups' },
-      },
+      // ── Workspaces ─────────────────────────────────────────────────────
       {
         path: '/workspaces/:id',
         element: <ProtectedRoute roles={['admin', 'instructor', 'student']}><WorkspaceDetailPage /></ProtectedRoute>,
@@ -179,6 +176,5 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // ── Catch-all ───────────────────────────────────────────────────────────
   { path: '*', element: <Navigate to="/" replace /> },
 ]);
