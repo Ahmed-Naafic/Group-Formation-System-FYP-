@@ -4,12 +4,11 @@ const objectId = Joi.string().hex().length(24);
 
 const taskValidation = {
   createTask: Joi.object({
-    classId:         objectId.required(),
-    title:           Joi.string().trim().min(1).max(200).required(),
-    description:     Joi.string().trim().max(5000).allow('', null),
-    deadline:        Joi.date().iso().allow(null),
-    assignedGroupIds: Joi.array().items(objectId).default([]),
-    // attachments are added via multipart upload; not validated here
+    courseOfferingId:  objectId.required(),
+    title:             Joi.string().trim().min(1).max(200).required(),
+    description:       Joi.string().trim().max(5000).allow('', null),
+    deadline:          Joi.date().iso().allow(null),
+    assignedGroupIds:  Joi.array().items(objectId).default([]),
   }),
 
   updateTask: Joi.object({
@@ -21,7 +20,7 @@ const taskValidation = {
   }).min(1),
 
   listTasks: Joi.object({
-    classId: objectId.required(),
+    courseOfferingId: objectId.required(),
   }),
 
   idParam: Joi.object({ id: objectId.required() }),

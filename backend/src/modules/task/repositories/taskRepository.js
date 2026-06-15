@@ -1,8 +1,10 @@
 const Task = require('../models/Task');
 
+// Group no longer has courseId (removed in Step 6) — populate courseOfferingId instead
 const BASE_POPULATE = [
   { path: 'assignedBy',     select: 'fullName role email' },
-  { path: 'assignedGroups', select: 'name courseId', populate: { path: 'courseId', select: 'name code' } },
+  { path: 'assignedGroups', select: 'name courseOfferingId',
+    populate: { path: 'courseOfferingId', select: 'courseId', populate: { path: 'courseId', select: 'name code' } } },
 ];
 
 const taskRepository = {
@@ -14,8 +16,8 @@ const taskRepository = {
     return Task.findById(id).populate(BASE_POPULATE);
   },
 
-  findByClass(classId) {
-    return Task.find({ classId }).populate(BASE_POPULATE).sort({ createdAt: -1 });
+  findByOffering(courseOfferingId) {
+    return Task.find({ courseOfferingId }).populate(BASE_POPULATE).sort({ createdAt: -1 });
   },
 
   // Returns tasks that have at least one group from the given groupIds list

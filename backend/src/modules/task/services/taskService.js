@@ -1,53 +1,47 @@
-const emitter                 = require('../../../common/events/emitter');
-const taskRepository          = require('../repositories/taskRepository');
-const classService            = require('../../class/services/classService');
-const courseAssignmentService = require('../../courseAssignment/services/courseAssignmentService');
-const groupRepository         = require('../../group/repositories/groupRepository');
-const studentRepository       = require('../../student/repositories/studentRepository');
+const emitter                  = require('../../../common/events/emitter');
+const taskRepository           = require('../repositories/taskRepository');
+const courseOfferingService    = require('../../courseOffering/services/courseOfferingService');
+const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
+const groupRepository          = require('../../group/repositories/groupRepository');
+const studentRepository        = require('../../student/repositories/studentRepository');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../../../common/errors');
 
-// Throws if the calling instructor/admin cannot manage tasks for this class.
-async function assertWriteAccess(classId, context) {
-  if (context.role === 'admin') return;
-  const allowed = await courseAssignmentService.hasAccess(context.userId, String(classId));
-  if (!allowed) throw new ForbiddenError('You are not assigned to this class');
+// courseOfferingService.getById(id, context) enforces ownership for instructors
+// and existence for everyone. Admin passes through; instructor throws if not their offering.
+async function assertCourseOfferingAccess(courseOfferingId, context) {
+  return courseOfferingService.getById(courseOfferingId, context);
 }
 
 const taskService = {
   async create(data, context) {
-    await classService.getById(String(data.classId)); // confirms class exists
-    await assertWriteAccess(data.classId, context);
+    await assertCourseOfferingAccess(data.courseOfferingId, context);
 
-    // Validate that all assignedGroups belong to this class
+    // Validate that all assignedGroups belong to this offering
     if (data.assignedGroupIds?.length) {
       for (const gid of data.assignedGroupIds) {
         const group = await groupRepository.findById(gid);
         if (!group) throw new NotFoundError(`Group ${gid} not found`);
-        if (String(group.classId?._id ?? group.classId) !== String(data.classId)) {
-          throw new BadRequestError(`Group ${gid} does not belong to class ${data.classId}`);
+        const gOfferingId = String(group.courseOfferingId?._id ?? group.courseOfferingId);
+        if (gOfferingId !== String(data.courseOfferingId)) {
+          throw new BadRequestError(`Group ${gid} does not belong to offering ${data.courseOfferingId}`);
         }
       }
     }
 
     const task = await taskRepository.create({
-      classId:        data.classId,
-      assignedGroups: data.assignedGroupIds ?? [],
-      assignedBy:     context.userId,
-      title:          data.title,
-      description:    data.description,
-      attachments:    data.attachments ?? [],
-      deadline:       data.deadline,
-      status:         'open',
+      courseOfferingId: data.courseOfferingId,
+      assignedGroups:   data.assignedGroupIds ?? [],
+      assignedBy:       context.userId,
+      title:            data.title,
+      description:      data.description,
+      attachments:      data.attachments ?? [],
+      deadline:         data.deadline,
+      status:           'open',
     });
 
-    // Populate assignedGroups so the listener can fan out to member userIds
     await task.populate({
       path: 'assignedGroups',
-      populate: {
-        path: 'memberIds',
-        select: 'userId',
-        populate: { path: 'userId', select: '_id' },
-      },
+      populate: { path: 'memberIds', select: 'userId', populate: { path: 'userId', select: '_id' } },
     });
 
     emitter.emit('task.created', {
@@ -59,22 +53,25 @@ const taskService = {
     return task;
   },
 
-  // Admin/instructor: list all tasks for a class.
-  // Student: list only tasks whose assignedGroups include their groups.
-  async list(classId, context) {
-    if (!classId) throw new BadRequestError('classId query parameter is required');
+  // Admin/instructor: list all tasks for an offering.
+  // Student: list only tasks whose assignedGroups include their group in this offering.
+  async list(courseOfferingId, context) {
+    if (!courseOfferingId) throw new BadRequestError('courseOfferingId query parameter is required');
 
     if (context.role === 'student') {
-      const studentRecords = await studentRepository.findAll({ userId: context.userId, classId });
-      if (!studentRecords.length) return [];
-      const studentIds = studentRecords.map((s) => s._id);
-      const groups     = await groupRepository.findByMemberIds(studentIds);
+      // Load offering to get cohortId, then find the student's record and groups
+      const offering = await courseOfferingRepository.findById(courseOfferingId);
+      if (!offering) return [];
+      const cohortId = String(offering.cohortId?._id ?? offering.cohortId);
+      const studentRecord = await studentRepository.findOne({ userId: context.userId, cohortId, deletedAt: null });
+      if (!studentRecord) return [];
+      const groups = await groupRepository.findByOfferingAndMemberId(courseOfferingId, studentRecord._id);
       if (!groups.length) return [];
-      return taskRepository.findByGroupIds(groups.map((g) => g._id));
+      return taskRepository.findByGroupIds(groups.map(g => g._id));
     }
 
-    await assertWriteAccess(classId, context);
-    return taskRepository.findByClass(classId);
+    await assertCourseOfferingAccess(courseOfferingId, context);
+    return taskRepository.findByOffering(courseOfferingId);
   },
 
   async getById(id, context) {
@@ -82,16 +79,19 @@ const taskService = {
     if (!task) throw new NotFoundError('Task not found');
 
     if (context.role === 'student') {
-      // Student must be a member of at least one assigned group
-      const studentRecords = await studentRepository.findAll({ userId: context.userId });
-      const studentIds     = studentRecords.map((s) => String(s._id));
-      const assigned       = task.assignedGroups.map((g) => String(g._id ?? g));
-      const groups         = await groupRepository.findByMemberIds(studentRecords.map((s) => s._id));
-      const memberGroupIds = groups.map((g) => String(g._id));
-      const hasAccess      = assigned.some((gid) => memberGroupIds.includes(gid));
+      const offering = await courseOfferingRepository.findById(String(task.courseOfferingId?._id ?? task.courseOfferingId));
+      const cohortId = offering ? String(offering.cohortId?._id ?? offering.cohortId) : null;
+      const studentRecords = cohortId
+        ? await studentRepository.findAll({ userId: context.userId, cohortId, deletedAt: null })
+        : [];
+      const studentIds  = studentRecords.map(s => s._id);
+      const groups      = await groupRepository.findByMemberIds(studentIds);
+      const memberGroupIds = groups.map(g => String(g._id));
+      const assigned    = task.assignedGroups.map(g => String(g._id ?? g));
+      const hasAccess   = assigned.length === 0 || assigned.some(gid => memberGroupIds.includes(gid));
       if (!hasAccess) throw new ForbiddenError('This task is not assigned to your group');
     } else {
-      await assertWriteAccess(task.classId, context);
+      await assertCourseOfferingAccess(String(task.courseOfferingId?._id ?? task.courseOfferingId), context);
     }
 
     return task;
@@ -100,9 +100,8 @@ const taskService = {
   async update(id, updates, context) {
     const task = await taskRepository.findById(id);
     if (!task) throw new NotFoundError('Task not found');
-    await assertWriteAccess(task.classId, context);
+    await assertCourseOfferingAccess(String(task.courseOfferingId?._id ?? task.courseOfferingId), context);
 
-    // Only the creator or admin can update
     if (context.role !== 'admin' && String(task.assignedBy?._id ?? task.assignedBy) !== String(context.userId)) {
       throw new ForbiddenError('Only the task creator can update this task');
     }
@@ -118,7 +117,7 @@ const taskService = {
   async remove(id, context) {
     const task = await taskRepository.findById(id);
     if (!task) throw new NotFoundError('Task not found');
-    await assertWriteAccess(task.classId, context);
+    await assertCourseOfferingAccess(String(task.courseOfferingId?._id ?? task.courseOfferingId), context);
 
     if (context.role !== 'admin' && String(task.assignedBy?._id ?? task.assignedBy) !== String(context.userId)) {
       throw new ForbiddenError('Only the task creator can delete this task');
