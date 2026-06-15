@@ -4,7 +4,6 @@ import {
   LayoutDashboard, Building2, Layers, BookOpen,
   CalendarDays, Calendar, Users, UserCheck, SlidersHorizontal,
   X, Users2, ShieldAlert, FileBarChart, GraduationCap, BookMarked,
-  School,
 } from 'lucide-react';
 import { selectRole } from '@/features/auth/authSlice';
 import { cn } from '@/lib/utils';
@@ -20,7 +19,6 @@ const ADMIN_NAV = [
   { type: 'section', label: 'Operations' },
   { type: 'link',    label: 'Cohorts',            icon: GraduationCap,     to: '/cohorts' },
   { type: 'link',    label: 'Course Offerings',   icon: BookMarked,        to: '/course-offerings' },
-  { type: 'link',    label: 'Classes',            icon: School,            to: '/classes' },
   { type: 'section', label: 'Users' },
   { type: 'link',    label: 'Instructors',        icon: UserCheck,         to: '/instructors' },
   { type: 'section', label: 'Settings' },

@@ -11,7 +11,6 @@ import AcademicYearsPage     from '@/features/academicYear/AcademicYearsPage';
 import SemestersPage         from '@/features/semester/SemestersPage';
 import CohortsPage           from '@/features/cohort/CohortsPage';
 import CourseOfferingsPage   from '@/features/courseOffering/CourseOfferingsPage';
-import ClassesPage           from '@/features/class/ClassesPage';
 import StudentsPage          from '@/features/student/StudentsPage';
 import BulkUploadPage        from '@/features/student/BulkUploadPage';
 import StudentDetailPage     from '@/features/student/StudentDetailPage';
@@ -19,7 +18,7 @@ import ScoresPage              from '@/features/performance/ScoresPage';
 import PerformanceSettingsPage from '@/features/performance/PerformanceSettingsPage';
 import GroupsPage              from '@/features/group/GroupsPage';
 import GroupDetailPage         from '@/features/group/GroupDetailPage';
-import InstructorsPage         from '@/features/courseAssignment/InstructorsPage';
+import InstructorsPage         from '@/features/user/InstructorsPage';
 import WorkspaceDetailPage     from '@/features/workspace/WorkspaceDetailPage';
 import TasksPage               from '@/features/task/TasksPage';
 import TaskSubmissionsPage     from '@/features/task/TaskSubmissionsPage';
@@ -81,14 +80,7 @@ export const router = createBrowserRouter([
         handle: { title: 'Course Offerings' },
       },
 
-      // ── Classes (legacy — removed in Step 10) ──────────────────────────
-      {
-        path: '/classes',
-        element: <ProtectedRoute roles={['admin', 'instructor']}><ClassesPage /></ProtectedRoute>,
-        handle: { title: 'Classes' },
-      },
-
-      // ── Students (cohort-scoped — Step 9) ─────────────────────────────────
+      // ── Students (cohort-scoped) ────────────────────────────────────────
       {
         path: '/cohorts/:cohortId/students',
         element: <ProtectedRoute roles={['admin', 'instructor']}><StudentsPage /></ProtectedRoute>,
@@ -105,7 +97,7 @@ export const router = createBrowserRouter([
         handle: { title: 'Student' },
       },
 
-      // ── Groups (offering-scoped — Step 9) ──────────────────────────────
+      // ── Groups (offering-scoped) ────────────────────────────────────────
       {
         path: '/course-offerings/:offeringId/groups',
         element: <ProtectedRoute roles={['admin', 'instructor']}><GroupsPage /></ProtectedRoute>,
@@ -117,26 +109,9 @@ export const router = createBrowserRouter([
         handle: { title: 'Group' },
       },
 
-      // ── Legacy class-scoped routes (removed in Step 10) ────────────────
+      // ── Tasks (offering-scoped) ─────────────────────────────────────────
       {
-        path: '/classes/:classId/students',
-        element: <ProtectedRoute roles={['admin', 'instructor']}><StudentsPage /></ProtectedRoute>,
-        handle: { title: 'Students' },
-      },
-      {
-        path: '/classes/:classId/students/upload',
-        element: <ProtectedRoute roles={['admin']}><BulkUploadPage /></ProtectedRoute>,
-        handle: { title: 'Upload Students' },
-      },
-      {
-        path: '/classes/:classId/groups',
-        element: <ProtectedRoute roles={['admin', 'instructor']}><GroupsPage /></ProtectedRoute>,
-        handle: { title: 'Groups' },
-      },
-
-      // ── Tasks & Submissions ─────────────────────────────────────────────
-      {
-        path: '/classes/:classId/tasks',
+        path: '/course-offerings/:offeringId/tasks',
         element: <ProtectedRoute roles={['admin', 'instructor']}><TasksPage /></ProtectedRoute>,
         handle: { title: 'Tasks' },
       },
@@ -146,15 +121,9 @@ export const router = createBrowserRouter([
         handle: { title: 'Submissions' },
       },
 
-      // ── Scores (cohort-scoped — Step 9) ─────────────────────────────────
+      // ── Scores (cohort-scoped) ──────────────────────────────────────────
       {
         path: '/cohorts/:cohortId/scores',
-        element: <ProtectedRoute roles={['admin', 'instructor']}><ScoresPage /></ProtectedRoute>,
-        handle: { title: 'Scores' },
-      },
-      // Legacy (removed in Step 10)
-      {
-        path: '/classes/:classId/scores',
         element: <ProtectedRoute roles={['admin', 'instructor']}><ScoresPage /></ProtectedRoute>,
         handle: { title: 'Scores' },
       },

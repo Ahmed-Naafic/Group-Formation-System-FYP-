@@ -3,7 +3,7 @@ import { baseApi } from '@/lib/api';
 export const taskApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     getTasks: build.query({
-      query: (classId) => ({ url: '/api/tasks', params: { classId } }),
+      query: (courseOfferingId) => ({ url: '/api/tasks', params: { courseOfferingId } }),
       transformResponse: (res) => res.data.tasks,
       providesTags: (result) =>
         result
