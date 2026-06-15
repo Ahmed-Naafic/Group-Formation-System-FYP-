@@ -62,6 +62,12 @@ const groupRepository = {
   countActiveByClass(classId) {
     return Group.countDocuments({ classId, status: 'active' });
   },
+
+  // Used by CourseOffering cascade-delete guard.
+  // Returns 0 until Step 6 adds courseOfferingId to Group documents.
+  countActiveByOffering(courseOfferingId) {
+    return Group.countDocuments({ courseOfferingId, status: 'active' });
+  },
 };
 
 module.exports = groupRepository;

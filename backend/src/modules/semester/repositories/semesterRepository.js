@@ -16,6 +16,16 @@ const semesterRepository = {
   updateById(id, updates) {
     return Semester.findByIdAndUpdate(id, updates, { new: true });
   },
+
+  findActiveByNameAndYear(name, year) {
+    return Semester.findOne({ name, year });
+  },
+
+  // Used by AcademicYear cascade-delete guard.
+  // Returns 0 until Step 4 adds academicYearId to Semester documents.
+  countByAcademicYear(academicYearId) {
+    return Semester.countDocuments({ academicYearId });
+  },
 };
 
 module.exports = semesterRepository;
