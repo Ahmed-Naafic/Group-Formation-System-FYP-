@@ -16,6 +16,27 @@ const groupHistoryRepository = {
     return GroupHistory.find({ cohortId }).sort({ generatedAt: -1 });
   },
 
+  // Populated version used by the read-only history view.
+  findByCohortPopulated(cohortId) {
+    return GroupHistory.find({ cohortId })
+      .populate({
+        path: 'courseOfferingId',
+        select: 'courseId semesterId instructorId',
+        populate: [
+          { path: 'courseId',   select: 'name code' },
+          { path: 'semesterId', select: 'name' },
+        ],
+      })
+      .populate({
+        path:     'memberIds',
+        select:   'fullName performanceCategory userId',
+        populate: { path: 'userId', select: 'studentId' },
+      })
+      .populate({ path: 'leaderId', select: '_id' })
+      .sort({ generatedAt: -1 })
+      .lean();
+  },
+
   deleteByGenerationId(generationId) {
     return GroupHistory.deleteMany({ generationId });
   },

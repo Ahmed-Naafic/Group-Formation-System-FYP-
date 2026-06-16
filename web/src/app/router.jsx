@@ -18,6 +18,7 @@ import ScoresPage              from '@/features/performance/ScoresPage';
 import PerformanceSettingsPage from '@/features/performance/PerformanceSettingsPage';
 import GroupsPage              from '@/features/group/GroupsPage';
 import GroupDetailPage         from '@/features/group/GroupDetailPage';
+import GroupHistoryPage        from '@/features/group/GroupHistoryPage';
 import InstructorsPage         from '@/features/user/InstructorsPage';
 import WorkspaceDetailPage     from '@/features/workspace/WorkspaceDetailPage';
 import TasksPage               from '@/features/task/TasksPage';
@@ -126,6 +127,13 @@ export const router = createBrowserRouter([
         path: '/cohorts/:cohortId/scores',
         element: <ProtectedRoute roles={['admin', 'instructor']}><ScoresPage /></ProtectedRoute>,
         handle: { title: 'Scores' },
+      },
+
+      // ── Group History (cohort-scoped, read-only) ────────────────────────
+      {
+        path: '/cohorts/:cohortId/history',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><GroupHistoryPage /></ProtectedRoute>,
+        handle: { title: 'Group History' },
       },
 
       // ── Settings ────────────────────────────────────────────────────────

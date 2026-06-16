@@ -31,9 +31,15 @@ const groupParamSchema = Joi.object({
   id: objectId.required(),
 });
 
+// Query param for GET /api/groups/history?cohortId=
+const cohortHistoryQuerySchema = Joi.object({
+  cohortId: objectId.required(),
+});
+
 module.exports = {
   generateGroupsSchema,
   updateGroupSchema,
   offeringQuerySchema,
   groupParamSchema,
+  cohortHistoryQuerySchema,
 };

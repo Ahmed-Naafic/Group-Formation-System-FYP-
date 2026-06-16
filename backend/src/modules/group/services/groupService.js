@@ -250,6 +250,40 @@ const groupService = {
 
     return groupRepository.updateById(id, { leaderId: finalLeaderId, memberIds: newMemberIds });
   },
+
+  // Read-only history view: all past generations for a cohort, newest first.
+  // Instructor-scoped to offerings they own; admin sees all.
+  async getHistory(cohortId, context) {
+    const records = await groupHistoryRepository.findByCohortPopulated(cohortId);
+
+    const filtered = context.role === 'instructor'
+      ? records.filter(r => {
+          const instrId = String(r.courseOfferingId?.instructorId ?? '');
+          return instrId === context.userId;
+        })
+      : records;
+
+    // Group by generationId; Map preserves newest-first insertion order.
+    const map = new Map();
+    for (const rec of filtered) {
+      const gid = String(rec.generationId);
+      if (!map.has(gid)) {
+        map.set(gid, {
+          generationId:   rec.generationId,
+          courseOffering: rec.courseOfferingId,
+          generatedAt:    rec.generatedAt,
+          groupSize:      rec.groupSize,
+          groups:         [],
+        });
+      }
+      map.get(gid).groups.push({
+        memberIds: rec.memberIds,
+        leaderId:  rec.leaderId,
+      });
+    }
+
+    return [...map.values()];
+  },
 };
 
 module.exports = groupService;
