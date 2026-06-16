@@ -4,16 +4,17 @@ import { useSelector } from 'react-redux';
 import {
   Building2, Layers, BookOpen, Calendar, Users, Users2,
   BarChart2, Loader2, Crown, UserCheck, ClipboardList,
-  Clock, AlertTriangle, AlertCircle,
+  Clock, AlertTriangle, AlertCircle, GraduationCap,
 } from 'lucide-react';
 import { selectCurrentUser, selectRole } from '@/features/auth/authSlice';
-import { useGetFacultiesQuery }   from '@/features/faculty/facultyApi';
-import { useGetDepartmentsQuery } from '@/features/department/departmentApi';
-import { useGetCoursesQuery }     from '@/features/course/courseApi';
-import { useGetSemestersQuery }   from '@/features/semester/semesterApi';
-import { useGetMyWorkspacesQuery } from '@/features/workspace/workspaceApi';
+import { useGetFacultiesQuery }     from '@/features/faculty/facultyApi';
+import { useGetDepartmentsQuery }   from '@/features/department/departmentApi';
+import { useGetCoursesQuery }       from '@/features/course/courseApi';
+import { useGetSemestersQuery }     from '@/features/semester/semesterApi';
+import { useGetMyWorkspacesQuery }  from '@/features/workspace/workspaceApi';
+import { useGetCohortsQuery }       from '@/features/cohort/cohortApi';
+import { useGetCourseOfferingsQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Badge } from '@/components/ui/badge';
-import { useGetClassesQuery }     from '@/features/class/classApi';
 import {
   useGetDashboardStatsQuery,
   useGetInstructorDashboardStatsQuery,
@@ -123,15 +124,15 @@ function RecentActivity({ entries }) {
 // ── Admin dashboard ───────────────────────────────────────────────────────────
 
 function AdminDashboard({ user }) {
-  const { data: faculties   = [], isLoading: lF  } = useGetFacultiesQuery();
-  const { data: departments = [], isLoading: lD  } = useGetDepartmentsQuery();
-  const { data: courses     = [], isLoading: lC  } = useGetCoursesQuery();
-  const { data: semesters   = [], isLoading: lS  } = useGetSemestersQuery();
-  const { data: classes     = [], isLoading: lCl } = useGetClassesQuery();
+  const { data: faculties   = [], isLoading: lF   } = useGetFacultiesQuery();
+  const { data: departments = [], isLoading: lD   } = useGetDepartmentsQuery();
+  const { data: courses     = [], isLoading: lC   } = useGetCoursesQuery();
+  const { data: semesters   = [], isLoading: lS   } = useGetSemestersQuery();
+  const { data: cohorts     = [], isLoading: lCoh } = useGetCohortsQuery();
+  const { data: offerings   = [], isLoading: lOff } = useGetCourseOfferingsQuery();
   const { data: dash,             isLoading: lDash } = useGetDashboardStatsQuery();
 
-  const semesterMap  = useMemo(() => Object.fromEntries(semesters.map((s) => [s._id, s])), [semesters]);
-  const recentClasses = classes.slice(0, 8);
+  const recentOfferings = offerings.slice(0, 8);
 
   return (
     <div className="max-w-5xl">
@@ -144,26 +145,25 @@ function AdminDashboard({ user }) {
       </p>
 
       {/* Row 1 — Academic structure */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
-        <StatCard icon={Building2} label="Faculties"   count={lF   ? null : faculties.length}   to="/faculties"   iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
-        <StatCard icon={Layers}    label="Departments" count={lD   ? null : departments.length} to="/departments" iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
-        <StatCard icon={BookOpen}  label="Courses"     count={lC   ? null : courses.length}     to="/courses"     iconBg="rgba(18,138,71,0.08)" iconColor="var(--just-green-600)" />
-        <StatCard icon={Calendar}  label="Semesters"   count={lS   ? null : semesters.length}   to="/semesters"   iconBg="rgba(232,197,71,0.12)" iconColor="var(--just-gold-400)" />
-        <StatCard icon={Users}     label="Classes"     count={lCl  ? null : classes.length}     to="/classes"     iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
+        <StatCard icon={Building2}     label="Faculties"         count={lF   ? null : faculties.length}   to="/faculties"         iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
+        <StatCard icon={Layers}        label="Departments"       count={lD   ? null : departments.length} to="/departments"       iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
+        <StatCard icon={BookOpen}      label="Courses"           count={lC   ? null : courses.length}     to="/courses"           iconBg="rgba(18,138,71,0.08)" iconColor="var(--just-green-600)" />
+        <StatCard icon={Calendar}      label="Semesters"         count={lS   ? null : semesters.length}   to="/semesters"         iconBg="rgba(232,197,71,0.12)" iconColor="var(--just-gold-400)" />
+        <StatCard icon={GraduationCap} label="Cohorts"           count={lCoh ? null : cohorts.length}     to="/cohorts"           iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
+        <StatCard icon={Users2}        label="Offerings"         count={lOff ? null : offerings.length}   to="/course-offerings"  iconBg="rgba(18,138,71,0.08)" iconColor="var(--just-green-600)" />
       </div>
 
       {/* Row 2 — Live stats from dashboard API */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <StatCard icon={UserCheck}     label="Active Users"    count={lDash ? null : dash?.counts?.users}        iconBg="rgba(18,138,71,0.08)"  iconColor="var(--just-green-600)" />
-        <StatCard icon={Users2}        label="Students"        count={lDash ? null : dash?.counts?.students}     iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
-        <StatCard icon={Users2}        label="Active Groups"   count={lDash ? null : dash?.counts?.activeGroups} iconBg="rgba(232,197,71,0.12)" iconColor="var(--just-gold-500)" />
-        <StatCard icon={ClipboardList} label="Submissions"     count={lDash ? null : dash?.counts?.submissions}  iconBg="rgba(18,138,71,0.08)"  iconColor="var(--just-green-600)" />
+        <StatCard icon={UserCheck}     label="Active Users"    count={lDash ? null : dash?.counts?.users}           iconBg="rgba(18,138,71,0.08)"  iconColor="var(--just-green-600)" />
+        <StatCard icon={Users}         label="Students"        count={lDash ? null : dash?.counts?.students}        iconBg="var(--just-blue-50)"   iconColor="var(--just-blue-600)" />
+        <StatCard icon={Users2}        label="Active Groups"   count={lDash ? null : dash?.counts?.activeGroups}    iconBg="rgba(232,197,71,0.12)" iconColor="var(--just-gold-500)" />
+        <StatCard icon={ClipboardList} label="Submissions"     count={lDash ? null : dash?.counts?.submissions}     iconBg="rgba(18,138,71,0.08)"  iconColor="var(--just-green-600)" />
       </div>
 
-      {/* Submission breakdown + Recent activity — two columns */}
+      {/* Submission breakdown + Recent activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-
-        {/* Submission status breakdown */}
         <div>
           <h3 className="text-ink-800 mb-3" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
             Submissions by Status
@@ -174,8 +174,6 @@ function AdminDashboard({ user }) {
             <SubmissionBreakdown stats={dash?.submissions} />
           )}
         </div>
-
-        {/* Recent activity */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-ink-800" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
@@ -194,80 +192,69 @@ function AdminDashboard({ user }) {
         </div>
       </div>
 
-      {/* Classes table */}
+      {/* Active Course Offerings table */}
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-ink-800" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
-          Classes
+          Active Course Offerings
         </h3>
-        {classes.length > 0 && (
+        {offerings.length > 0 && (
           <Button variant="ghost" size="sm" asChild className="text-xs text-just-blue-600 -mr-2">
-            <Link to="/classes">All classes →</Link>
+            <Link to="/course-offerings">All offerings →</Link>
           </Button>
         )}
       </div>
 
-      {lCl ? (
+      {lOff ? (
         <div className="flex justify-center py-10 rounded-lg border border-border bg-white">
           <Loader2 size={20} className="animate-spin text-ink-300" />
         </div>
-      ) : classes.length === 0 ? (
+      ) : offerings.length === 0 ? (
         <div className="rounded-lg border border-border bg-white p-10 text-center">
-          <p className="text-sm text-ink-400 mb-3">No classes yet.</p>
-          <Button size="sm" asChild><Link to="/classes">Create first class</Link></Button>
+          <p className="text-sm text-ink-400 mb-3">No course offerings yet.</p>
+          <Button size="sm" asChild><Link to="/course-offerings">Create first offering</Link></Button>
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-white shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Class</TableHead>
-                <TableHead>Courses</TableHead>
+                <TableHead>Course</TableHead>
+                <TableHead>Cohort</TableHead>
                 <TableHead>Semester</TableHead>
-                <TableHead className="w-36" />
+                <TableHead>Instructor</TableHead>
+                <TableHead className="w-32" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentClasses.map((cls) => {
-                const semester = semesterMap[cls.semesterId];
-                return (
-                  <TableRow key={cls._id}>
-                    <TableCell className="font-medium text-ink-800">{cls.name}</TableCell>
-                    <TableCell>
-                      {cls.courseIds?.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {cls.courseIds.map((c) => (
-                            <span key={c._id ?? c} className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs bg-ink-100 text-ink-700">
-                              {c.code && <span className="font-mono text-ink-400">{c.code}</span>}
-                              {c.name}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-ink-300 text-xs">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-ink-500">
-                      {semester ? `${semester.name} · ${semester.year}` : <span className="text-ink-300 text-xs">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600" asChild>
-                          <Link to={`/classes/${cls._id}/students`}><Users size={12} /> Students</Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600" asChild>
-                          <Link to={`/classes/${cls._id}/groups`}><Users2 size={12} /> Groups</Link>
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {recentOfferings.map((o) => (
+                <TableRow key={o._id}>
+                  <TableCell className="font-medium text-ink-800">
+                    {o.courseId?.name ?? '—'}
+                    {o.courseId?.code && (
+                      <span className="ml-1.5 font-mono text-xs text-ink-400">{o.courseId.code}</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-ink-600">{o.cohortId?.name ?? '—'}</TableCell>
+                  <TableCell className="text-ink-500">{o.semesterId?.name ?? '—'}</TableCell>
+                  <TableCell className="text-ink-500">{o.instructorId?.fullName ?? '—'}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600" asChild>
+                        <Link to={`/cohorts/${o.cohortId?._id}/students`}><Users size={12} /> Students</Link>
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600" asChild>
+                        <Link to={`/course-offerings/${o._id}/groups`}><Users2 size={12} /> Groups</Link>
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
-          {classes.length > 8 && (
+          {offerings.length > 8 && (
             <div className="px-4 py-2.5 border-t border-border bg-ink-50/30 text-right">
-              <Link to="/classes" className="text-xs text-just-blue-600 hover:underline">
-                +{classes.length - 8} more →
+              <Link to="/course-offerings" className="text-xs text-just-blue-600 hover:underline">
+                +{offerings.length - 8} more →
               </Link>
             </div>
           )}
@@ -283,8 +270,8 @@ const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive
 
 function InstructorDashboard({ user }) {
   const { data: dash, isLoading } = useGetInstructorDashboardStatsQuery();
-  const counts         = dash?.counts         ?? {};
-  const classSummaries = dash?.classSummaries ?? [];
+  const counts           = dash?.counts           ?? {};
+  const offeringSummaries = dash?.offeringSummaries ?? [];
 
   return (
     <div className="max-w-5xl">
@@ -293,20 +280,20 @@ function InstructorDashboard({ user }) {
         Welcome back, {user?.fullName?.split(' ')[0] ?? 'there'}
       </h2>
       <p className="text-ink-500 mb-8" style={{ fontSize: 'var(--fs-small)' }}>
-        Manage your classes, tasks, and student groups from here.
+        Manage your course offerings, groups, and students from here.
       </p>
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <StatCard
-          icon={Users}
-          label="My Classes"
-          count={isLoading ? null : counts.classes}
+          icon={Users2}
+          label="My Offerings"
+          count={isLoading ? null : counts.offerings}
           iconBg="var(--just-blue-50)"
           iconColor="var(--just-blue-600)"
         />
         <StatCard
-          icon={Users2}
+          icon={Users}
           label="My Students"
           count={isLoading ? null : counts.students}
           iconBg="var(--just-blue-50)"
@@ -356,62 +343,60 @@ function InstructorDashboard({ user }) {
         </div>
       </div>
 
-      {/* Class cards */}
+      {/* Offering cards */}
       <h3 className="text-ink-800 mb-3" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
-        My Classes
+        My Offerings
       </h3>
 
       {isLoading ? (
         <div className="flex justify-center py-10">
           <Loader2 size={20} className="animate-spin text-ink-300" />
         </div>
-      ) : classSummaries.length === 0 ? (
+      ) : offeringSummaries.length === 0 ? (
         <div className="rounded-lg border border-border bg-white p-10 text-center">
-          <p className="text-sm text-ink-400">No classes assigned to you yet.</p>
+          <p className="text-sm text-ink-400">No course offerings assigned to you yet.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {classSummaries.map((cls) => (
+          {offeringSummaries.map((o) => (
             <div
-              key={String(cls._id)}
+              key={String(o._id)}
               className="rounded-lg border border-border bg-white shadow-xs p-5 flex flex-col"
             >
               {/* Header */}
               <div className="flex-1 mb-3">
                 <p className="font-semibold text-ink-800 text-base leading-snug mb-0.5">
-                  {cls.name}
+                  {o.course?.name ?? '—'}
                 </p>
-                {cls.semester && (
-                  <p className="text-xs text-ink-400 mb-1">
-                    {cls.semester.name} · {cls.semester.year}
-                  </p>
+                {o.course?.code && (
+                  <p className="font-mono text-xs text-ink-400 mb-1">{o.course.code}</p>
                 )}
-                {cls.courses.map((c) => (
-                  <p key={String(c._id ?? c)} className="text-sm text-ink-500">
-                    {c.code && <span className="font-mono text-xs text-ink-400 mr-1">{c.code}</span>}
-                    {c.name}
-                  </p>
-                ))}
+                {o.cohort && (
+                  <p className="text-sm text-ink-500">{o.cohort.name}</p>
+                )}
+                {o.semester && (
+                  <p className="text-xs text-ink-400">{o.semester.name}</p>
+                )}
               </div>
 
-              {/* Per-class counts */}
+              {/* Per-offering counts */}
               <div className="flex items-center gap-2 text-xs text-ink-500 mb-3">
-                <span>{cls.students} student{cls.students !== 1 ? 's' : ''}</span>
+                <span>{o.students} student{o.students !== 1 ? 's' : ''}</span>
                 <span className="text-ink-300">·</span>
-                <span>{cls.activeGroups} group{cls.activeGroups !== 1 ? 's' : ''}</span>
+                <span>{o.activeGroups} group{o.activeGroups !== 1 ? 's' : ''}</span>
               </div>
 
               {/* Task / review chips */}
-              {(cls.openTasks > 0 || cls.pendingReviews > 0) && (
+              {(o.openTasks > 0 || o.pendingReviews > 0) && (
                 <div className="flex gap-2 flex-wrap mb-3">
-                  {cls.openTasks > 0 && (
+                  {o.openTasks > 0 && (
                     <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium bg-just-blue-50 text-just-blue-700">
-                      <ClipboardList size={10} /> {cls.openTasks} open task{cls.openTasks !== 1 ? 's' : ''}
+                      <ClipboardList size={10} /> {o.openTasks} open task{o.openTasks !== 1 ? 's' : ''}
                     </span>
                   )}
-                  {cls.pendingReviews > 0 && (
+                  {o.pendingReviews > 0 && (
                     <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium bg-amber-100 text-amber-700">
-                      <AlertCircle size={10} /> {cls.pendingReviews} to review
+                      <AlertCircle size={10} /> {o.pendingReviews} to review
                     </span>
                   )}
                 </div>
@@ -420,16 +405,13 @@ function InstructorDashboard({ user }) {
               {/* Action buttons */}
               <div className="flex gap-1.5 flex-wrap pt-3 border-t border-border">
                 <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
-                  <Link to={`/classes/${cls._id}/students`}><Users size={12} /> Students</Link>
+                  <Link to={`/cohorts/${o.cohort?._id}/students`}><Users size={12} /> Students</Link>
                 </Button>
                 <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
-                  <Link to={`/classes/${cls._id}/groups`}><Users2 size={12} /> Groups</Link>
+                  <Link to={`/course-offerings/${o._id}/groups`}><Users2 size={12} /> Groups</Link>
                 </Button>
                 <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
-                  <Link to={`/classes/${cls._id}/tasks`}><ClipboardList size={12} /> Tasks</Link>
-                </Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" asChild>
-                  <Link to={`/classes/${cls._id}/scores`}><BarChart2 size={12} /> Scores</Link>
+                  <Link to={`/cohorts/${o.cohort?._id}/scores`}><BarChart2 size={12} /> Scores</Link>
                 </Button>
               </div>
             </div>
@@ -536,9 +518,10 @@ function StudentDashboard({ user }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {workspaces.map((ws) => {
               const group    = ws.groupId;
-              const cls      = group?.classId;
-              const course   = group?.courseId;
-              const semester = cls?.semesterId;
+              const offering = group?.courseOfferingId;
+              const course   = offering?.courseId;
+              const cohort   = offering?.cohortId;
+              const semester = offering?.semesterId;
               const leaderId = String(group?.leaderId?._id ?? group?.leaderId);
               const members  = group?.memberIds ?? [];
               const summary  = ws.taskSummary ?? { total: 0, done: 0, pending: 0, dueSoon: 0 };
@@ -565,8 +548,8 @@ function StudentDashboard({ user }) {
                       )}
                     </div>
                     <p className="text-xs text-ink-400">
-                      {cls?.name ?? '—'}
-                      {semester && <> · {semester.name} {semester.year}</>}
+                      {cohort?.name ?? '—'}
+                      {semester && <> · {semester.name}</>}
                     </p>
                     {course && (
                       <p className="text-xs text-ink-500 mt-0.5">

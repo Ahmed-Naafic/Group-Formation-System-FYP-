@@ -1,8 +1,8 @@
-const columnMapper = require('../utils/columnMapper');
-const classService = require('../../class/services/classService');
-const courseAssignmentService = require('../../courseAssignment/services/courseAssignmentService');
-const userService = require('../../user/services/userService');
-const studentService = require('../../student/services/studentService');
+const columnMapper    = require('../utils/columnMapper');
+const cohortService   = require('../../cohort/services/cohortService');
+const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
+const userService     = require('../../user/services/userService');
+const studentService  = require('../../student/services/studentService');
 const performanceService = require('../../performance/services/performanceService');
 const passwordGenerator = require('../../../common/utils/passwordGenerator');
 const { ForbiddenError, BadRequestError, TransferConfirmationError } = require('../../../common/errors');
@@ -15,25 +15,24 @@ function parseAverageScore(val) {
   return Math.min(100, Math.max(0, n));
 }
 
-// Attendance is a percentage 0–100; blank/invalid → 0
-function parseAttendance(val) {
-  if (val === null || val === undefined || val === '') return 0;
-  const n = Number(val);
-  if (Number.isNaN(n)) return 0;
-  return Math.min(100, Math.max(0, n));
-}
-
-async function assertClassAccess(classId, context) {
-  const cls = await classService.getById(String(classId));
-  if (context.role === 'admin') return cls;
-  const allowed = await courseAssignmentService.hasAccess(context.userId, String(classId));
-  if (!allowed) throw new ForbiddenError('You do not have access to this class');
-  return cls;
+// Admin: unrestricted. Instructor: must have at least one active offering for this cohort.
+async function assertCohortAccess(cohortId, context) {
+  const cohort = await cohortService.getById(cohortId);
+  if (context.role === 'admin') return cohort;
+  const offerings = await courseOfferingRepository.findAll({
+    cohortId,
+    instructorId: context.userId,
+    status: 'active',
+  });
+  if (!offerings || offerings.length === 0) {
+    throw new ForbiddenError('You do not have access to this cohort');
+  }
+  return cohort;
 }
 
 const enrollmentService = {
-  async bulkUpload(classId, buffer, mimetype, originalname, confirmTransfers, context) {
-    const targetClass = await assertClassAccess(classId, context);
+  async bulkUpload(cohortId, buffer, mimetype, originalname, confirmTransfers, context) {
+    const targetCohort = await assertCohortAccess(cohortId, context);
 
     let rawRows;
     try {
@@ -42,10 +41,7 @@ const enrollmentService = {
       throw new BadRequestError(`Could not parse file: ${err.message}`);
     }
 
-    // ── First pass: detect any cross-class transfers ────────────────────────
-    // We scan the whole batch BEFORE writing anything. If transfers are found
-    // and the caller has not explicitly confirmed, we abort with a 409 listing
-    // exactly which students would be moved and from which class.
+    // ── First pass: detect any cross-cohort transfers ──────────────────────
     const wouldTransfer = [];
 
     for (const row of rawRows) {
@@ -54,26 +50,24 @@ const enrollmentService = {
       if (!studentId) continue;
 
       try {
-        // Already in this class → will be skipped, not a transfer concern
-        const isDuplicate = await studentService.existsByStudentIdAndClass(studentId, classId);
+        const isDuplicate = await studentService.existsByStudentIdAndCohort(studentId, cohortId);
         if (isDuplicate) continue;
 
         const user = await userService.findByStudentId(studentId);
-        if (!user) continue; // brand-new student → no existing record anywhere
+        if (!user) continue;
 
-        const existing = await studentService.findActiveInOtherClass(user._id, classId);
+        const existing = await studentService.findActiveInOtherCohort(user._id, cohortId);
         if (existing) {
-          const fromClass = await classService.getById(String(existing.classId));
+          const fromCohort = await cohortService.getById(String(existing.cohortId));
           wouldTransfer.push({
             studentId,
             fullName: fullName || existing.fullName,
-            fromClassName: fromClass.name,
-            toClassName: targetClass.name,
+            fromCohortName: fromCohort.name,
+            toCohortName: targetCohort.name,
           });
         }
       } catch {
-        // If we can't determine transfer status for a row, skip it here.
-        // The second pass will either process or fail it.
+        // If transfer status is indeterminate for a row, defer to second pass.
       }
     }
 
@@ -81,7 +75,7 @@ const enrollmentService = {
       throw new TransferConfirmationError(wouldTransfer);
     }
 
-    // ── Second pass: process rows ───────────────────────────────────────────
+    // ── Second pass: process rows ──────────────────────────────────────────
     const { thresholds } = await performanceService.getSettings();
 
     const created     = [];
@@ -105,18 +99,15 @@ const enrollmentService = {
           continue;
         }
 
-        // Idempotency — already enrolled in this class
-        const isDuplicate = await studentService.existsByStudentIdAndClass(studentId, classId);
+        const isDuplicate = await studentService.existsByStudentIdAndCohort(studentId, cohortId);
         if (isDuplicate) {
-          skipped.push({ studentId, fullName, reason: 'already exists in this class' });
+          skipped.push({ studentId, fullName, reason: 'already exists in this cohort' });
           continue;
         }
 
         const averageScore        = parseAverageScore(row.averageScore);
-        const attendance          = parseAttendance(row.attendance);
         const performanceCategory = performanceService.mapToCategory(averageScore, thresholds);
 
-        // Find or create the User account
         let user = await userService.findByStudentId(studentId);
         let tempPassword = null;
 
@@ -131,38 +122,32 @@ const enrollmentService = {
           });
         }
 
-        // Check for an active Student record in a different class
-        const existing = await studentService.findActiveInOtherClass(user._id, classId);
+        const existing = await studentService.findActiveInOtherCohort(user._id, cohortId);
 
         if (existing) {
-          // TRANSFER: archive the old record, create the new one
-          const fromClass = await classService.getById(String(existing.classId));
+          const fromCohort = await cohortService.getById(String(existing.cohortId));
           await studentService.archiveRecord(existing, context.userId);
           await studentService.createRecord({
             userId: user._id,
-            classId,
+            cohortId,
             fullName,
             averageScore,
-            attendance,
             performanceCategory,
           });
           transferred.push({
             studentId,
             fullName,
-            fromClassId:   String(existing.classId),
-            fromClassName: fromClass.name,
+            fromCohortId:   String(existing.cohortId),
+            fromCohortName: fromCohort.name,
           });
         } else {
-          // Normal new enrollment
           await studentService.createRecord({
             userId: user._id,
-            classId,
+            cohortId,
             fullName,
             averageScore,
-            attendance,
             performanceCategory,
           });
-          // tempPassword is null when reusing an existing account
           created.push({ studentId, fullName, tempPassword });
         }
       } catch (err) {

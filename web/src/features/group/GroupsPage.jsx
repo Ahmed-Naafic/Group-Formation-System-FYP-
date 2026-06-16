@@ -2,18 +2,16 @@ import { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, BookOpen, ClipboardList,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useSelector } from 'react-redux';
 import {
   useGetGroupsQuery,
   useGenerateGroupsMutation,
   useRegenerateGroupsMutation,
+  useDeleteGroupsMutation,
 } from './groupApi';
-import { useGetClassByIdQuery } from '@/features/class/classApi';
-import { useGetCourseAssignmentsQuery } from '@/features/courseAssignment/courseAssignmentApi';
-import { selectRole } from '@/features/auth/authSlice';
+import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +21,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -177,51 +178,27 @@ function GroupCard({ group, onAdjust }) {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function GroupsPage() {
-  const { classId } = useParams();
-  const navigate    = useNavigate();
-  const role        = useSelector(selectRole);
-  const isAdmin     = role === 'admin';
+  const { offeringId } = useParams();
+  const navigate       = useNavigate();
 
-  const { data: cls, isLoading: loadingClass }                    = useGetClassByIdQuery(classId);
-  const { data: assignments = [], isLoading: loadingAssignments } = useGetCourseAssignmentsQuery(
-    undefined, { skip: isAdmin },
-  );
+  const { data: offering, isLoading: loadingOffering } = useGetCourseOfferingByIdQuery(offeringId);
 
-  // Courses for this class — normalized to { _id, name, code }
-  const classCourses = useMemo(() => {
-    if (isAdmin) {
-      return (cls?.courseIds ?? []).map((c) => ({
-        _id:  String(c._id ?? c),
-        name: c.name  ?? '',
-        code: c.code  ?? '',
-      }));
-    }
-    return assignments
-      .filter((a) => String(a.classId?._id ?? a.classId) === classId)
-      .map((a) => {
-        const c = a.courseId;
-        return { _id: String(c?._id ?? c), name: c?.name ?? '', code: c?.code ?? '' };
-      });
-  }, [isAdmin, cls, assignments, classId]);
-
-  const [selectedCourseId, setSelectedCourseId] = useState('');
-
-  const selectedCourseName = classCourses.find((c) => c._id === selectedCourseId)?.name ?? '';
-
-  const skipGroups = !selectedCourseId;
-  const { data: groups = [], isLoading, error } = useGetGroupsQuery(
-    { classId, courseId: selectedCourseId },
-    { skip: skipGroups },
-  );
+  const { data: groups = [], isLoading, error } = useGetGroupsQuery({ courseOfferingId: offeringId });
   const [generateGroups,   { isLoading: generating }]  = useGenerateGroupsMutation();
   const [regenerateGroups, { isLoading: regenerating }] = useRegenerateGroupsMutation();
+  const [deleteGroups,     { isLoading: deleting }]     = useDeleteGroupsMutation();
 
   const [regenOpen,  setRegenOpen]  = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [genWarning, setGenWarning] = useState(null);
 
-  const hasGroups = groups.length > 0;
-  const lastOpts  = groups[0]?.generationOptions;
-  const className = cls?.name ?? '…';
+  const hasGroups  = groups.length > 0;
+  const lastOpts   = groups[0]?.generationOptions;
+
+  const courseName   = offering?.courseId?.name ?? (loadingOffering ? '…' : 'Offering');
+  const cohortName   = offering?.cohortId?.name ?? '';
+  const semesterName = offering?.semesterId?.name ?? '';
+  const offeringLabel = [courseName, cohortName, semesterName].filter(Boolean).join(' — ');
 
   // Generate form (empty state)
   const {
@@ -245,8 +222,7 @@ export default function GroupsPage() {
   async function handleGenerate(data) {
     try {
       const result = await generateGroups({
-        classId,
-        courseId:  selectedCourseId,
+        courseOfferingId: offeringId,
         groupSize: Number(data.groupSize),
         options:   { attendanceThreshold: Number(data.attendanceThreshold) },
       }).unwrap();
@@ -257,11 +233,21 @@ export default function GroupsPage() {
     }
   }
 
+  async function handleDeleteAll() {
+    try {
+      const result = await deleteGroups({ courseOfferingId: offeringId }).unwrap();
+      setDeleteOpen(false);
+      setGenWarning(null);
+      toast.success(`${result.archived} group${result.archived !== 1 ? 's' : ''} deleted`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to delete groups');
+    }
+  }
+
   async function handleRegenerate(data) {
     try {
       const result = await regenerateGroups({
-        classId,
-        courseId:  selectedCourseId,
+        courseOfferingId: offeringId,
         groupSize: Number(data.groupSize),
         options:   { attendanceThreshold: Number(data.attendanceThreshold) },
       }).unwrap();
@@ -279,11 +265,9 @@ export default function GroupsPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="eyebrow mb-1">
-            <Link to="/classes" className="hover:underline">Classes</Link>
+            <Link to="/course-offerings" className="hover:underline">Course Offerings</Link>
             {' / '}
-            <Link to={`/classes/${classId}/students`} className="hover:underline">{className}</Link>
-            {' / '}
-            Groups
+            {offeringLabel}
           </p>
           <h2 className="text-ink-900 mb-1">Groups</h2>
           {hasGroups && (
@@ -294,52 +278,24 @@ export default function GroupsPage() {
           )}
         </div>
         <div className="flex items-center gap-2 ml-4 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(`/classes/${classId}/tasks`)}
-          >
-            <ClipboardList size={15} />
-            Tasks
-          </Button>
           {hasGroups && (
-            <Button variant="outline" size="sm" onClick={() => setRegenOpen(true)}>
-              <RefreshCw size={15} />
-              Regenerate
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-danger hover:text-danger hover:bg-danger/10 border-danger/30"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 size={15} />
+                Delete All
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setRegenOpen(true)}>
+                <RefreshCw size={15} />
+                Regenerate
+              </Button>
+            </>
           )}
         </div>
-      </div>
-
-      {/* Course selector */}
-      <div className="mb-6 max-w-sm">
-        <Label className="mb-1.5 block">Course</Label>
-        {(isAdmin ? loadingClass : loadingAssignments) ? (
-          <div className="flex items-center gap-2 text-sm text-ink-400">
-            <Loader2 size={14} className="animate-spin" /> Loading courses…
-          </div>
-        ) : classCourses.length === 0 ? (
-          <div className="flex items-center gap-2 rounded-md border border-border bg-ink-50 px-3 py-2 text-sm text-ink-400">
-            <BookOpen size={14} />
-            No courses assigned to this class yet.
-          </div>
-        ) : (
-          <Select value={selectedCourseId} onValueChange={(v) => { setSelectedCourseId(v); setGenWarning(null); }}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a course to manage groups…" />
-            </SelectTrigger>
-            <SelectContent>
-              {classCourses.map((course) => (
-                <SelectItem key={course._id} value={course._id}>
-                  {course.name}
-                  {course.code && (
-                    <span className="ml-1.5 font-mono text-xs text-ink-400">{course.code}</span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
       </div>
 
       {/* Generation warning */}
@@ -350,8 +306,8 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* Main content — only shown once a course is selected */}
-      {!selectedCourseId ? null : isLoading ? (
+      {/* Main content */}
+      {isLoading ? (
         <div className="flex justify-center py-20">
           <Loader2 size={22} className="animate-spin text-ink-300" />
         </div>
@@ -367,7 +323,7 @@ export default function GroupsPage() {
             Generate Groups
           </h3>
           <p className="text-sm text-ink-500 mb-5">
-            No groups yet for <strong>{selectedCourseName}</strong>. Configure the parameters and generate balanced groups.
+            No groups yet for <strong>{courseName}</strong>. Configure the parameters and generate balanced groups.
           </p>
           <form onSubmit={submitGen(handleGenerate)} className="space-y-5" noValidate>
             <GenerateFields control={ctrlGen} register={regGen} />
@@ -388,7 +344,7 @@ export default function GroupsPage() {
               <GroupCard
                 key={group._id}
                 group={group}
-                onAdjust={() => navigate(`/groups/${group._id}`, { state: { classId, courseId: selectedCourseId } })}
+                onAdjust={() => navigate(`/groups/${group._id}`, { state: { courseOfferingId: offeringId } })}
               />
             ))}
           </div>
@@ -396,13 +352,39 @@ export default function GroupsPage() {
 
       )}
 
+      {/* Delete all groups confirm */}
+      <AlertDialog open={deleteOpen} onOpenChange={(v) => !v && setDeleteOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete All Groups</AlertDialogTitle>
+            <AlertDialogDescription>
+              Archive all{' '}
+              <span className="font-semibold text-ink-800">{groups.length} group{groups.length !== 1 ? 's' : ''}</span>{' '}
+              for <span className="font-semibold text-ink-800">{courseName}</span>?
+              Group history and workspaces are preserved. You can generate fresh groups afterwards.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger hover:bg-danger/90 text-white"
+              onClick={handleDeleteAll}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 size={14} className="animate-spin" />}
+              Delete All Groups
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Regenerate dialog */}
       <Dialog open={regenOpen} onOpenChange={(v) => !v && setRegenOpen(false)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Regenerate Groups</DialogTitle>
             <DialogDescription>
-              Archive the current groups for <strong>{selectedCourseName}</strong> and generate new ones.
+              Archive the current groups for <strong>{courseName}</strong> and generate new ones.
               All manual adjustments will be lost.
             </DialogDescription>
           </DialogHeader>

@@ -24,6 +24,10 @@ const courseRepository = {
   countByDepartment(departmentId) {
     return Course.countDocuments({ departmentId });
   },
+
+  findActiveByNameAndDepartment(name, departmentId) {
+    return Course.findOne({ name, departmentId });
+  },
 };
 
 module.exports = courseRepository;

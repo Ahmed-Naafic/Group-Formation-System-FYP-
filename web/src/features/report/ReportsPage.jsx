@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Loader2, FileSpreadsheet, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { useGetClassesQuery, useGetClassByIdQuery } from '@/features/class/classApi';
-import { useGetCourseAssignmentsQuery } from '@/features/courseAssignment/courseAssignmentApi';
-import { selectRole, selectCurrentToken } from '@/features/auth/authSlice';
+import { useGetCourseOfferingsQuery } from '@/features/courseOffering/courseOfferingApi';
+import { selectCurrentToken } from '@/features/auth/authSlice';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,55 +11,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
 
 export default function ReportsPage() {
-  const role    = useSelector(selectRole);
-  const token   = useSelector(selectCurrentToken);
-  const isAdmin = role === 'admin';
+  const token = useSelector(selectCurrentToken);
 
-  const [selectedClassId,  setSelectedClassId]  = useState('');
-  const [selectedCourseId, setSelectedCourseId] = useState('');
-  const [downloading,      setDownloading]      = useState(null); // 'xlsx' | 'csv' | null
+  const [selectedOfferingId, setSelectedOfferingId] = useState('');
+  const [downloading,        setDownloading]         = useState(null); // 'xlsx' | 'csv' | null
 
-  const { data: allClasses = [] }  = useGetClassesQuery(undefined, { skip: !isAdmin });
-  const { data: assignments = [] } = useGetCourseAssignmentsQuery(undefined, { skip: isAdmin });
-  const { data: selectedClass, isLoading: loadingCourses } = useGetClassByIdQuery(
-    selectedClassId, { skip: !selectedClassId || !isAdmin },
-  );
-
-  // ── Class list ─────────────────────────────────────────────────────────────
-
-  const classList = isAdmin
-    ? allClasses
-    : [...new Map(
-        assignments.map((a) => {
-          const cls = a.classId;
-          return [String(cls?._id ?? cls), { _id: String(cls?._id ?? cls), name: cls?.name ?? '' }];
-        }),
-      ).values()];
-
-  // ── Course list for selected class ─────────────────────────────────────────
-
-  const courseList = isAdmin
-    ? (selectedClass?.courseIds ?? []).map((c) => ({
-        _id: String(c._id ?? c), name: c.name ?? '', code: c.code ?? '',
-      }))
-    : assignments
-        .filter((a) => String(a.classId?._id ?? a.classId) === selectedClassId)
-        .map((a) => {
-          const c = a.courseId;
-          return { _id: String(c?._id ?? c), name: c?.name ?? '', code: c?.code ?? '' };
-        });
-
-  // ── Handlers ───────────────────────────────────────────────────────────────
-
-  function handleClassChange(val) {
-    setSelectedClassId(val);
-    setSelectedCourseId('');
-  }
+  const { data: offerings = [], isLoading } = useGetCourseOfferingsQuery();
 
   async function download(format) {
     setDownloading(format);
     try {
-      const url = `${API_BASE}/api/reports/groups?classId=${selectedClassId}&courseId=${selectedCourseId}&format=${format}`;
+      const url = `${API_BASE}/api/reports/groups?courseOfferingId=${selectedOfferingId}&format=${format}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) {
         const json = await res.json().catch(() => null);
@@ -79,59 +40,35 @@ export default function ReportsPage() {
     }
   }
 
-  const canDownload = !!(selectedClassId && selectedCourseId);
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-
   return (
     <div className="max-w-lg">
       <h2 className="text-ink-900 mb-6">Reports</h2>
 
       <div className="space-y-5">
-        {/* Class selector */}
+        {/* Course Offering selector */}
         <div className="space-y-1.5">
-          <Label>Class</Label>
-          <Select value={selectedClassId} onValueChange={handleClassChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a class…" />
-            </SelectTrigger>
-            <SelectContent>
-              {classList.map((cls) => (
-                <SelectItem key={cls._id ?? cls.id} value={String(cls._id ?? cls.id)}>
-                  {cls.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Course selector */}
-        <div className="space-y-1.5">
-          <Label>Course</Label>
-          <Select
-            value={selectedCourseId}
-            onValueChange={setSelectedCourseId}
-            disabled={!selectedClassId || loadingCourses || courseList.length === 0}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={
-                !selectedClassId   ? 'Select a class first'
-                : loadingCourses   ? 'Loading courses…'
-                : courseList.length === 0 ? 'No courses found'
-                : 'Select a course…'
-              } />
-            </SelectTrigger>
-            <SelectContent>
-              {courseList.map((c) => (
-                <SelectItem key={c._id} value={c._id}>
-                  {c.name}
-                  {c.code && (
-                    <span className="ml-1.5 font-mono text-xs text-ink-400">{c.code}</span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label>Course Offering</Label>
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-ink-400 rounded-md border border-border bg-ink-50 px-3 py-2">
+              <Loader2 size={14} className="animate-spin" /> Loading offerings…
+            </div>
+          ) : (
+            <Select value={selectedOfferingId} onValueChange={setSelectedOfferingId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select an offering…" />
+              </SelectTrigger>
+              <SelectContent>
+                {offerings.map((o) => (
+                  <SelectItem key={o._id} value={String(o._id)}>
+                    {o.courseId?.name ?? '—'}
+                    {' — '}
+                    {o.cohortId?.name ?? '—'}
+                    {o.semesterId?.name ? ` (${o.semesterId.name})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* Download card */}
@@ -142,20 +79,13 @@ export default function ReportsPage() {
             XLSX includes two sheets; CSV is a flat student list.
           </p>
           <div className="flex gap-2">
-            <Button
-              onClick={() => download('xlsx')}
-              disabled={!canDownload || !!downloading}
-            >
+            <Button onClick={() => download('xlsx')} disabled={!selectedOfferingId || !!downloading}>
               {downloading === 'xlsx'
                 ? <Loader2 size={14} className="animate-spin" />
                 : <FileSpreadsheet size={14} />}
               Download XLSX
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => download('csv')}
-              disabled={!canDownload || !!downloading}
-            >
+            <Button variant="outline" onClick={() => download('csv')} disabled={!selectedOfferingId || !!downloading}>
               {downloading === 'csv'
                 ? <Loader2 size={14} className="animate-spin" />
                 : <FileText size={14} />}

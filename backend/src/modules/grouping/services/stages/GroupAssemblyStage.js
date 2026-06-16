@@ -119,6 +119,13 @@ function rebalanceTier(groups, tier, avoidPairs) {
             const k = [ds._id.toString(), m._id.toString()].sort().join('|');
             if (avoidPairs.has(k)) score++;
           }
+          // Tier-displacement penalty: avoid moving ds if it is the ONLY remaining
+          // member of its tier in dstGroup (removing it would leave a zero of that
+          // tier — the exact problem we are solving here). Weight 500: lower than
+          // a history conflict (1000) but high enough to strongly prefer MEDIUM or
+          // UNGRADED candidates over equally-sparse-tier candidates (HIGH/LOW).
+          const dsTierCountInDst = groups[dstIdx].filter(m => m.performanceCategory === ds.performanceCategory).length;
+          if (dsTierCountInDst === 1) score += 500;
           if (score < bestScore) { bestScore = score; bestSI = si; bestDI = di; }
         }
       }
@@ -217,11 +224,19 @@ class GroupAssemblyStage {
     // group to the smallest until sizes are within ±1 of target.
     rebalance(groups, avoidPairs);
 
-    // Tier rebalance for UNGRADED (null performanceCategory).
-    // Conflict avoidance can override the same-tier-spread penalty and cluster
-    // all UNGRADED students into fewer groups than intended. This enforces the
-    // same max-min ≤ 1 invariant that the round-robin interleaving targets.
-    rebalanceTier(groups, null, avoidPairs);
+    // Tier rebalance for sparse tiers (UNGRADED, LOW, HIGH).
+    // Conflict avoidance overrides the same-tier-spread penalty and can leave
+    // some groups with zero students from a sparse tier. This pass enforces
+    // max(tier-count) - min ≤ 1 by moving or swapping the least-conflicting
+    // candidate.
+    //
+    // ORDER IS CRITICAL: each pass can displace students of other tiers via
+    // swaps. HIGH runs LAST so its balance cannot be broken by subsequent
+    // passes. A group with no HIGH performer is the most visible balance
+    // failure — it is never acceptable at this student scale.
+    rebalanceTier(groups, null,     avoidPairs);  // UNGRADED
+    rebalanceTier(groups, 'LOW',    avoidPairs);  // LOW
+    rebalanceTier(groups, 'HIGH',   avoidPairs);  // HIGH — must run last
 
     return groups;
   }

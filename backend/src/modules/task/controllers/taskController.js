@@ -9,9 +9,9 @@ const taskController = {
     return sendSuccess(res, { status: 201, data: { task } });
   }),
 
-  // GET /api/tasks?classId=
+  // GET /api/tasks?courseOfferingId=
   list: asyncHandler(async (req, res) => {
-    const tasks = await taskService.list(req.query.classId, req.context);
+    const tasks = await taskService.list(req.query.courseOfferingId, req.context);
     return sendSuccess(res, { data: { tasks } });
   }),
 

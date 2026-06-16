@@ -8,12 +8,12 @@ const {
   createStudentSchema,
   updateStudentSchema,
   bulkUploadSchema,
+  clearByCohortSchema,
 } = require('../validations/studentValidation');
 const studentController = require('../controllers/studentController');
 
 const router = Router();
 
-// Multer: keep file in memory, max 5 MB, .csv and .xlsx only
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -26,26 +26,23 @@ const upload = multer({
   },
 });
 
-// All student-management endpoints require at least instructor role
 router.use(authenticate, requireRole('admin', 'instructor'));
 
-// ── Specific paths before parameterised routes ────────────────────────────────
 router.post(
   '/bulk-upload',
-  requireRole('admin'),           // upload is admin-only (MODEL_REVISION_v2 §8)
+  requireRole('admin'),
   upload.single('file'),
   validate(bulkUploadSchema),
-  studentController.bulkUpload
+  studentController.bulkUpload,
 );
 
-// ── CRUD ─────────────────────────────────────────────────────────────────────
-router.post('/', requireRole('admin'), validate(createStudentSchema), studentController.create);
-router.get('/', studentController.getAll);
+router.post('/',   requireRole('admin'), validate(createStudentSchema), studentController.create);
+router.get('/',    studentController.getAll);
 router.get('/:id', studentController.getById);
 router.patch('/:id', validate(updateStudentSchema), studentController.update);
+router.delete('/', requireRole('admin'), validate(clearByCohortSchema, 'query'), studentController.clearByCohort);
 router.delete('/:id', studentController.remove);
 
-// ── Password reset ────────────────────────────────────────────────────────────
 router.post('/:id/reset-password', studentController.resetPassword);
 
 module.exports = router;

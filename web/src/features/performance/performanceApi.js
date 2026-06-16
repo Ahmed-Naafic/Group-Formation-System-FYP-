@@ -12,21 +12,16 @@ export const performanceApi = baseApi.injectEndpoints({
       transformResponse: (res) => ({ ...res.data, message: res.message }),
       invalidatesTags: ['Performance'],
     }),
-    recalculateClass: build.mutation({
-      query: (classId) => ({
-        url: `/api/performance/recalculate/class/${classId}`,
+    recalculateCohort: build.mutation({
+      query: (cohortId) => ({
+        url: `/api/performance/recalculate/cohort/${cohortId}`,
         method: 'POST',
       }),
       transformResponse: (res) => res.data,
       invalidatesTags: ['Student'],
     }),
-    updateAttendance: build.mutation({
-      query: (body) => ({ url: '/api/attendance', method: 'POST', body }),
-      transformResponse: (res) => res.data,
-      invalidatesTags: ['Student'],
-    }),
     updateScores: build.mutation({
-      query: (body) => ({ url: '/api/scores', method: 'POST', body }),
+      query: (body) => ({ url: '/api/performance/scores', method: 'POST', body }),
       transformResponse: (res) => res.data,
       invalidatesTags: ['Student'],
     }),
@@ -37,7 +32,6 @@ export const performanceApi = baseApi.injectEndpoints({
 export const {
   useGetPerformanceSettingsQuery,
   useUpdatePerformanceSettingsMutation,
-  useRecalculateClassMutation,
-  useUpdateAttendanceMutation,
+  useRecalculateCohortMutation,
   useUpdateScoresMutation,
 } = performanceApi;

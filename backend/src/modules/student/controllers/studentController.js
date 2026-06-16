@@ -5,24 +5,19 @@ const studentService = require('../services/studentService');
 const enrollmentService = require('../../enrollment/services/enrollmentService');
 
 const studentController = {
-  // POST /api/students — single manual creation
+  // POST /api/students
   create: asyncHandler(async (req, res) => {
     const { student, tempPassword } = await studentService.create(req.body, req.context);
-
     return sendSuccess(res, {
       status: 201,
       message: 'Student created',
-      data: {
-        student,
-        // null when the student already had an account in another class
-        tempPassword: tempPassword ?? null,
-      },
+      data: { student, tempPassword: tempPassword ?? null },
     });
   }),
 
-  // GET /api/students?classId=
+  // GET /api/students?cohortId=
   getAll: asyncHandler(async (req, res) => {
-    const students = await studentService.getAll(req.query.classId, req.context);
+    const students = await studentService.getAll(req.query.cohortId, req.context);
     return sendSuccess(res, { data: { students } });
   }),
 
@@ -53,16 +48,26 @@ const studentController = {
     });
   }),
 
+  // DELETE /api/students?cohortId=  — remove every student in a cohort at once
+  clearByCohort: asyncHandler(async (req, res) => {
+    const { cohortId } = req.query;
+    const count = await studentService.clearByCohort(cohortId, req.context);
+    return sendSuccess(res, {
+      message: `${count} student${count !== 1 ? 's' : ''} removed from cohort`,
+      data: { removed: count },
+    });
+  }),
+
   // POST /api/students/bulk-upload
   bulkUpload: asyncHandler(async (req, res) => {
-    const { classId, confirmTransfers } = req.body;
+    const { cohortId, confirmTransfers } = req.body;
 
     if (!req.file) {
       throw new BadRequestError('No file uploaded — attach a .csv or .xlsx file as field "file"');
     }
 
     const result = await enrollmentService.bulkUpload(
-      classId,
+      cohortId,
       req.file.buffer,
       req.file.mimetype,
       req.file.originalname,

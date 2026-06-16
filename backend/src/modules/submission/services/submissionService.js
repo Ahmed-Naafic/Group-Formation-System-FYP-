@@ -1,48 +1,41 @@
-const emitter                 = require('../../../common/events/emitter');
-const submissionRepository    = require('../repositories/submissionRepository');
-const taskRepository          = require('../../task/repositories/taskRepository');
-const groupRepository         = require('../../group/repositories/groupRepository');
-const studentRepository       = require('../../student/repositories/studentRepository');
-const courseAssignmentService = require('../../courseAssignment/services/courseAssignmentService');
+const emitter                  = require('../../../common/events/emitter');
+const submissionRepository     = require('../repositories/submissionRepository');
+const taskRepository           = require('../../task/repositories/taskRepository');
+const groupRepository          = require('../../group/repositories/groupRepository');
+const studentRepository        = require('../../student/repositories/studentRepository');
+const courseOfferingService    = require('../../courseOffering/services/courseOfferingService');
+const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
 const {
   NotFoundError, ForbiddenError, BadRequestError, ConflictError,
 } = require('../../../common/errors');
 
-// Resolves a student's group that is assigned to this task.
-// Returns the group document or throws.
+// Resolves the student's group for a given task.
+// Derives cohortId from task.courseOfferingId, looks up the student's record in that cohort,
+// then finds the group in this offering that contains the student and is assigned to the task.
 async function resolveStudentGroup(task, context) {
-  const studentRecords = await studentRepository.findAll({
-    userId:  context.userId,
-    classId: task.classId,
-  });
-  if (!studentRecords.length) throw new ForbiddenError('You are not enrolled in this class');
+  const courseOfferingId = String(task.courseOfferingId?._id ?? task.courseOfferingId);
+  const offering = await courseOfferingRepository.findById(courseOfferingId);
+  if (!offering) throw new ForbiddenError('Course offering not found');
+  const cohortId = String(offering.cohortId?._id ?? offering.cohortId);
 
-  const studentIds  = studentRecords.map((s) => s._id);
-  const allGroups   = await groupRepository.findByMemberIds(studentIds);
-  const assigned    = task.assignedGroups.map((g) => String(g._id ?? g));
-  const myGroup     = allGroups.find((g) => assigned.includes(String(g._id)));
+  const studentRecord = await studentRepository.findOne({ userId: context.userId, cohortId, deletedAt: null });
+  if (!studentRecord) throw new ForbiddenError('You are not enrolled in this cohort');
+
+  const groups    = await groupRepository.findByOfferingAndMemberId(courseOfferingId, studentRecord._id);
+  const assigned  = task.assignedGroups.map(g => String(g._id ?? g));
+  const myGroup   = groups.find(g => assigned.length === 0 || assigned.includes(String(g._id)));
   if (!myGroup) throw new ForbiddenError('This task is not assigned to your group');
 
-  return { group: myGroup, studentRecord: studentRecords[0] };
+  return { group: myGroup, studentRecord };
 }
 
-async function assertInstructorAccess(classId, context) {
-  if (context.role === 'admin') return;
-  const allowed = await courseAssignmentService.hasAccess(context.userId, String(classId));
-  if (!allowed) throw new ForbiddenError('You are not assigned to this class');
+async function assertCourseOfferingAccess(courseOfferingId, context) {
+  return courseOfferingService.getById(courseOfferingId, context);
 }
 
 const submissionService = {
-  /**
-   * Student submits (or updates a draft for) a task.
-   * - Creates a Submission if none exists, updates if it's still in draft.
-   * - Status auto-set: 'late' if past deadline, 'submitted' otherwise.
-   * - Once 'submitted', the student cannot change it again.
-   */
   async submit(taskId, { fileIds = [], notes }, context) {
-    if (context.role !== 'student') {
-      throw new ForbiddenError('Only students can submit tasks');
-    }
+    if (context.role !== 'student') throw new ForbiddenError('Only students can submit tasks');
 
     const task = await taskRepository.findById(taskId);
     if (!task) throw new NotFoundError('Task not found');
@@ -50,32 +43,25 @@ const submissionService = {
 
     const { group, studentRecord } = await resolveStudentGroup(task, context);
 
-    // Check if a submission already exists
     const existing = await submissionRepository.findOne({ taskId, groupId: group._id });
     if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
       throw new ConflictError('This task has already been submitted and cannot be changed');
     }
 
-    const isLate   = task.deadline && new Date() > new Date(task.deadline);
-    const status   = isLate ? 'late' : 'submitted';
-    const now      = new Date();
+    const isLate = task.deadline && new Date() > new Date(task.deadline);
+    const status = isLate ? 'late' : 'submitted';
 
     return submissionRepository.upsert(taskId, group._id, {
-      submittedBy:  studentRecord._id,
-      files:        fileIds,
+      submittedBy: studentRecord._id,
+      files:       fileIds,
       notes,
       status,
-      submittedAt:  now,
+      submittedAt: new Date(),
     });
   },
 
-  /**
-   * Saves a draft without finalising.  Student can call this multiple times.
-   */
   async saveDraft(taskId, { fileIds = [], notes }, context) {
-    if (context.role !== 'student') {
-      throw new ForbiddenError('Only students can save drafts');
-    }
+    if (context.role !== 'student') throw new ForbiddenError('Only students can save drafts');
 
     const task = await taskRepository.findById(taskId);
     if (!task) throw new NotFoundError('Task not found');
@@ -96,42 +82,31 @@ const submissionService = {
     });
   },
 
-  /**
-   * Lists all submissions for a task.  Admin/instructor only.
-   */
   async listByTask(taskId, context) {
     const task = await taskRepository.findById(taskId);
     if (!task) throw new NotFoundError('Task not found');
-    await assertInstructorAccess(task.classId, context);
+    await assertCourseOfferingAccess(String(task.courseOfferingId?._id ?? task.courseOfferingId), context);
     return submissionRepository.findByTask(taskId);
   },
 
-  /**
-   * Get a single submission.
-   * Student: only their group's submission.
-   * Instructor/Admin: any submission for their class.
-   */
   async getById(id, context) {
     const submission = await submissionRepository.findById(id);
     if (!submission) throw new NotFoundError('Submission not found');
 
     if (context.role === 'student') {
-      const task           = await taskRepository.findById(submission.taskId);
-      const { group }      = await resolveStudentGroup(task, context);
+      const task      = await taskRepository.findById(submission.taskId);
+      const { group } = await resolveStudentGroup(task, context);
       if (String(submission.groupId?._id ?? submission.groupId) !== String(group._id)) {
         throw new ForbiddenError('Access denied');
       }
     } else {
       const task = await taskRepository.findById(submission.taskId);
-      await assertInstructorAccess(task.classId, context);
+      await assertCourseOfferingAccess(String(task.courseOfferingId?._id ?? task.courseOfferingId), context);
     }
 
     return submission;
   },
 
-  /**
-   * Returns the calling student's group submission for a task, or null if not started.
-   */
   async getMySubmission(taskId, context) {
     const task = await taskRepository.findById(taskId);
     if (!task) throw new NotFoundError('Task not found');
@@ -140,15 +115,12 @@ const submissionService = {
     return submission ?? null;
   },
 
-  /**
-   * Instructor grades a submission.  Grade 0–100; status moves to 'reviewed'.
-   */
   async grade(id, grade, context) {
     const submission = await submissionRepository.findById(id);
     if (!submission) throw new NotFoundError('Submission not found');
 
     const task = await taskRepository.findById(submission.taskId);
-    await assertInstructorAccess(task.classId, context);
+    await assertCourseOfferingAccess(String(task.courseOfferingId?._id ?? task.courseOfferingId), context);
 
     if (!['submitted', 'late', 'reviewed'].includes(submission.status)) {
       throw new BadRequestError('Cannot grade a submission that has not been submitted yet');

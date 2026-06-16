@@ -1,6 +1,7 @@
 const departmentRepository = require('../repositories/departmentRepository');
 const facultyService       = require('../../faculty/services/facultyService');
 const courseRepository     = require('../../course/repositories/courseRepository');
+const cohortRepository     = require('../../cohort/repositories/cohortRepository');
 const { NotFoundError, ConflictError } = require('../../../common/errors');
 
 const departmentService = {
@@ -30,10 +31,16 @@ const departmentService = {
 
   async softDelete(id, userId) {
     const department = await departmentService.getById(id);
-    const courseCount = await courseRepository.countByDepartment(id);
-    if (courseCount > 0) {
+    const [courseCount, cohortCount] = await Promise.all([
+      courseRepository.countByDepartment(id),
+      cohortRepository.countByDepartment(id),
+    ]);
+    const parts = [];
+    if (courseCount > 0) parts.push(`${courseCount} course(s)`);
+    if (cohortCount > 0) parts.push(`${cohortCount} cohort(s)`);
+    if (parts.length > 0) {
       throw new ConflictError(
-        `Cannot delete department — it has ${courseCount} course(s). Delete them first.`,
+        `Cannot delete department — it has ${parts.join(' and ')}. Delete them first.`,
       );
     }
     return department.softDelete(userId);

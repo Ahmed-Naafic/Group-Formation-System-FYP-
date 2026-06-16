@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useParams, Link, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Loader2, Crown, Trash2, ArrowLeft, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetGroupByIdQuery, useGetGroupsQuery, useUpdateGroupMutation } from './groupApi';
 import { useGetStudentsQuery } from '@/features/student/studentApi';
-import { useGetClassByIdQuery } from '@/features/class/classApi';
+import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,20 +17,23 @@ import { cn } from '@/lib/utils';
 const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
 
 export default function GroupDetailPage() {
-  const { id }    = useParams();
-  const location  = useLocation();
+  const { id }   = useParams();
+  const location = useLocation();
 
   const { data: group, isLoading, error } = useGetGroupByIdQuery(id);
   const [updateGroup, { isLoading: updating }] = useUpdateGroupMutation();
 
-  const classId  = group?.classId  ? String(group.classId)  : undefined;
-  const courseId = group?.courseId ? String(group.courseId) : undefined;
+  const courseOfferingId = group?.courseOfferingId
+    ? String(group.courseOfferingId?._id ?? group.courseOfferingId)
+    : undefined;
 
-  const { data: cls }              = useGetClassByIdQuery(classId, { skip: !classId });
-  const { data: allStudents = [] } = useGetStudentsQuery(classId,  { skip: !classId });
+  const { data: offering } = useGetCourseOfferingByIdQuery(courseOfferingId, { skip: !courseOfferingId });
+  const cohortId = offering ? String(offering.cohortId?._id ?? offering.cohortId) : undefined;
+
+  const { data: allStudents = [] } = useGetStudentsQuery(cohortId, { skip: !cohortId });
   const { data: allGroups   = [] } = useGetGroupsQuery(
-    { classId, courseId },
-    { skip: !classId || !courseId },
+    { courseOfferingId },
+    { skip: !courseOfferingId },
   );
 
   const [removeTarget,  setRemoveTarget]  = useState(null);
@@ -40,13 +43,18 @@ export default function GroupDetailPage() {
 
   const leaderId = group ? String(group.leaderId?._id ?? group.leaderId) : null;
 
-  // Students not in any group (available to add to this group)
   const takenIds = new Set();
   allGroups.forEach((g) => g.memberIds?.forEach((m) => takenIds.add(String(m._id))));
   const available = allStudents.filter((s) => !takenIds.has(String(s._id)));
 
-  const backClassId = location.state?.classId ?? classId;
-  const backTo = backClassId ? `/classes/${backClassId}/groups` : '/classes';
+  const backOfferingId = location.state?.courseOfferingId ?? courseOfferingId;
+  const backTo = backOfferingId
+    ? `/course-offerings/${backOfferingId}/groups`
+    : '/course-offerings';
+
+  const offeringLabel = offering
+    ? [offering.courseId?.name, offering.cohortId?.name].filter(Boolean).join(' — ')
+    : '…';
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -103,14 +111,13 @@ export default function GroupDetailPage() {
       <div className="py-12 text-center">
         <p className="text-sm text-danger mb-4">Group not found or you don't have access.</p>
         <Button variant="outline" asChild>
-          <Link to="/classes">Go to classes</Link>
+          <Link to="/course-offerings">Go to offerings</Link>
         </Button>
       </div>
     );
   }
 
   const memberCount = group.memberIds?.length ?? 0;
-  const className   = cls?.name ?? '…';
 
   return (
     <div className="max-w-2xl">
@@ -124,7 +131,7 @@ export default function GroupDetailPage() {
 
       {/* Header */}
       <div className="mb-6">
-        <p className="eyebrow mb-1">{className}</p>
+        <p className="eyebrow mb-1">{offeringLabel}</p>
         <h2 className="text-ink-900 mb-0.5">{group.name}</h2>
         <p className="text-sm text-ink-400">
           {memberCount} member{memberCount !== 1 ? 's' : ''}
@@ -223,7 +230,7 @@ export default function GroupDetailPage() {
 
           {available.length === 0 ? (
             <p className="p-5 text-sm text-ink-400 text-center">
-              All students in this class are already assigned to a group.
+              All students in this cohort are already assigned to a group.
             </p>
           ) : (
             <Table>

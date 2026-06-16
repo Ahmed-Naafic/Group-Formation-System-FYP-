@@ -3,7 +3,7 @@ import { baseApi } from '@/lib/api';
 export const studentApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     getStudents: build.query({
-      query: (classId) => ({ url: '/api/students', params: { classId } }),
+      query: (cohortId) => ({ url: '/api/students', params: { cohortId } }),
       transformResponse: (res) => res.data.students,
       providesTags: (result) =>
         result
@@ -39,10 +39,16 @@ export const studentApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data,
     }),
 
+    clearRoster: build.mutation({
+      query: (cohortId) => ({ url: `/api/students?cohortId=${cohortId}`, method: 'DELETE' }),
+      transformResponse: (res) => res.data,
+      invalidatesTags: ['Student'],
+    }),
+
     bulkUploadStudents: build.mutation({
-      query: ({ classId, file, confirmTransfers = false }) => {
+      query: ({ cohortId, file, confirmTransfers = false }) => {
         const formData = new FormData();
-        formData.append('classId', classId);
+        formData.append('cohortId', cohortId);
         formData.append('file', file);
         if (confirmTransfers) formData.append('confirmTransfers', 'true');
         return { url: '/api/students/bulk-upload', method: 'POST', body: formData };
@@ -61,4 +67,5 @@ export const {
   useDeleteStudentMutation,
   useResetStudentPasswordMutation,
   useBulkUploadStudentsMutation,
+  useClearRosterMutation,
 } = studentApi;

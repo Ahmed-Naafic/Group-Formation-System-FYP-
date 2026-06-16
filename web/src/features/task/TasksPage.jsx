@@ -9,10 +9,7 @@ import {
   useDeleteTaskMutation,
 } from './taskApi';
 import { useGetGroupsQuery } from '@/features/group/groupApi';
-import { useGetClassByIdQuery } from '@/features/class/classApi';
-import { useGetCourseAssignmentsQuery } from '@/features/courseAssignment/courseAssignmentApi';
-import { useSelector } from 'react-redux';
-import { selectRole } from '@/features/auth/authSlice';
+import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,14 +51,14 @@ function deadlineLabel(deadline) {
   );
 }
 
-// ── Group picker (multi-select checkboxes) ─────────────────────────────────────
+// ── Group picker ───────────────────────────────────────────────────────────────
 
 function GroupPicker({ groups, selected, onChange }) {
   function toggle(id) {
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
   }
   if (!groups.length) {
-    return <p className="text-sm text-ink-400">No active groups in this class yet.</p>;
+    return <p className="text-sm text-ink-400">No active groups in this offering yet.</p>;
   }
   return (
     <div className="max-h-44 overflow-y-auto rounded-md border border-border divide-y divide-border">
@@ -90,51 +87,31 @@ function GroupPicker({ groups, selected, onChange }) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function TasksPage() {
-  const { classId } = useParams();
-  const navigate    = useNavigate();
-  const role        = useSelector(selectRole);
-  const isAdmin     = role === 'admin';
+  const { offeringId } = useParams();
+  const navigate       = useNavigate();
 
-  const { data: cls }           = useGetClassByIdQuery(classId);
-  const { data: tasks = [], isLoading, error } = useGetTasksQuery(classId);
+  const { data: offering }                           = useGetCourseOfferingByIdQuery(offeringId);
+  const { data: tasks = [], isLoading, error }       = useGetTasksQuery(offeringId);
+  const { data: groups = [] }                        = useGetGroupsQuery({ courseOfferingId: offeringId });
+  const [createTask, { isLoading: creating }]        = useCreateTaskMutation();
+  const [deleteTask, { isLoading: deleting }]        = useDeleteTaskMutation();
 
-  // Gather all groups for the group picker — need courseId per group
-  // We fetch all course assignments to know which courses exist for this class,
-  // then load groups. For simplicity: use the flat list of all groups via
-  // a broad fetch — the backend scopes it by class via courseId, so we fetch
-  // each course's groups. Instead, fetch the instructor's assignments to get courseIds.
-  const { data: assignments = [] } = useGetCourseAssignmentsQuery(undefined, { skip: isAdmin });
-
-  // Build unique courseIds for this class
-  const courseIds = isAdmin
-    ? (cls?.courseIds ?? []).map((c) => String(c._id ?? c))
-    : assignments
-        .filter((a) => String(a.classId?._id ?? a.classId) === classId)
-        .map((a) => String(a.courseId?._id ?? a.courseId));
-
-  // Fetch groups for first course (sufficient for the picker — groups across courses)
-  // We fetch per-course and merge
-  const firstCourseId = courseIds[0];
-  const { data: groups = [] } = useGetGroupsQuery(
-    { classId, courseId: firstCourseId },
-    { skip: !firstCourseId },
-  );
-
-  const [createTask, { isLoading: creating }] = useCreateTaskMutation();
-  const [deleteTask, { isLoading: deleting }] = useDeleteTaskMutation();
-
-  const [newOpen,       setNewOpen]       = useState(false);
-  const [deleteTarget,  setDeleteTarget]  = useState(null);
-  const [pickedGroups,  setPickedGroups]  = useState([]);
+  const [newOpen,      setNewOpen]      = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [pickedGroups, setPickedGroups] = useState([]);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: { title: '', description: '', deadline: '' },
   });
 
+  const offeringLabel = offering
+    ? [offering.courseId?.name, offering.cohortId?.name].filter(Boolean).join(' — ')
+    : '…';
+
   async function onCreateTask(data) {
     try {
       await createTask({
-        classId,
+        courseOfferingId: offeringId,
         title:            data.title.trim(),
         description:      data.description?.trim() || undefined,
         deadline:         data.deadline || undefined,
@@ -159,19 +136,15 @@ export default function TasksPage() {
     }
   }
 
-  const className = cls?.name ?? '…';
-
   return (
     <div>
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="eyebrow mb-1">
-            <Link to="/classes" className="hover:underline">Classes</Link>
+            <Link to="/course-offerings" className="hover:underline">Course Offerings</Link>
             {' / '}
-            <Link to={`/classes/${classId}/students`} className="hover:underline">{className}</Link>
-            {' / '}
-            Tasks
+            {offeringLabel}
           </p>
           <h2 className="text-ink-900">Tasks</h2>
         </div>
@@ -217,17 +190,14 @@ export default function TasksPage() {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <Button
-                  variant="ghost"
-                  size="sm"
+                  variant="ghost" size="sm"
                   className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700"
-                  onClick={() => navigate(`/tasks/${task._id}/submissions`, { state: { classId } })}
+                  onClick={() => navigate(`/tasks/${task._id}/submissions`, { state: { offeringId } })}
                 >
                   Submissions <ArrowRight size={11} />
                 </Button>
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 hover:text-danger"
+                  variant="ghost" size="icon" className="h-7 w-7 hover:text-danger"
                   onClick={() => setDeleteTarget(task)}
                   disabled={deleting}
                   aria-label="Delete task"
@@ -245,7 +215,7 @@ export default function TasksPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>New Task</DialogTitle>
-            <DialogDescription>Assign a task to one or more groups in {className}.</DialogDescription>
+            <DialogDescription>Assign a task to one or more groups in {offeringLabel}.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(onCreateTask)} className="space-y-4 py-1" noValidate>
             <div className="space-y-1.5">
@@ -258,7 +228,6 @@ export default function TasksPage() {
               />
               {errors.title && <p className="text-xs text-danger">{errors.title.message}</p>}
             </div>
-
             <div className="space-y-1.5">
               <Label htmlFor="t-desc">Description</Label>
               <textarea
@@ -269,26 +238,19 @@ export default function TasksPage() {
                 {...register('description')}
               />
             </div>
-
             <div className="space-y-1.5">
               <Label htmlFor="t-deadline">Deadline</Label>
               <Input id="t-deadline" type="datetime-local" {...register('deadline')} />
             </div>
-
             <div className="space-y-1.5">
               <Label>Assign to groups</Label>
-              <GroupPicker
-                groups={groups}
-                selected={pickedGroups}
-                onChange={setPickedGroups}
-              />
+              <GroupPicker groups={groups} selected={pickedGroups} onChange={setPickedGroups} />
               <p className="text-xs text-ink-400">
                 {pickedGroups.length === 0
                   ? 'No groups selected — task will be visible to all groups.'
                   : `${pickedGroups.length} group${pickedGroups.length !== 1 ? 's' : ''} selected.`}
               </p>
             </div>
-
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setNewOpen(false); reset(); setPickedGroups([]); }}>
                 Cancel
