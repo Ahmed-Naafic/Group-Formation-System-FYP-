@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Plus, Loader2, Users2, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
 import {
@@ -191,6 +192,7 @@ export default function CourseOfferingsPage() {
                 <TableHead>Semester</TableHead>
                 <TableHead>Instructor</TableHead>
                 <TableHead className="w-24">Status</TableHead>
+                <TableHead className="w-44" />
                 {isAdmin && <TableHead className="w-20" />}
               </TableRow>
             </TableHeader>
@@ -211,6 +213,16 @@ export default function CourseOfferingsPage() {
                     <TableCell className="text-ink-500">{o.instructorId?.fullName ?? instrMap[instrId] ?? '—'}</TableCell>
                     <TableCell>
                       <Badge variant={STATUS_VARIANT[o.status] ?? 'secondary'}>{o.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700" asChild>
+                          <Link to={`/course-offerings/${o._id}/groups`}><Users2 size={12} /> Groups</Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700" asChild>
+                          <Link to={`/course-offerings/${o._id}/tasks`}><ClipboardList size={12} /> Tasks</Link>
+                        </Button>
+                      </div>
                     </TableCell>
                     {isAdmin && (
                       <TableCell>
