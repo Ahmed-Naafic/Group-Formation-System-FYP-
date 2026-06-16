@@ -19,8 +19,10 @@ async function assertCourseOfferingAccess(courseOfferingId, context) {
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
 
-// Writes assembled groups to DB (Groups → Workspaces → hasBeenLeader flags).
-async function _persist(courseOfferingId, courseName, assembledGroups, groupSize, options, context, generationId) {
+// Writes assembled groups to DB (Groups → Workspaces → hasBeenLeader flags → GroupHistory).
+// GroupHistory is written LAST so that any earlier failure leaves history untouched;
+// _rollback() covers history cleanup via deleteByGenerationId if history itself fails.
+async function _persist(courseOfferingId, cohortId, courseName, assembledGroups, groupSize, options, context, generationId) {
   const now            = new Date();
   const createdGroupIds = [];
 
@@ -45,6 +47,21 @@ async function _persist(courseOfferingId, courseName, assembledGroups, groupSize
 
   await Promise.all(assembledGroups.map(g => studentService.markAsLeader(g.leaderId)));
 
+  // Write pairing history after all Group/Workspace/leader writes have succeeded.
+  // If this throws, _rollback() will call deleteByGenerationId on both collections.
+  await groupHistoryRepository.insertMany(
+    assembledGroups.map(({ members, leaderId }) => ({
+      courseOfferingId,
+      cohortId,
+      generationId,
+      memberIds:   members.map(m => m._id),
+      leaderId,
+      generatedAt: now,
+      groupSize,
+      options,
+    }))
+  );
+
   return Promise.all(createdGroupIds.map(id => groupRepository.findById(id)));
 }
 
@@ -52,8 +69,10 @@ async function _rollback(generationId, archivedGroupIds) {
   const partialGroups   = await groupRepository.findByGenerationId(generationId);
   const partialGroupIds = partialGroups.map(g => g._id);
 
+  // Delete Groups, Workspaces, and any GroupHistory written before the failure.
   await Promise.all([
     groupRepository.deleteByGenerationId(generationId),
+    groupHistoryRepository.deleteByGenerationId(generationId),
     ...(partialGroupIds.length > 0
       ? [workspaceRepository.deleteByGroupIds(partialGroupIds)]
       : []),
@@ -89,7 +108,7 @@ const groupService = {
     const generationId = new mongoose.Types.ObjectId();
     let groups;
     try {
-      groups = await _persist(courseOfferingId, courseName, assembledGroups, groupSize, options, context, generationId);
+      groups = await _persist(courseOfferingId, cohortId, courseName, assembledGroups, groupSize, options, context, generationId);
     } catch (err) {
       await _rollback(generationId, []);
       throw err;
@@ -104,7 +123,8 @@ const groupService = {
     return { groups, summary };
   },
 
-  // Archives current active groups (writing to history for pair-avoidance), then generates fresh set.
+  // Archives current active groups, then generates a fresh set.
+  // History is now written by _persist() — the old-groups write here is removed.
   async regenerate(courseOfferingId, groupSize, options, context) {
     const offering = await assertCourseOfferingAccess(courseOfferingId, context);
     const cohortId  = String(offering.cohortId?._id ?? offering.cohortId);
@@ -114,19 +134,8 @@ const groupService = {
     const archivedGroupIds = currentGroups.map(g => g._id);
 
     if (currentGroups.length > 0) {
-      // Write current groups to history so pair-avoidance can read them.
-      await groupHistoryRepository.insertMany(
-        currentGroups.map(g => ({
-          courseOfferingId,
-          cohortId,
-          generationId:  g.generationId,
-          memberIds:     g.memberIds,
-          leaderId:      g.leaderId,
-          generatedAt:   g.generatedAt,
-          groupSize:     g.generationOptions?.groupSize ?? groupSize,
-          options:       g.generationOptions ?? {},
-        })),
-      );
+      // Old groups already have GroupHistory records from when _persist() created them.
+      // Just archive them — _persist() will write history for the new generation.
       await groupRepository.archiveByOffering(courseOfferingId);
     }
 
@@ -137,7 +146,7 @@ const groupService = {
     const generationId = new mongoose.Types.ObjectId();
     let groups;
     try {
-      groups = await _persist(courseOfferingId, courseName, assembledGroups, groupSize, options, context, generationId);
+      groups = await _persist(courseOfferingId, cohortId, courseName, assembledGroups, groupSize, options, context, generationId);
     } catch (err) {
       await _rollback(generationId, archivedGroupIds);
       throw err;
@@ -282,7 +291,17 @@ const groupService = {
       });
     }
 
-    return [...map.values()];
+    // Mark each generation isActive if its groups are still in the active state.
+    const generationIds = [...map.keys()];
+    const activeGroups  = generationIds.length > 0
+      ? await groupRepository.findActiveByGenerationIds(generationIds)
+      : [];
+    const activeGenIds = new Set(activeGroups.map(g => String(g.generationId)));
+
+    return [...map.values()].map(gen => ({
+      ...gen,
+      isActive: activeGenIds.has(String(gen.generationId)),
+    }));
   },
 };
 

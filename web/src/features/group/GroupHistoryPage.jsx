@@ -49,7 +49,10 @@ function GenerationCard({ generation, index, isOpen, onToggle }) {
   const semName     = co?.semesterId?.name ?? '—';
 
   return (
-    <div className="rounded-lg border border-border bg-white shadow-xs overflow-hidden">
+    <div className={cn(
+      'rounded-lg border bg-white shadow-xs overflow-hidden',
+      generation.isActive ? 'border-just-blue-300' : 'border-border',
+    )}>
       {/* Header row — always visible, click to expand */}
       <button
         type="button"
@@ -74,6 +77,11 @@ function GenerationCard({ generation, index, isOpen, onToggle }) {
             {generation.groups.length} groups of {generation.groupSize}
           </span>
         </span>
+        {generation.isActive && (
+          <span className="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-just-blue-100 text-just-blue-700">
+            Current
+          </span>
+        )}
       </button>
 
       {/* Expanded: grid of groups */}

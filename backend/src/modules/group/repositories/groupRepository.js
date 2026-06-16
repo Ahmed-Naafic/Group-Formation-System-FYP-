@@ -55,6 +55,11 @@ const groupRepository = {
     return Group.find({ status: 'active', memberIds: { $in: studentIds } }, '_id').lean();
   },
 
+  // Used by getHistory() to determine which generationIds still have active groups.
+  findActiveByGenerationIds(generationIds) {
+    return Group.find({ generationId: { $in: generationIds }, status: 'active' }, 'generationId').lean();
+  },
+
   deleteByGenerationId(generationId) {
     return Group.deleteMany({ generationId });
   },
