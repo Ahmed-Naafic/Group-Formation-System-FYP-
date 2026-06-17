@@ -67,7 +67,7 @@ const taskService = {
       if (!studentRecord) return [];
       const groups = await groupRepository.findByOfferingAndMemberId(courseOfferingId, studentRecord._id);
       if (!groups.length) return [];
-      return taskRepository.findByGroupIds(groups.map(g => g._id));
+      return taskRepository.findForStudent(courseOfferingId, groups.map(g => g._id));
     }
 
     await assertCourseOfferingAccess(courseOfferingId, context);

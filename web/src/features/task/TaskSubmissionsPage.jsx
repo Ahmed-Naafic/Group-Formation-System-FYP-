@@ -9,6 +9,7 @@ import {
   useUpdateTaskMutation,
   useGradeSubmissionMutation,
 } from './taskApi';
+import { useGetGroupsQuery } from '@/features/group/groupApi';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -103,11 +104,20 @@ function GradeDialog({ submission, onClose }) {
 export default function TaskSubmissionsPage() {
   const { taskId }  = useParams();
   const location    = useLocation();
-  const classId     = location.state?.classId;
+  const offeringId  = location.state?.offeringId;
 
   const { data: task,        isLoading: loadingTask,  error: taskError }  = useGetTaskByIdQuery(taskId);
   const { data: submissions = [], isLoading: loadingSubs } = useGetTaskSubmissionsQuery(taskId);
   const [updateTask, { isLoading: toggling }] = useUpdateTaskMutation();
+
+  // When assignedGroups is [] the task targets ALL groups. We need the offering's
+  // full group list to build rows — otherwise the table is empty until groups submit.
+  const isAllGroups     = task?.assignedGroups?.length === 0;
+  const taskOfferingId  = offeringId ?? String(task?.courseOfferingId?._id ?? task?.courseOfferingId ?? '');
+  const { data: offeringGroups = [] } = useGetGroupsQuery(
+    { courseOfferingId: taskOfferingId },
+    { skip: !isAllGroups || !taskOfferingId },
+  );
 
   const [gradeTarget, setGradeTarget] = useState(null);
 
@@ -121,7 +131,7 @@ export default function TaskSubmissionsPage() {
     }
   }
 
-  const backTo = classId ? `/classes/${classId}/tasks` : '/classes';
+  const backTo = offeringId ? `/course-offerings/${offeringId}/tasks` : '/course-offerings';
 
   if (loadingTask) {
     return (
@@ -140,23 +150,27 @@ export default function TaskSubmissionsPage() {
     );
   }
 
-  // Build a complete row per assigned group — merge with existing submissions
+  // Build one row per group, merged with any existing submission.
+  // For all-groups tasks (assignedGroups=[]) use the offering's active group list
+  // so the table shows every group even before anyone has submitted.
   const submissionByGroup = {};
   for (const s of submissions) {
     const gid = String(s.groupId?._id ?? s.groupId);
     submissionByGroup[gid] = s;
   }
 
-  const rows = (task.assignedGroups ?? []).map((g) => ({
+  const baseGroups = isAllGroups ? offeringGroups : (task.assignedGroups ?? []);
+  const rows = baseGroups.map((g) => ({
     group:      g,
     submission: submissionByGroup[String(g._id)] ?? null,
   }));
 
-  // Groups that submitted but aren't in assignedGroups (if task was open to all)
-  const assignedIds = new Set((task.assignedGroups ?? []).map((g) => String(g._id)));
+  // Also surface any submissions from groups outside baseGroups (e.g. archived groups
+  // that submitted before a regeneration, or late entries on all-groups tasks).
+  const baseIds = new Set(baseGroups.map((g) => String(g._id)));
   for (const s of submissions) {
     const gid = String(s.groupId?._id ?? s.groupId);
-    if (!assignedIds.has(gid)) {
+    if (!baseIds.has(gid)) {
       rows.push({ group: s.groupId, submission: s });
     }
   }

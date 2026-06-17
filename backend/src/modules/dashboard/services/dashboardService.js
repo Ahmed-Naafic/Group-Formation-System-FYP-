@@ -71,7 +71,12 @@ const dashboardService = {
     const cohortIds   = [...new Set(offerings.map(o => String(o.cohortId?._id ?? o.cohortId)))];
     const cohortOids  = cohortIds.map(id => new mongoose.Types.ObjectId(id));
 
-    const [totalStudents, totalActiveGroups, studentsByCohort, groupsByOffering] = await Promise.all([
+    const now         = new Date();
+    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Fetch students, groups, and tasks in parallel.
+    // Task fetch is lean — only the fields needed for stat computation.
+    const [totalStudents, totalActiveGroups, studentsByCohort, groupsByOffering, tasks] = await Promise.all([
       Student.countDocuments({ cohortId: { $in: cohortOids }, deletedAt: null }),
       Group.countDocuments({ courseOfferingId: { $in: offeringIds }, status: 'active', deletedAt: null }),
       Student.aggregate([
@@ -82,22 +87,68 @@ const dashboardService = {
         { $match: { courseOfferingId: { $in: offeringIds }, status: 'active', deletedAt: null } },
         { $group: { _id: '$courseOfferingId', count: { $sum: 1 } } },
       ]),
+      Task.find(
+        { courseOfferingId: { $in: offeringIds } },
+        '_id courseOfferingId status deadline',
+      ).lean(),
     ]);
 
+    // ── Task stats (computed in memory) ──────────────────────────────────────
+    const taskIds = tasks.map(t => t._id);
+
+    const openTaskCount = tasks.filter(t => t.status === 'open').length;
+    const dueSoonCount  = tasks.filter(t =>
+      t.status === 'open' && t.deadline && t.deadline >= now && t.deadline <= weekFromNow,
+    ).length;
+    const overdueCount  = tasks.filter(t =>
+      t.status === 'open' && t.deadline && t.deadline < now,
+    ).length;
+
+    // Per-offering open-task breakdown
+    const openByOffering = {};
+    for (const t of tasks) {
+      if (t.status === 'open') {
+        const oid = String(t.courseOfferingId);
+        openByOffering[oid] = (openByOffering[oid] ?? 0) + 1;
+      }
+    }
+
+    // ── Submission stats ──────────────────────────────────────────────────────
+    // pendingReviews = submissions that are submitted/late but not yet graded.
+    // Fetch only taskId so we can map back to offering without a $lookup.
+    let pendingReviewCount  = 0;
+    const pendingByOffering = {};
+
+    if (taskIds.length > 0) {
+      const taskOfferingMap = {};
+      for (const t of tasks) taskOfferingMap[String(t._id)] = String(t.courseOfferingId);
+
+      const pendingSubs = await Submission.find(
+        { taskId: { $in: taskIds }, status: { $in: ['submitted', 'late'] } },
+        'taskId',
+      ).lean();
+
+      pendingReviewCount = pendingSubs.length;
+      for (const s of pendingSubs) {
+        const oid = taskOfferingMap[String(s.taskId)];
+        if (oid) pendingByOffering[oid] = (pendingByOffering[oid] ?? 0) + 1;
+      }
+    }
+
+    // ── Assemble response ─────────────────────────────────────────────────────
     const studentMap = Object.fromEntries(studentsByCohort.map(x => [String(x._id), x.count]));
     const groupMap   = Object.fromEntries(groupsByOffering.map(x => [String(x._id), x.count]));
 
     const offeringSummaries = offerings.map(o => ({
-      _id:          o._id,
-      course:       o.courseId,
-      cohort:       o.cohortId,
-      semester:     o.semesterId,
-      status:       o.status,
-      students:     studentMap[String(o.cohortId?._id ?? o.cohortId)] ?? 0,
-      activeGroups: groupMap[String(o._id)] ?? 0,
-      // Task/submission stats pending Step 7 (Task.courseOfferingId migration)
-      openTasks:      0,
-      pendingReviews: 0,
+      _id:            o._id,
+      course:         o.courseId,
+      cohort:         o.cohortId,
+      semester:       o.semesterId,
+      status:         o.status,
+      students:       studentMap[String(o.cohortId?._id ?? o.cohortId)] ?? 0,
+      activeGroups:   groupMap[String(o._id)] ?? 0,
+      openTasks:      openByOffering[String(o._id)]    ?? 0,
+      pendingReviews: pendingByOffering[String(o._id)] ?? 0,
     }));
 
     return {
@@ -105,10 +156,10 @@ const dashboardService = {
         offerings:      offerings.length,
         students:       totalStudents,
         activeGroups:   totalActiveGroups,
-        pendingReviews: 0,
-        openTasks:      0,
-        dueSoon:        0,
-        overdue:        0,
+        pendingReviews: pendingReviewCount,
+        openTasks:      openTaskCount,
+        dueSoon:        dueSoonCount,
+        overdue:        overdueCount,
       },
       offeringSummaries,
     };

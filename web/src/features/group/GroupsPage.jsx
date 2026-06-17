@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -12,6 +12,7 @@ import {
   useDeleteGroupsMutation,
 } from './groupApi';
 import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
+import { useLazyGetWorkspaceByGroupIdQuery } from '@/features/workspace/workspaceApi';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,22 +126,39 @@ function BalanceSummary({ groups }) {
   );
 }
 
-function GroupCard({ group, onAdjust }) {
+function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading }) {
   const leaderId = String(group.leaderId?._id ?? group.leaderId);
 
   return (
     <Card className="flex flex-col">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold text-ink-800">{group.name}</CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700 -mr-1"
-            onClick={onAdjust}
-          >
-            Adjust <ArrowRight size={11} />
-          </Button>
+        <div className="flex items-center justify-between gap-1">
+          <CardTitle className="text-base font-semibold text-ink-800 truncate min-w-0">
+            {group.name}
+          </CardTitle>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1 text-ink-500 hover:text-ink-800"
+              onClick={() => onOpenWorkspace(group._id)}
+              disabled={workspaceLoading === group._id}
+              title="Open workspace"
+            >
+              {workspaceLoading === group._id
+                ? <Loader2 size={11} className="animate-spin" />
+                : <ExternalLink size={11} />}
+              Workspace
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700"
+              onClick={onAdjust}
+            >
+              Adjust <ArrowRight size={11} />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0 flex-1">
@@ -188,6 +206,9 @@ export default function GroupsPage() {
   const [regenerateGroups, { isLoading: regenerating }] = useRegenerateGroupsMutation();
   const [deleteGroups,     { isLoading: deleting }]     = useDeleteGroupsMutation();
 
+  const [fetchWorkspace]          = useLazyGetWorkspaceByGroupIdQuery();
+  const [workspaceLoading, setWorkspaceLoading] = useState(null); // group._id being opened
+
   const [regenOpen,  setRegenOpen]  = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [genWarning, setGenWarning] = useState(null);
@@ -218,6 +239,18 @@ export default function GroupsPage() {
       attendanceThreshold:  lastOpts?.attendanceThreshold  ?? 25,
     },
   });
+
+  async function handleOpenWorkspace(groupId) {
+    setWorkspaceLoading(groupId);
+    try {
+      const ws = await fetchWorkspace(groupId).unwrap();
+      navigate(`/workspaces/${ws._id}`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Could not open workspace');
+    } finally {
+      setWorkspaceLoading(null);
+    }
+  }
 
   async function handleGenerate(data) {
     try {
@@ -345,6 +378,8 @@ export default function GroupsPage() {
                 key={group._id}
                 group={group}
                 onAdjust={() => navigate(`/groups/${group._id}`, { state: { courseOfferingId: offeringId } })}
+                onOpenWorkspace={handleOpenWorkspace}
+                workspaceLoading={workspaceLoading}
               />
             ))}
           </div>

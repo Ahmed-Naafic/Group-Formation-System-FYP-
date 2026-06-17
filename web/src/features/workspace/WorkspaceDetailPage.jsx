@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
-  Loader2, Crown, ArrowLeft, Send, Paperclip, Download, Trash2,
+  Loader2, Crown, ArrowLeft, ArrowRight, Send, Paperclip, Download, Trash2,
   File as FileIcon, FileText, FileImage, ClipboardList, Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -220,6 +220,78 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
   );
 }
 
+// ── Instructor tasks tab (read-only — no submission form) ─────────────────────
+
+function InstructorTasksTab({ courseOfferingId }) {
+  const navigate = useNavigate();
+  const { data: tasks = [], isLoading, error } = useGetTasksQuery(courseOfferingId);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 size={20} className="animate-spin text-ink-300" />
+      </div>
+    );
+  }
+  if (error) {
+    return <p className="text-sm text-danger">{error?.data?.error?.message ?? 'Failed to load tasks.'}</p>;
+  }
+  if (!tasks.length) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-white py-14 flex flex-col items-center gap-2">
+        <ClipboardList size={28} className="text-ink-200" />
+        <p className="text-sm text-ink-400">No tasks assigned to this group yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {tasks.map((task) => {
+        const now      = new Date();
+        const deadline = task.deadline ? new Date(task.deadline) : null;
+        const overdue  = deadline && task.status === 'open' && deadline < now;
+        const dueSoon  = deadline && !overdue && (deadline - now) < 3 * 86400000;
+        const deadlineColor = overdue ? 'text-danger' : dueSoon ? 'text-[var(--fg-warning)]' : 'text-ink-400';
+
+        return (
+          <div
+            key={task._id}
+            className="rounded-lg border border-border bg-white shadow-xs px-5 py-4 flex items-start gap-4"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="font-semibold text-ink-800 text-sm">{task.title}</span>
+                <Badge variant={task.status === 'open' ? 'success' : 'secondary'}>
+                  {task.status === 'open' ? 'Open' : 'Closed'}
+                </Badge>
+              </div>
+              {task.description && (
+                <p className="text-xs text-ink-500 line-clamp-2 mb-1">{task.description}</p>
+              )}
+              {deadline && (
+                <p className={cn('inline-flex items-center gap-1 text-xs', deadlineColor)}>
+                  <Calendar size={11} />
+                  {deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {overdue ? ' — overdue' : ''}
+                </p>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700 shrink-0"
+              onClick={() => navigate(`/tasks/${task._id}/submissions`, { state: { offeringId: courseOfferingId } })}
+            >
+              Submissions <ArrowRight size={11} />
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Tasks tab ─────────────────────────────────────────────────────────────────
 
 const SUBMISSION_STATUS = {
@@ -359,8 +431,8 @@ function StudentTaskCard({ task }) {
   );
 }
 
-function StudentTasksTab({ classId }) {
-  const { data: tasks = [], isLoading, error } = useGetTasksQuery(classId);
+function StudentTasksTab({ courseOfferingId }) {
+  const { data: tasks = [], isLoading, error } = useGetTasksQuery(courseOfferingId);
 
   if (isLoading) {
     return (
@@ -556,9 +628,10 @@ export default function WorkspaceDetailPage() {
   }
 
   const group    = workspace.groupId;
-  const cls      = group?.classId;
-  const course   = group?.courseId;
-  const semester = cls?.semesterId;
+  const offering = group?.courseOfferingId;
+  const course   = offering?.courseId;
+  const cohort   = offering?.cohortId;
+  const semester = offering?.semesterId;
 
   return (
     <div className="max-w-2xl">
@@ -573,7 +646,7 @@ export default function WorkspaceDetailPage() {
       {/* Header */}
       <div className="mb-6">
         <p className="eyebrow mb-1">
-          {cls?.name ?? '—'}
+          {cohort?.name ?? '—'}
           {course && (
             <>
               {' · '}{course.name}
@@ -583,7 +656,7 @@ export default function WorkspaceDetailPage() {
         </p>
         <h2 className="text-ink-900 mb-0.5">{group?.name ?? '—'}</h2>
         {semester && (
-          <p className="text-sm text-ink-400">{semester.name} · {semester.year}</p>
+          <p className="text-sm text-ink-400">{semester.name}</p>
         )}
       </div>
 
@@ -593,7 +666,9 @@ export default function WorkspaceDetailPage() {
       {activeTab === 'members' && <MembersTab workspace={workspace} />}
 
       {activeTab === 'tasks' && (
-        <StudentTasksTab classId={String(group?.classId?._id ?? group?.classId)} />
+        role === 'student'
+          ? <StudentTasksTab courseOfferingId={String(offering?._id ?? offering)} />
+          : <InstructorTasksTab courseOfferingId={String(offering?._id ?? offering)} />
       )}
 
       {activeTab === 'chat' && (

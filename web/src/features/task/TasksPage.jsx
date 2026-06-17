@@ -185,7 +185,11 @@ export default function TasksPage() {
                 )}
                 <div className="flex items-center gap-4 text-xs text-ink-400">
                   {deadlineLabel(task.deadline)}
-                  <span>{task.assignedGroups?.length ?? 0} group{task.assignedGroups?.length !== 1 ? 's' : ''}</span>
+                  <span>
+                    {!task.assignedGroups?.length
+                      ? 'All groups'
+                      : `${task.assignedGroups.length} group${task.assignedGroups.length !== 1 ? 's' : ''}`}
+                  </span>
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">

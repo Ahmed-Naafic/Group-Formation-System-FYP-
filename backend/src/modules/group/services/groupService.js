@@ -268,7 +268,7 @@ const groupService = {
     const filtered = context.role === 'instructor'
       ? records.filter(r => {
           const instrId = String(r.courseOfferingId?.instructorId ?? '');
-          return instrId === context.userId;
+          return instrId === String(context.userId);
         })
       : records;
 

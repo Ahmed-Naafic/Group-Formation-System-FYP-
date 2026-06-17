@@ -9,6 +9,12 @@ const workspaceController = {
     return sendSuccess(res, { data: { workspaces } });
   }),
 
+  // GET /api/workspaces/by-group/:groupId — any role, looks up workspace by group id
+  getByGroupId: asyncHandler(async (req, res) => {
+    const workspace = await workspaceService.getByGroupId(req.params.groupId, req.context);
+    return sendSuccess(res, { data: { workspace } });
+  }),
+
   // GET /api/workspaces/:id — any role, with ownership check inside service
   getById: asyncHandler(async (req, res) => {
     const workspace = await workspaceService.getById(req.params.id, req.context);

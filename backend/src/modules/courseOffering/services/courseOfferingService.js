@@ -14,7 +14,7 @@ async function resolveOffering(id, context) {
   if (!offering) throw new NotFoundError('Course offering not found');
   if (context.role === 'instructor') {
     const instructorId = String(offering.instructorId?._id ?? offering.instructorId);
-    if (instructorId !== context.userId) {
+    if (instructorId !== String(context.userId)) {
       throw new ForbiddenError('You are not the instructor for this course offering');
     }
   }

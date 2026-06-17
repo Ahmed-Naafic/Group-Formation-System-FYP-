@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Loader2, Crown, Trash2, ArrowLeft, UserPlus } from 'lucide-react';
+import { Loader2, Crown, Trash2, ArrowLeft, UserPlus, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetGroupByIdQuery, useGetGroupsQuery, useUpdateGroupMutation } from './groupApi';
+import { useGetWorkspaceByGroupIdQuery } from '@/features/workspace/workspaceApi';
 import { useGetStudentsQuery } from '@/features/student/studentApi';
 import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -22,6 +23,7 @@ export default function GroupDetailPage() {
 
   const { data: group, isLoading, error } = useGetGroupByIdQuery(id);
   const [updateGroup, { isLoading: updating }] = useUpdateGroupMutation();
+  const { data: workspace } = useGetWorkspaceByGroupIdQuery(id);
 
   const courseOfferingId = group?.courseOfferingId
     ? String(group.courseOfferingId?._id ?? group.courseOfferingId)
@@ -130,12 +132,21 @@ export default function GroupDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="mb-6">
-        <p className="eyebrow mb-1">{offeringLabel}</p>
-        <h2 className="text-ink-900 mb-0.5">{group.name}</h2>
-        <p className="text-sm text-ink-400">
-          {memberCount} member{memberCount !== 1 ? 's' : ''}
-        </p>
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <p className="eyebrow mb-1">{offeringLabel}</p>
+          <h2 className="text-ink-900 mb-0.5">{group.name}</h2>
+          <p className="text-sm text-ink-400">
+            {memberCount} member{memberCount !== 1 ? 's' : ''}
+          </p>
+        </div>
+        {workspace && (
+          <Button variant="outline" size="sm" className="shrink-0 gap-1.5" asChild>
+            <Link to={`/workspaces/${workspace._id}`}>
+              <ExternalLink size={13} /> Open Workspace
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="space-y-5">

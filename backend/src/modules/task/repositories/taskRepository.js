@@ -20,11 +20,16 @@ const taskRepository = {
     return Task.find({ courseOfferingId }).populate(BASE_POPULATE).sort({ createdAt: -1 });
   },
 
-  // Returns tasks that have at least one group from the given groupIds list
-  findByGroupIds(groupIds) {
-    return Task.find({ assignedGroups: { $in: groupIds } })
-      .populate(BASE_POPULATE)
-      .sort({ createdAt: -1 });
+  // Returns tasks visible to a student: either assigned to one of their groups
+  // or assigned to no specific groups (meaning all groups in the offering).
+  findForStudent(courseOfferingId, groupIds) {
+    return Task.find({
+      courseOfferingId,
+      $or: [
+        { assignedGroups: { $size: 0 } },
+        { assignedGroups: { $in: groupIds } },
+      ],
+    }).populate(BASE_POPULATE).sort({ createdAt: -1 });
   },
 
   updateById(id, updates) {

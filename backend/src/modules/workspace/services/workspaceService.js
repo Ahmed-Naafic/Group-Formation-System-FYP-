@@ -78,6 +78,33 @@ const workspaceService = {
     });
   },
 
+  // Looks up a workspace by its group's _id rather than by workspace _id.
+  // Used by the instructor "Open Workspace" flow where only the group id is known.
+  // Same access rules as getById — delegated to courseOfferingService.getById for instructors.
+  async getByGroupId(groupId, context) {
+    const workspace = await workspaceRepository.findByGroupId(groupId);
+    if (!workspace) throw new NotFoundError('Workspace not found for this group');
+
+    const group      = workspace.groupId;
+    const offeringId = String(group.courseOfferingId?._id ?? group.courseOfferingId);
+
+    if (context.role === 'student') {
+      const offering = await courseOfferingRepository.findById(offeringId);
+      if (!offering) throw new ForbiddenError('Access denied');
+      const cohortId      = String(offering.cohortId?._id ?? offering.cohortId);
+      const studentRecord = await studentRepository.findOne({ userId: context.userId, cohortId, deletedAt: null });
+      if (!studentRecord) throw new ForbiddenError('Access denied');
+      const isMember = group.memberIds.some(
+        m => (m._id ?? m).toString() === studentRecord._id.toString(),
+      );
+      if (!isMember) throw new ForbiddenError('You are not a member of this group');
+    } else if (context.role === 'instructor') {
+      await courseOfferingService.getById(offeringId, context);
+    }
+
+    return workspace;
+  },
+
   // Returns a single workspace. Access rules:
   // student must be a group member; instructor must own the offering; admin always.
   async getById(id, context) {
