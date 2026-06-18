@@ -1,4 +1,5 @@
 const { Router }       = require('express');
+const multer           = require('multer');
 const { authenticate } = require('../../../middleware/auth');
 const { requireRole }  = require('../../../middleware/rbac');
 const validate         = require('../../../common/validators/validate');
@@ -6,14 +7,38 @@ const taskController   = require('../controllers/taskController');
 const taskValidation   = require('../validations/taskValidation');
 const submissionController = require('../../submission/controllers/submissionController');
 const submissionValidation = require('../../submission/validations/submissionValidation');
+const { ALLOWED_MIME_TYPES, MAX_FILE_SIZE } = require('../../file/validations/fileValidation');
+const { BadRequestError } = require('../../../common/errors');
 
 const router = Router();
+
+// ── Multer — same config as workspace file upload ─────────────────────────────
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: MAX_FILE_SIZE },
+  fileFilter(_req, file, cb) {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) return cb(null, true);
+    cb(new BadRequestError(`File type '${file.mimetype}' is not allowed`));
+  },
+});
+
+// When the request is multipart the assignedGroupIds field arrives as a
+// JSON-encoded string; parse it back to an array before Joi validation runs.
+function parseMultipartBody(req, _res, next) {
+  if (typeof req.body.assignedGroupIds === 'string') {
+    try   { req.body.assignedGroupIds = JSON.parse(req.body.assignedGroupIds); }
+    catch { req.body.assignedGroupIds = []; }
+  }
+  next();
+}
 
 // ── Task CRUD ──────────────────────────────────────────────────────────────────
 
 router.post(
   '/',
   authenticate, requireRole('admin', 'instructor'),
+  upload.single('file'),
+  parseMultipartBody,
   validate(taskValidation.createTask, 'body'),
   taskController.create,
 );
@@ -45,6 +70,13 @@ router.delete(
   authenticate, requireRole('admin', 'instructor'),
   validate(taskValidation.idParam, 'params'),
   taskController.remove,
+);
+
+router.get(
+  '/:id/attachment',
+  authenticate, requireRole('admin', 'instructor', 'student'),
+  validate(taskValidation.idParam, 'params'),
+  taskController.downloadAttachment,
 );
 
 // ── Submission sub-resources (nested under task) ───────────────────────────────

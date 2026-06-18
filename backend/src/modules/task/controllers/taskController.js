@@ -5,8 +5,17 @@ const taskService     = require('../services/taskService');
 const taskController = {
   // POST /api/tasks
   create: asyncHandler(async (req, res) => {
-    const task = await taskService.create(req.body, req.context);
+    const task = await taskService.create(req.body, req.context, req.file ?? null);
     return sendSuccess(res, { status: 201, data: { task } });
+  }),
+
+  // GET /api/tasks/:id/attachment
+  downloadAttachment: asyncHandler(async (req, res) => {
+    const { absolutePath, originalName, mimeType } =
+      await taskService.getAttachment(req.params.id, req.context);
+    res.set('Content-Disposition', `attachment; filename="${originalName}"`);
+    res.set('Content-Type', mimeType);
+    res.sendFile(absolutePath);
   }),
 
   // GET /api/tasks?courseOfferingId=

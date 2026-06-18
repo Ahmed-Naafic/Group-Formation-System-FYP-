@@ -4,6 +4,7 @@ const courseOfferingService    = require('../../courseOffering/services/courseOf
 const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
 const groupRepository          = require('../../group/repositories/groupRepository');
 const studentRepository        = require('../../student/repositories/studentRepository');
+const StorageService           = require('../../../common/services/storage/StorageService');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../../../common/errors');
 
 // courseOfferingService.getById(id, context) enforces ownership for instructors
@@ -13,7 +14,7 @@ async function assertCourseOfferingAccess(courseOfferingId, context) {
 }
 
 const taskService = {
-  async create(data, context) {
+  async create(data, context, multerFile = null) {
     await assertCourseOfferingAccess(data.courseOfferingId, context);
 
     // Validate that all assignedGroups belong to this offering
@@ -28,13 +29,29 @@ const taskService = {
       }
     }
 
+    // Save optional attachment via StorageService (same call as workspace file upload)
+    let attachments = [];
+    if (multerFile) {
+      const storageKey = await StorageService.save(
+        multerFile.buffer,
+        multerFile.originalname,
+        `tasks/${data.courseOfferingId}`,
+      );
+      attachments = [{
+        originalName: multerFile.originalname,
+        storageKey,
+        mimeType:     multerFile.mimetype,
+        sizeBytes:    multerFile.size,
+      }];
+    }
+
     const task = await taskRepository.create({
       courseOfferingId: data.courseOfferingId,
       assignedGroups:   data.assignedGroupIds ?? [],
       assignedBy:       context.userId,
       title:            data.title,
       description:      data.description,
-      attachments:      data.attachments ?? [],
+      attachments,
       deadline:         data.deadline,
       status:           'open',
     });
@@ -124,6 +141,39 @@ const taskService = {
     }
 
     await taskRepository.softDelete(id, context.userId);
+  },
+
+  // Returns the resolved path + metadata for a task's first attachment.
+  // Access rules mirror getById: student must be in an assigned group (or all-groups);
+  // instructor must own the offering.
+  async getAttachment(id, context) {
+    const task = await taskRepository.findById(id);
+    if (!task)                       throw new NotFoundError('Task not found');
+    if (!task.attachments?.length)   throw new NotFoundError('This task has no attachment');
+
+    const offeringId = String(task.courseOfferingId?._id ?? task.courseOfferingId);
+
+    if (context.role === 'student') {
+      const offering = await courseOfferingRepository.findById(offeringId);
+      const cohortId = offering ? String(offering.cohortId?._id ?? offering.cohortId) : null;
+      const records  = cohortId
+        ? await studentRepository.findAll({ userId: context.userId, cohortId, deletedAt: null })
+        : [];
+      const groups       = await groupRepository.findByMemberIds(records.map(s => s._id));
+      const memberGroupIds = groups.map(g => String(g._id));
+      const assigned       = task.assignedGroups.map(g => String(g._id ?? g));
+      const hasAccess      = assigned.length === 0 || assigned.some(gid => memberGroupIds.includes(gid));
+      if (!hasAccess) throw new ForbiddenError('This task is not assigned to your group');
+    } else {
+      await assertCourseOfferingAccess(offeringId, context);
+    }
+
+    const att = task.attachments[0];
+    return {
+      absolutePath: StorageService.resolve(att.storageKey),
+      originalName: att.originalName,
+      mimeType:     att.mimeType,
+    };
   },
 };
 

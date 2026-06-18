@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
-import { Loader2, Plus, Trash2, ClipboardList, ArrowRight, Calendar } from 'lucide-react';
+import { Loader2, Plus, Trash2, ClipboardList, ArrowRight, Calendar, Paperclip, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetTasksQuery,
@@ -96,9 +96,11 @@ export default function TasksPage() {
   const [createTask, { isLoading: creating }]        = useCreateTaskMutation();
   const [deleteTask, { isLoading: deleting }]        = useDeleteTaskMutation();
 
-  const [newOpen,      setNewOpen]      = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [pickedGroups, setPickedGroups] = useState([]);
+  const [newOpen,        setNewOpen]        = useState(false);
+  const [deleteTarget,   setDeleteTarget]   = useState(null);
+  const [pickedGroups,   setPickedGroups]   = useState([]);
+  const [attachmentFile, setAttachmentFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: { title: '', description: '', deadline: '' },
@@ -108,19 +110,39 @@ export default function TasksPage() {
     ? [offering.courseId?.name, offering.cohortId?.name].filter(Boolean).join(' — ')
     : '…';
 
+  function resetDialog() {
+    setNewOpen(false);
+    reset();
+    setPickedGroups([]);
+    setAttachmentFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
   async function onCreateTask(data) {
     try {
-      await createTask({
-        courseOfferingId: offeringId,
-        title:            data.title.trim(),
-        description:      data.description?.trim() || undefined,
-        deadline:         data.deadline || undefined,
-        assignedGroupIds: pickedGroups,
-      }).unwrap();
+      let body;
+      if (attachmentFile) {
+        // Multipart — matches the pattern used by student bulk-upload
+        const form = new FormData();
+        form.append('courseOfferingId', offeringId);
+        form.append('title',            data.title.trim());
+        if (data.description?.trim()) form.append('description', data.description.trim());
+        if (data.deadline)            form.append('deadline',    data.deadline);
+        form.append('assignedGroupIds', JSON.stringify(pickedGroups));
+        form.append('file', attachmentFile);
+        body = form;
+      } else {
+        body = {
+          courseOfferingId: offeringId,
+          title:            data.title.trim(),
+          description:      data.description?.trim() || undefined,
+          deadline:         data.deadline || undefined,
+          assignedGroupIds: pickedGroups,
+        };
+      }
+      await createTask(body).unwrap();
       toast.success('Task created');
-      setNewOpen(false);
-      reset();
-      setPickedGroups([]);
+      resetDialog();
     } catch (err) {
       toast.error(err?.data?.error?.message ?? 'Failed to create task');
     }
@@ -215,7 +237,7 @@ export default function TasksPage() {
       )}
 
       {/* New task dialog */}
-      <Dialog open={newOpen} onOpenChange={(v) => { if (!v) { setNewOpen(false); reset(); setPickedGroups([]); } }}>
+      <Dialog open={newOpen} onOpenChange={(v) => { if (!v) resetDialog(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>New Task</DialogTitle>
@@ -255,8 +277,41 @@ export default function TasksPage() {
                   : `${pickedGroups.length} group${pickedGroups.length !== 1 ? 's' : ''} selected.`}
               </p>
             </div>
+            <div className="space-y-1.5">
+              <Label>Attachment <span className="text-ink-400 font-normal">(optional)</span></Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
+              />
+              {attachmentFile ? (
+                <div className="flex items-center gap-2 rounded-md border border-border bg-ink-50 px-3 py-2 text-sm">
+                  <Paperclip size={13} className="shrink-0 text-ink-400" />
+                  <span className="flex-1 truncate text-ink-700 min-w-0">{attachmentFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setAttachmentFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                    className="shrink-0 text-ink-400 hover:text-danger transition-colors"
+                    aria-label="Remove attachment"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip size={13} /> Attach file
+                </Button>
+              )}
+            </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setNewOpen(false); reset(); setPickedGroups([]); }}>
+              <Button type="button" variant="outline" onClick={resetDialog}>
                 Cancel
               </Button>
               <Button type="submit" disabled={creating}>

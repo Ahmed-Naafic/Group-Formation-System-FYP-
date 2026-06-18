@@ -224,7 +224,25 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
 
 function InstructorTasksTab({ courseOfferingId }) {
   const navigate = useNavigate();
+  const token    = useSelector(selectCurrentToken);
   const { data: tasks = [], isLoading, error } = useGetTasksQuery(courseOfferingId);
+
+  async function downloadAttachment(task) {
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${task._id}/attachment`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href  = URL.createObjectURL(blob);
+      link.download = task.attachments[0].originalName;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch {
+      toast.error('Could not download attachment');
+    }
+  }
 
   if (isLoading) {
     return (
@@ -276,6 +294,17 @@ function InstructorTasksTab({ courseOfferingId }) {
                   {overdue ? ' — overdue' : ''}
                 </p>
               )}
+              {task.attachments?.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => downloadAttachment(task)}
+                  className="inline-flex items-center gap-1 text-xs text-just-blue-600 hover:underline mt-1"
+                >
+                  <Paperclip size={11} />
+                  {task.attachments[0].originalName}
+                  <Download size={10} />
+                </button>
+              )}
             </div>
             <Button
               variant="ghost"
@@ -322,6 +351,24 @@ function StudentTaskCard({ task }) {
   const [saveDraft,   { isLoading: saving }]    = useSaveDraftMutation();
   const [submitTask,  { isLoading: submitting }] = useSubmitTaskMutation();
   const [notes, setNotes] = useState('');
+  const token = useSelector(selectCurrentToken);
+
+  async function handleDownloadAttachment() {
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${task._id}/attachment`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href  = URL.createObjectURL(blob);
+      link.download = task.attachments[0].originalName;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch {
+      toast.error('Could not download attachment');
+    }
+  }
 
   // Pre-fill notes from existing draft when it loads
   useEffect(() => {
@@ -378,6 +425,17 @@ function StudentTaskCard({ task }) {
               <Calendar size={11} />
               Due {formatDeadline(task.deadline)}
             </p>
+          )}
+          {task.attachments?.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDownloadAttachment}
+              className="inline-flex items-center gap-1 text-xs text-just-blue-600 hover:underline mt-1"
+            >
+              <Paperclip size={11} />
+              {task.attachments[0].originalName}
+              <Download size={10} />
+            </button>
           )}
         </div>
         {/* Grade pill */}
