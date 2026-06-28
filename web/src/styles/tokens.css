@@ -176,8 +176,8 @@
 
   /* ---------- ELEVATION ---------- */
   --shadow-xs:    0 1px 2px rgba(14,19,32,0.05);
-  --shadow-sm:    0 1px 3px rgba(14,19,32,0.07), 0 1px 2px rgba(14,19,32,0.04);
-  --shadow-md:    0 4px 10px rgba(14,19,32,0.08), 0 2px 4px rgba(14,19,32,0.04);
+  --shadow-sm:    0 1px 3px rgba(14,19,32,0.08), 0 6px 24px rgba(14,19,32,0.09);
+  --shadow-md:    0 4px 12px rgba(14,19,32,0.10), 0 12px 36px rgba(30,58,138,0.12);
   --shadow-lg:    0 12px 28px rgba(14,19,32,0.10), 0 4px 10px rgba(14,19,32,0.05);
   --shadow-xl:    0 24px 48px rgba(14,19,32,0.14), 0 8px 16px rgba(14,19,32,0.06);
   --shadow-brand: 0 8px 24px rgba(30,58,138,0.18);
@@ -298,8 +298,8 @@
 
   /* ── Elevation: stronger shadows needed on dark ── */
   --shadow-xs:    0 1px 2px rgba(0,0,0,0.40);
-  --shadow-sm:    0 1px 3px rgba(0,0,0,0.50), 0 1px 2px rgba(0,0,0,0.35);
-  --shadow-md:    0 4px 10px rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.35);
+  --shadow-sm:    0 1px 4px rgba(0,0,0,0.45), 0 6px 20px rgba(0,0,0,0.28);
+  --shadow-md:    0 4px 16px rgba(0,0,0,0.55), 0 12px 36px rgba(79,108,194,0.28);
   --shadow-lg:    0 12px 28px rgba(0,0,0,0.60), 0 4px 10px rgba(0,0,0,0.35);
   --shadow-xl:    0 24px 48px rgba(0,0,0,0.65), 0 8px 16px rgba(0,0,0,0.40);
   --shadow-brand: 0 8px 24px rgba(79,108,194,0.30);

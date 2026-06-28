@@ -222,10 +222,15 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
 
 // ── Instructor tasks tab (read-only — no submission form) ─────────────────────
 
-function InstructorTasksTab({ courseOfferingId }) {
+function InstructorTasksTab({ courseOfferingId, groupId }) {
   const navigate = useNavigate();
   const token    = useSelector(selectCurrentToken);
-  const { data: tasks = [], isLoading, error } = useGetTasksQuery(courseOfferingId);
+  const { data: rawTasks = [], isLoading, error } = useGetTasksQuery(courseOfferingId);
+
+  const tasks = rawTasks.filter((t) =>
+    t.assignedGroups.length === 0 ||
+    t.assignedGroups.some((g) => String(g._id ?? g) === groupId),
+  );
 
   async function downloadAttachment(task) {
     try {
@@ -489,8 +494,13 @@ function StudentTaskCard({ task }) {
   );
 }
 
-function StudentTasksTab({ courseOfferingId }) {
-  const { data: tasks = [], isLoading, error } = useGetTasksQuery(courseOfferingId);
+function StudentTasksTab({ courseOfferingId, groupId }) {
+  const { data: rawTasks = [], isLoading, error } = useGetTasksQuery(courseOfferingId);
+
+  const tasks = rawTasks.filter((t) =>
+    t.assignedGroups.length === 0 ||
+    t.assignedGroups.some((g) => String(g._id ?? g) === groupId),
+  );
 
   if (isLoading) {
     return (
@@ -725,8 +735,8 @@ export default function WorkspaceDetailPage() {
 
       {activeTab === 'tasks' && (
         role === 'student'
-          ? <StudentTasksTab courseOfferingId={String(offering?._id ?? offering)} />
-          : <InstructorTasksTab courseOfferingId={String(offering?._id ?? offering)} />
+          ? <StudentTasksTab courseOfferingId={String(offering?._id ?? offering)} groupId={String(group?._id)} />
+          : <InstructorTasksTab courseOfferingId={String(offering?._id ?? offering)} groupId={String(group?._id)} />
       )}
 
       {activeTab === 'chat' && (

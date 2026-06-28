@@ -30,7 +30,7 @@ export default function Topbar({ title, onMenuClick }) {
       style={{
         background:   'var(--topbar-bg)',
         borderBottom: '1px solid var(--topbar-border)',
-        boxShadow:    'var(--shadow-xs)',
+        boxShadow:    'var(--shadow-sm)',
       }}
     >
       {/* Mobile hamburger */}

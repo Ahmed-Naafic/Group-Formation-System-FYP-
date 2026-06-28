@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
-import { Loader2, ArrowLeft, Calendar, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { Loader2, ArrowLeft, Calendar, CheckCircle2, Clock, AlertTriangle, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetTaskByIdQuery,
@@ -10,6 +11,7 @@ import {
   useGradeSubmissionMutation,
 } from './taskApi';
 import { useGetGroupsQuery } from '@/features/group/groupApi';
+import { selectCurrentToken } from '@/features/auth/authSlice';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,13 +23,15 @@ import {
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
+
 // ── Status config ──────────────────────────────────────────────────────────────
 
 const SUBMISSION_STATUS = {
-  draft:     { label: 'Draft',     variant: 'secondary',    icon: Clock },
-  submitted: { label: 'Submitted', variant: 'default',      icon: CheckCircle2 },
-  late:      { label: 'Late',      variant: 'warning',      icon: AlertTriangle },
-  reviewed:  { label: 'Reviewed',  variant: 'success',      icon: CheckCircle2 },
+  draft:     { label: 'Draft',     variant: 'secondary', icon: Clock },
+  submitted: { label: 'Submitted', variant: 'default',   icon: CheckCircle2 },
+  late:      { label: 'Late',      variant: 'warning',   icon: AlertTriangle },
+  reviewed:  { label: 'Reviewed',  variant: 'success',   icon: CheckCircle2 },
 };
 
 function SubmissionBadge({ status }) {
@@ -37,7 +41,10 @@ function SubmissionBadge({ status }) {
 
 function formatDate(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(d).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
 }
 
 // ── Grade dialog ───────────────────────────────────────────────────────────────
@@ -69,7 +76,9 @@ function GradeDialog({ submission, onClose }) {
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-1" noValidate>
           <div className="space-y-1.5">
-            <Label htmlFor="grade-input">Score (0–100) <span className="text-danger">*</span></Label>
+            <Label htmlFor="grade-input">
+              Score (0–100) <span className="text-danger">*</span>
+            </Label>
             <Input
               id="grade-input"
               type="number"
@@ -79,12 +88,14 @@ function GradeDialog({ submission, onClose }) {
               autoFocus
               {...register('grade', {
                 required: 'Score is required',
-                min: { value: 0, message: 'Min 0' },
+                min: { value: 0,   message: 'Min 0' },
                 max: { value: 100, message: 'Max 100' },
               })}
               aria-invalid={!!errors.grade}
             />
-            {errors.grade && <p className="text-xs text-danger">{errors.grade.message}</p>}
+            {errors.grade && (
+              <p className="text-xs text-danger">{errors.grade.message}</p>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
@@ -99,6 +110,58 @@ function GradeDialog({ submission, onClose }) {
   );
 }
 
+// ── Submission content cell (notes + files) ────────────────────────────────────
+
+function SubmissionContent({ submission, onDownload }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const notes = submission?.notes?.trim();
+  const files = submission?.files ?? [];
+  const hasContent = notes || files.length > 0;
+
+  if (!hasContent) return <span className="text-xs text-ink-400">—</span>;
+
+  const NOTES_LIMIT = 120;
+  const notesLong = notes && notes.length > NOTES_LIMIT;
+  const notesDisplay = notesLong && !expanded
+    ? notes.slice(0, NOTES_LIMIT) + '…'
+    : notes;
+
+  return (
+    <div className="space-y-1.5 max-w-xs">
+      {notes && (
+        <div>
+          <p className="text-xs text-ink-700 leading-relaxed whitespace-pre-wrap">
+            {notesDisplay}
+          </p>
+          {notesLong && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="text-xs text-just-blue-500 hover:underline mt-0.5"
+            >
+              {expanded ? 'Show less' : 'Show more'}
+            </button>
+          )}
+        </div>
+      )}
+      {files.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {files.map((f) => (
+            <button
+              key={f._id}
+              onClick={() => onDownload(f)}
+              className="inline-flex items-center gap-1 text-xs text-just-blue-600 hover:text-just-blue-800 hover:underline text-left"
+            >
+              <Paperclip size={11} className="shrink-0" />
+              <span className="truncate max-w-[180px]">{f.originalName}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function TaskSubmissionsPage() {
@@ -106,20 +169,47 @@ export default function TaskSubmissionsPage() {
   const location    = useLocation();
   const offeringId  = location.state?.offeringId;
 
-  const { data: task,        isLoading: loadingTask,  error: taskError }  = useGetTaskByIdQuery(taskId);
-  const { data: submissions = [], isLoading: loadingSubs } = useGetTaskSubmissionsQuery(taskId);
+  const { data: task, isLoading: loadingTask, error: taskError } =
+    useGetTaskByIdQuery(taskId);
+  const { data: submissions = [], isLoading: loadingSubs } =
+    useGetTaskSubmissionsQuery(taskId);
   const [updateTask, { isLoading: toggling }] = useUpdateTaskMutation();
 
-  // When assignedGroups is [] the task targets ALL groups. We need the offering's
-  // full group list to build rows — otherwise the table is empty until groups submit.
-  const isAllGroups     = task?.assignedGroups?.length === 0;
-  const taskOfferingId  = offeringId ?? String(task?.courseOfferingId?._id ?? task?.courseOfferingId ?? '');
+  const isAllGroups    = task?.assignedGroups?.length === 0;
+  const taskOfferingId = offeringId ?? String(task?.courseOfferingId?._id ?? task?.courseOfferingId ?? '');
   const { data: offeringGroups = [] } = useGetGroupsQuery(
     { courseOfferingId: taskOfferingId },
     { skip: !isAllGroups || !taskOfferingId },
   );
 
   const [gradeTarget, setGradeTarget] = useState(null);
+  const token = useSelector(selectCurrentToken);
+
+  async function downloadFile(file) {
+    if (!file.workspaceId) {
+      toast.error('File info incomplete — please restart the backend server and try again');
+      return;
+    }
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/workspaces/${file.workspaceId}/files/${file._id}/download`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        let msg = 'Download failed';
+        try { msg = (await res.json())?.error?.message ?? msg; } catch { /* */ }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = file.originalName;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (err) {
+      toast.error(err.message ?? 'Could not download file');
+    }
+  }
 
   async function toggleStatus() {
     const next = task.status === 'open' ? 'closed' : 'open';
@@ -150,13 +240,9 @@ export default function TaskSubmissionsPage() {
     );
   }
 
-  // Build one row per group, merged with any existing submission.
-  // For all-groups tasks (assignedGroups=[]) use the offering's active group list
-  // so the table shows every group even before anyone has submitted.
   const submissionByGroup = {};
   for (const s of submissions) {
-    const gid = String(s.groupId?._id ?? s.groupId);
-    submissionByGroup[gid] = s;
+    submissionByGroup[String(s.groupId?._id ?? s.groupId)] = s;
   }
 
   const baseGroups = isAllGroups ? offeringGroups : (task.assignedGroups ?? []);
@@ -165,14 +251,10 @@ export default function TaskSubmissionsPage() {
     submission: submissionByGroup[String(g._id)] ?? null,
   }));
 
-  // Also surface any submissions from groups outside baseGroups (e.g. archived groups
-  // that submitted before a regeneration, or late entries on all-groups tasks).
   const baseIds = new Set(baseGroups.map((g) => String(g._id)));
   for (const s of submissions) {
     const gid = String(s.groupId?._id ?? s.groupId);
-    if (!baseIds.has(gid)) {
-      rows.push({ group: s.groupId, submission: s });
-    }
+    if (!baseIds.has(gid)) rows.push({ group: s.groupId, submission: s });
   }
 
   const submitted   = submissions.filter((s) => ['submitted', 'late', 'reviewed'].includes(s.status)).length;
@@ -253,31 +335,38 @@ export default function TaskSubmissionsPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Submitted by</TableHead>
+                <TableHead>Submission</TableHead>
                 <TableHead className="text-right">Grade</TableHead>
                 <TableHead className="w-28" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map(({ group, submission }) => (
-                <TableRow key={String(group?._id ?? group)}>
-                  <TableCell className="font-medium text-ink-800">
+                <TableRow key={String(group?._id ?? group)} className="align-top">
+                  <TableCell className="font-medium text-ink-800 pt-3.5">
                     {group?.name ?? '—'}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="pt-3.5">
                     {submission
                       ? <SubmissionBadge status={submission.status} />
                       : <Badge variant="secondary">Not submitted</Badge>}
                   </TableCell>
-                  <TableCell className="text-xs text-ink-500">
+                  <TableCell className="text-xs text-ink-500 pt-3.5">
                     {formatDate(submission?.submittedAt)}
                   </TableCell>
-                  <TableCell className="text-sm text-ink-600">
+                  <TableCell className="text-sm text-ink-600 pt-3.5">
                     {submission?.submittedBy?.fullName ?? '—'}
                   </TableCell>
-                  <TableCell className="text-right font-mono text-sm text-ink-700">
+                  <TableCell className="pt-3">
+                    <SubmissionContent
+                      submission={submission}
+                      onDownload={downloadFile}
+                    />
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm text-ink-700 pt-3.5">
                     {submission?.grade != null ? `${submission.grade}/100` : '—'}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right pt-2.5">
                     {submission && ['submitted', 'late', 'reviewed'].includes(submission.status) && (
                       <Button
                         variant="ghost"

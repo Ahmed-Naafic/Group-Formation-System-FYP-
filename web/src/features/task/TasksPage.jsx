@@ -1,11 +1,12 @@
 import { useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
-import { Loader2, Plus, Trash2, ClipboardList, ArrowRight, Calendar, Paperclip, X } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { Loader2, Plus, Trash2, ClipboardList, ArrowRight, Calendar, Paperclip, X, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetTasksQuery,
   useCreateTaskMutation,
+  useUpdateTaskMutation,
   useDeleteTaskMutation,
 } from './taskApi';
 import { useGetGroupsQuery } from '@/features/group/groupApi';
@@ -94,10 +95,14 @@ export default function TasksPage() {
   const { data: tasks = [], isLoading, error }       = useGetTasksQuery(offeringId);
   const { data: groups = [] }                        = useGetGroupsQuery({ courseOfferingId: offeringId });
   const [createTask, { isLoading: creating }]        = useCreateTaskMutation();
+  const [updateTask, { isLoading: updating }]        = useUpdateTaskMutation();
   const [deleteTask, { isLoading: deleting }]        = useDeleteTaskMutation();
 
   const [newOpen,        setNewOpen]        = useState(false);
   const [deleteTarget,   setDeleteTarget]   = useState(null);
+  const [editTarget,     setEditTarget]     = useState(null);
+  const [editDeadline,   setEditDeadline]   = useState('');
+  const [editStatus,     setEditStatus]     = useState('open');
   const [pickedGroups,   setPickedGroups]   = useState([]);
   const [attachmentFile, setAttachmentFile] = useState(null);
   const fileInputRef = useRef(null);
@@ -118,16 +123,46 @@ export default function TasksPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
+  function openEdit(task) {
+    setEditTarget(task);
+    setEditDeadline(task.deadline ? new Date(task.deadline).toISOString().slice(0, 10) : '');
+    setEditStatus(task.status);
+  }
+
+  function closeEdit() {
+    setEditTarget(null);
+    setEditDeadline('');
+    setEditStatus('open');
+  }
+
+  async function confirmEdit() {
+    try {
+      await updateTask({
+        id:       editTarget._id,
+        status:   editStatus,
+        deadline: editDeadline ? `${editDeadline}T23:59` : undefined,
+      }).unwrap();
+      toast.success('Task updated');
+      closeEdit();
+    } catch (err) {
+      const e = err?.data?.error;
+      toast.error(e?.details?.length ? e.details.join(' · ') : (e?.message ?? 'Failed to update task'));
+    }
+  }
+
   async function onCreateTask(data) {
     try {
       let body;
+      // Date-only input sends YYYY-MM-DD; append end-of-day time so the
+      // deadline means "by end of that day" and passes the future check.
+      const deadline = data.deadline ? `${data.deadline}T23:59` : undefined;
       if (attachmentFile) {
         // Multipart — matches the pattern used by student bulk-upload
         const form = new FormData();
         form.append('courseOfferingId', offeringId);
         form.append('title',            data.title.trim());
         if (data.description?.trim()) form.append('description', data.description.trim());
-        if (data.deadline)            form.append('deadline',    data.deadline);
+        if (deadline)                 form.append('deadline',    deadline);
         form.append('assignedGroupIds', JSON.stringify(pickedGroups));
         form.append('file', attachmentFile);
         body = form;
@@ -136,7 +171,7 @@ export default function TasksPage() {
           courseOfferingId: offeringId,
           title:            data.title.trim(),
           description:      data.description?.trim() || undefined,
-          deadline:         data.deadline || undefined,
+          deadline,
           assignedGroupIds: pickedGroups,
         };
       }
@@ -144,7 +179,8 @@ export default function TasksPage() {
       toast.success('Task created');
       resetDialog();
     } catch (err) {
-      toast.error(err?.data?.error?.message ?? 'Failed to create task');
+      const e = err?.data?.error;
+      toast.error(e?.details?.length ? e.details.join(' · ') : (e?.message ?? 'Failed to create task'));
     }
   }
 
@@ -223,6 +259,13 @@ export default function TasksPage() {
                   Submissions <ArrowRight size={11} />
                 </Button>
                 <Button
+                  variant="ghost" size="icon" className="h-7 w-7 hover:text-just-blue-600"
+                  onClick={() => openEdit(task)}
+                  aria-label="Edit task"
+                >
+                  <Pencil size={13} />
+                </Button>
+                <Button
                   variant="ghost" size="icon" className="h-7 w-7 hover:text-danger"
                   onClick={() => setDeleteTarget(task)}
                   disabled={deleting}
@@ -238,7 +281,7 @@ export default function TasksPage() {
 
       {/* New task dialog */}
       <Dialog open={newOpen} onOpenChange={(v) => { if (!v) resetDialog(); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg" onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>New Task</DialogTitle>
             <DialogDescription>Assign a task to one or more groups in {offeringLabel}.</DialogDescription>
@@ -265,8 +308,18 @@ export default function TasksPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="t-deadline">Deadline</Label>
-              <Input id="t-deadline" type="datetime-local" {...register('deadline')} />
+              <Label htmlFor="t-deadline">Deadline <span className="text-danger">*</span></Label>
+              <div className="relative">
+                <Input
+                  id="t-deadline"
+                  type="date"
+                  min={new Date().toISOString().split('T')[0]}
+                  onClick={(e) => e.currentTarget.showPicker?.()}
+                  className="pr-9 [&::-webkit-calendar-picker-indicator]:opacity-0"
+                  {...register('deadline')}
+                />
+                <Calendar size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Assign to groups</Label>
@@ -320,6 +373,67 @@ export default function TasksPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit task dialog */}
+      <Dialog open={!!editTarget} onOpenChange={(v) => { if (!v) closeEdit(); }}>
+        <DialogContent className="max-w-sm" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+            <DialogDescription>
+              Update the deadline or status of &ldquo;{editTarget?.title}&rdquo;.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="e-deadline">Deadline</Label>
+              <div className="relative">
+                <Input
+                  id="e-deadline"
+                  type="date"
+                  min={new Date().toISOString().split('T')[0]}
+                  value={editDeadline}
+                  onChange={(e) => setEditDeadline(e.target.value)}
+                  onClick={(e) => e.currentTarget.showPicker?.()}
+                  className="pr-9 [&::-webkit-calendar-picker-indicator]:opacity-0"
+                />
+                <Calendar size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <div className="flex gap-2">
+                {['open', 'closed'].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setEditStatus(s)}
+                    className={cn(
+                      'flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                      editStatus === s
+                        ? 'border-just-blue-600 bg-just-blue-50 text-just-blue-700'
+                        : 'border-border text-ink-500 hover:bg-ink-50',
+                    )}
+                  >
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {editStatus === 'open' && (
+                <p className="text-xs text-ink-400">
+                  Reopening requires a deadline in the future.
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeEdit}>Cancel</Button>
+            <Button onClick={confirmEdit} disabled={updating}>
+              {updating && <Loader2 size={14} className="animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

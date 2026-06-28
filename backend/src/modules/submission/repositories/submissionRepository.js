@@ -4,7 +4,7 @@ const BASE_POPULATE = [
   { path: 'submittedBy', select: 'fullName userId', populate: { path: 'userId', select: 'studentId' } },
   { path: 'groupId',     select: 'name courseId' },
   { path: 'gradedBy',    select: 'fullName role' },
-  { path: 'files',       select: 'originalName mimeType sizeBytes uploadedAt' },
+  { path: 'files',       select: 'originalName mimeType sizeBytes uploadedAt workspaceId' },
 ];
 
 const submissionRepository = {

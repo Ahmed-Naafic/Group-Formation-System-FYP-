@@ -105,11 +105,11 @@ export default function Sidebar({ isOpen, onClose }) {
                 end={item.to === '/'}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium mb-0.5',
-                    'transition-colors duration-[120ms]',
+                    'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium mb-0.5',
+                    'transition-all duration-[150ms]',
                     isActive
                       ? 'bg-white/15 text-white'
-                      : 'text-white/70 hover:bg-white/8 hover:text-white',
+                      : 'text-white/70 hover:bg-white/10 hover:text-white',
                   )
                 }
                 onClick={() => { if (window.innerWidth < 1024) onClose(); }}

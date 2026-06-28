@@ -1,0 +1,48 @@
+name: group_formation
+description: JUST Group Formation System — Student mobile app
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management + routing + dependency injection
+  get: ^4.7.2
+
+  # HTTP client — interceptor support for JWT attachment and 401 handling
+  dio: ^5.8.0+1
+
+  # Secure on-device JWT storage (Keychain on iOS, Keystore on Android)
+  flutter_secure_storage: ^9.2.4
+
+  # Date formatting
+  intl: ^0.20.2
+
+  # Real-time chat via Socket.IO
+  socket_io_client: ^2.0.3
+
+  # File picking for upload
+  file_picker: ^8.0.0
+
+  # Device path for saving downloaded files
+  path_provider: ^2.1.4
+
+  # Open downloaded files via system share/open sheet
+  share_plus: ^10.1.4
+
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

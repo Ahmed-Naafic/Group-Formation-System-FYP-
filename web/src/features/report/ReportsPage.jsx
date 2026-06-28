@@ -40,6 +40,28 @@ export default function ReportsPage() {
     }
   }
 
+  async function downloadFormatted() {
+    setDownloading('formatted');
+    try {
+      const url = `${API_BASE}/api/reports/groups/formatted?courseOfferingId=${selectedOfferingId}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.error?.message ?? 'Download failed');
+      }
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href  = URL.createObjectURL(blob);
+      link.download = 'group_list.xlsx';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (err) {
+      toast.error(err.message ?? 'Download failed');
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   return (
     <div className="max-w-lg">
       <h2 className="text-ink-900 mb-6">Reports</h2>
@@ -71,15 +93,33 @@ export default function ReportsPage() {
           )}
         </div>
 
-        {/* Download card */}
+        {/* Formatted group list */}
         <div className="rounded-lg border border-border bg-white shadow-xs p-5">
-          <p className="text-sm font-medium text-ink-800 mb-1">Group Formation Report</p>
+          <p className="text-sm font-medium text-ink-800 mb-1">Group List (Excel)</p>
           <p className="text-xs text-ink-400 mb-4">
-            Exports groups summary and full student roster with performance data.
+            Styled report with one sheet per group: coloured headers, leader highlighted,
+            alternating rows. Names and roles only — no scores or attendance.
+          </p>
+          <Button
+            onClick={() => downloadFormatted()}
+            disabled={!selectedOfferingId || !!downloading}
+          >
+            {downloading === 'formatted'
+              ? <Loader2 size={14} className="animate-spin" />
+              : <FileSpreadsheet size={14} />}
+            Download group list (Excel)
+          </Button>
+        </div>
+
+        {/* Raw data export */}
+        <div className="rounded-lg border border-border bg-white shadow-xs p-5">
+          <p className="text-sm font-medium text-ink-800 mb-1">Full Data Export</p>
+          <p className="text-xs text-ink-400 mb-4">
+            Groups summary and full student roster with performance scores and attendance.
             XLSX includes two sheets; CSV is a flat student list.
           </p>
           <div className="flex gap-2">
-            <Button onClick={() => download('xlsx')} disabled={!selectedOfferingId || !!downloading}>
+            <Button variant="outline" onClick={() => download('xlsx')} disabled={!selectedOfferingId || !!downloading}>
               {downloading === 'xlsx'
                 ? <Loader2 size={14} className="animate-spin" />
                 : <FileSpreadsheet size={14} />}

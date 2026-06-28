@@ -7,6 +7,12 @@ const router = Router();
 
 // Admin and instructor (own assignments, enforced in service)
 router.get(
+  '/groups/formatted',
+  authenticate, requireRole('admin', 'instructor'),
+  reportController.formattedGroupReport,
+);
+
+router.get(
   '/groups',
   authenticate, requireRole('admin', 'instructor'),
   reportController.groupReport,

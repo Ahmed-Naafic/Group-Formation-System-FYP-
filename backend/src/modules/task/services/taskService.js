@@ -75,6 +75,9 @@ const taskService = {
   async list(courseOfferingId, context) {
     if (!courseOfferingId) throw new BadRequestError('courseOfferingId query parameter is required');
 
+    // Close any tasks whose deadline has passed before returning the list
+    await taskRepository.closeExpiredByOffering(courseOfferingId);
+
     if (context.role === 'student') {
       // Load offering to get cohortId, then find the student's record and groups
       const offering = await courseOfferingRepository.findById(courseOfferingId);
@@ -128,6 +131,14 @@ const taskService = {
     for (const key of allowed) {
       if (updates[key] !== undefined) patch[key] = updates[key];
     }
+
+    if (patch.status === 'open') {
+      const effectiveDeadline = patch.deadline !== undefined ? patch.deadline : task.deadline;
+      if (!effectiveDeadline || new Date(effectiveDeadline) <= new Date()) {
+        throw new BadRequestError('To reopen a task, provide a deadline in the future');
+      }
+    }
+
     return taskRepository.updateById(id, patch);
   },
 

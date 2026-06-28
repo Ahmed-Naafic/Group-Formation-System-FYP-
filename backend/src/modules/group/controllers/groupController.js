@@ -68,6 +68,7 @@ const groupController = {
     const generations = await groupService.getHistory(req.query.cohortId, req.context);
     return sendSuccess(res, { data: { generations } });
   }),
+
 };
 
 module.exports = groupController;

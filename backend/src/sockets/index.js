@@ -31,7 +31,7 @@ async function socketAuthMiddleware(socket, next) {
     if (!user || !user.isActive) return next(new Error('User not found or deactivated'));
 
     // Attach context to socket — same shape as req.context
-    socket.context = buildRequestContext(decoded, user);
+    socket.context = { ...buildRequestContext(decoded, user), fullName: user.fullName };
     next();
   } catch (err) {
     logger.error('Socket auth error', { message: err.message });
@@ -122,6 +122,22 @@ function initSocket(httpServer) {
     socket.on('leave-workspace', (data) => handleLeaveWorkspace(socket, data ?? {}));
     socket.on('send-message',    (data) => handleSendMessage(io, socket, data ?? {}));
     socket.on('mark-read',       (data) => handleMarkRead(io, socket, data ?? {}));
+
+    socket.on('typing', ({ workspaceId } = {}) => {
+      if (!workspaceId) return;
+      socket.to(roomName(workspaceId)).emit('typing', {
+        userId:   String(socket.context.userId),
+        fullName: socket.context.fullName,
+      });
+    });
+
+    socket.on('stop-typing', ({ workspaceId } = {}) => {
+      if (!workspaceId) return;
+      socket.to(roomName(workspaceId)).emit('stop-typing', {
+        userId:   String(socket.context.userId),
+        fullName: socket.context.fullName,
+      });
+    });
 
     socket.on('disconnect', (reason) => {
       logger.info('Socket disconnected', { socketId: socket.id, reason });

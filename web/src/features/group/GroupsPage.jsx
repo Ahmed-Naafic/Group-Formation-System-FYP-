@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { selectCurrentToken } from '@/features/auth/authSlice';
 import {
   useGetGroupsQuery,
   useGenerateGroupsMutation,
@@ -29,6 +31,8 @@ import {
 import { cn } from '@/lib/utils';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
 
 const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
 
@@ -206,6 +210,8 @@ export default function GroupsPage() {
   const [regenerateGroups, { isLoading: regenerating }] = useRegenerateGroupsMutation();
   const [deleteGroups,     { isLoading: deleting }]     = useDeleteGroupsMutation();
 
+  const token = useSelector(selectCurrentToken);
+
   const [fetchWorkspace]          = useLazyGetWorkspaceByGroupIdQuery();
   const [workspaceLoading, setWorkspaceLoading] = useState(null); // group._id being opened
 
@@ -239,6 +245,25 @@ export default function GroupsPage() {
       attendanceThreshold:  lastOpts?.attendanceThreshold  ?? 25,
     },
   });
+
+  async function downloadExcel(path, filename, label) {
+    toast.info(`Downloading ${label}…`);
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error('Failed to download Excel file');
+    }
+  }
 
   async function handleOpenWorkspace(groupId) {
     setWorkspaceLoading(groupId);
@@ -313,6 +338,18 @@ export default function GroupsPage() {
         <div className="flex items-center gap-2 ml-4 shrink-0">
           {hasGroups && (
             <>
+              <Button
+                size="sm"
+                className="bg-just-blue-600 hover:bg-just-blue-700 text-white"
+                onClick={() => downloadExcel(
+                  `/api/reports/groups/formatted?courseOfferingId=${offeringId}`,
+                  `group_list_${courseName.replace(/\s+/g, '_')}.xlsx`,
+                  'group list',
+                )}
+              >
+                <FileDown size={15} />
+                Group list (Excel)
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

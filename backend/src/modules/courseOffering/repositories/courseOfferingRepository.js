@@ -51,6 +51,7 @@ const courseOfferingRepository = {
   findByCohort(cohortId) {
     return CourseOffering.find({ cohortId }).lean();
   },
+
 };
 
 module.exports = courseOfferingRepository;

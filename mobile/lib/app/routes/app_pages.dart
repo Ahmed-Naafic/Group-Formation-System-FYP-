@@ -1,0 +1,71 @@
+import 'package:get/get.dart';
+import '../modules/auth/bindings/auth_binding.dart';
+import '../modules/auth/views/change_password_view.dart';
+import '../modules/auth/views/login_view.dart';
+import '../modules/chat/bindings/chat_binding.dart';
+import '../modules/chat/views/chat_view.dart';
+import '../modules/dashboard/bindings/dashboard_binding.dart';
+import '../modules/dashboard/views/dashboard_view.dart';
+import '../modules/files/bindings/files_binding.dart';
+import '../modules/files/views/files_view.dart';
+import '../modules/notifications/views/notifications_view.dart';
+import '../modules/splash/views/splash_view.dart';
+import '../modules/tasks/bindings/task_binding.dart';
+import '../modules/tasks/views/task_detail_view.dart';
+import '../modules/tasks/views/task_list_view.dart';
+import '../modules/workspace/views/workspace_detail_view.dart';
+
+part 'app_routes.dart';
+
+class AppPages {
+  static const initial = Routes.splash;
+
+  static final routes = [
+    GetPage(
+      name: Routes.splash,
+      page: () => const SplashView(),
+    ),
+    GetPage(
+      name: Routes.login,
+      page: () => const LoginView(),
+      binding: AuthBinding(),
+    ),
+    GetPage(
+      name: Routes.changePassword,
+      page: () => const ChangePasswordView(),
+      binding: AuthBinding(),
+    ),
+    GetPage(
+      name: Routes.dashboard,
+      page: () => const DashboardView(),
+      binding: DashboardBinding(),
+    ),
+    GetPage(
+      name: Routes.workspace,
+      page: () => const WorkspaceDetailView(),
+    ),
+    GetPage(
+      name: Routes.tasks,
+      page: () => const TaskListView(),
+      binding: TaskBinding(),
+    ),
+    GetPage(
+      name: Routes.taskDetail,
+      page: () => const TaskDetailView(),
+    ),
+    GetPage(
+      name: Routes.chat,
+      page: () => const ChatView(),
+      binding: ChatBinding(),
+    ),
+    GetPage(
+      name: Routes.notifications,
+      page: () => const NotificationsView(),
+    ),
+    GetPage(
+      name: Routes.files,
+      page: () => const FilesView(),
+      binding: FilesBinding(),
+    ),
+  ];
+}

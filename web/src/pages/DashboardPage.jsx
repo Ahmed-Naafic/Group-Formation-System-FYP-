@@ -29,13 +29,13 @@ import { cn } from '@/lib/utils';
 
 function StatCard({ icon: Icon, label, count, to, iconBg, iconColor }) {
   return (
-    <div className="rounded-lg border border-border bg-white p-5 shadow-xs">
-      <div className="flex items-start justify-between mb-3">
+    <div className="rounded-2xl border border-border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex items-start justify-between mb-4">
         <div
-          className="flex h-9 w-9 items-center justify-center rounded-md shrink-0"
+          className="flex h-11 w-11 items-center justify-center rounded-xl shrink-0"
           style={{ background: iconBg }}
         >
-          <Icon size={18} strokeWidth={1.75} style={{ color: iconColor }} />
+          <Icon size={20} strokeWidth={1.75} style={{ color: iconColor }} />
         </div>
         {to && (
           <Link to={to} className="text-xs text-just-blue-600 hover:underline mt-0.5 shrink-0">
@@ -43,10 +43,10 @@ function StatCard({ icon: Icon, label, count, to, iconBg, iconColor }) {
           </Link>
         )}
       </div>
-      <p className="text-2xl font-bold text-ink-900 leading-none">
-        {count != null ? count : <span className="text-ink-300 text-xl">—</span>}
+      <p className="text-3xl font-bold text-ink-900 leading-none tracking-tight">
+        {count != null ? count : <span className="text-ink-300 text-2xl">—</span>}
       </p>
-      <p className="text-sm text-ink-500 mt-1">{label}</p>
+      <p className="text-sm text-ink-500 mt-1.5">{label}</p>
     </div>
   );
 }
@@ -62,13 +62,13 @@ const SUB_STATUS = [
 
 function SubmissionBreakdown({ stats }) {
   return (
-    <div className="grid grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {SUB_STATUS.map(({ key, label, color, bg }) => (
-        <div key={key} className={cn('rounded-lg px-3 py-3 text-center', bg)}>
+        <div key={key} className={cn('rounded-xl px-3 py-4 text-center transition-all duration-150 hover:shadow-sm', bg)}>
           <p className={cn('text-2xl font-bold leading-none', color)}>
             {stats?.[key] ?? 0}
           </p>
-          <p className={cn('text-[11px] font-semibold mt-1 uppercase tracking-wide', color)}>
+          <p className={cn('text-[11px] font-semibold mt-1.5 uppercase tracking-wide', color)}>
             {label}
           </p>
         </div>
@@ -101,9 +101,9 @@ function RecentActivity({ entries }) {
     return <p className="text-sm text-ink-400 py-4 text-center">No recent activity.</p>;
   }
   return (
-    <div className="divide-y divide-border">
+    <div className="flex flex-col gap-0.5">
       {entries.map((entry) => (
-        <div key={entry._id} className="flex items-center gap-3 py-2.5">
+        <div key={entry._id} className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-ink-50 dark:hover:bg-white/[0.04] transition-colors duration-150">
           <span className={cn(
             'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap',
             ACTION_COLORS[entry.action] ?? 'bg-ink-100 text-ink-600',
@@ -135,7 +135,7 @@ function AdminDashboard({ user }) {
   const recentOfferings = offerings.slice(0, 8);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <p className="eyebrow mb-2">Overview</p>
       <h2 className="text-ink-900 mb-1">
         Welcome back, {user?.fullName?.split(' ')[0] ?? 'there'}
@@ -164,8 +164,8 @@ function AdminDashboard({ user }) {
 
       {/* Submission breakdown + Recent activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div>
-          <h3 className="text-ink-800 mb-3" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
+        <div className="rounded-2xl border border-border bg-white shadow-sm p-6">
+          <h3 className="text-ink-800 mb-4" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
             Submissions by Status
           </h3>
           {lDash ? (
@@ -174,8 +174,8 @@ function AdminDashboard({ user }) {
             <SubmissionBreakdown stats={dash?.submissions} />
           )}
         </div>
-        <div>
-          <div className="flex items-center justify-between mb-3">
+        <div className="rounded-2xl border border-border bg-white shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
             <h3 className="text-ink-800" style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }}>
               Recent Activity
             </h3>
@@ -183,12 +183,10 @@ function AdminDashboard({ user }) {
               View all →
             </Link>
           </div>
-          <div className="rounded-lg border border-border bg-white shadow-xs px-4 py-1">
-            {lDash
-              ? <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-ink-300" /></div>
-              : <RecentActivity entries={dash?.recentActivity} />
-            }
-          </div>
+          {lDash
+            ? <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-ink-300" /></div>
+            : <RecentActivity entries={dash?.recentActivity} />
+          }
         </div>
       </div>
 
@@ -205,16 +203,16 @@ function AdminDashboard({ user }) {
       </div>
 
       {lOff ? (
-        <div className="flex justify-center py-10 rounded-lg border border-border bg-white">
+        <div className="flex justify-center py-10 rounded-2xl border border-border bg-white">
           <Loader2 size={20} className="animate-spin text-ink-300" />
         </div>
       ) : offerings.length === 0 ? (
-        <div className="rounded-lg border border-border bg-white p-10 text-center">
+        <div className="rounded-2xl border border-border bg-white p-10 text-center">
           <p className="text-sm text-ink-400 mb-3">No course offerings yet.</p>
           <Button size="sm" asChild><Link to="/course-offerings">Create first offering</Link></Button>
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-white shadow-xs overflow-hidden">
+        <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -274,7 +272,7 @@ function InstructorDashboard({ user }) {
   const offeringSummaries = dash?.offeringSummaries ?? [];
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <p className="eyebrow mb-2">Overview</p>
       <h2 className="text-ink-900 mb-1">
         Welcome back, {user?.fullName?.split(' ')[0] ?? 'there'}
@@ -316,7 +314,7 @@ function InstructorDashboard({ user }) {
       </div>
 
       {/* Tasks overview banner */}
-      <div className="flex items-center gap-4 mb-8 px-4 py-3 rounded-lg border border-border bg-white shadow-xs flex-wrap">
+      <div className="flex items-center gap-4 mb-8 px-5 py-4 rounded-2xl border border-border bg-white shadow-sm flex-wrap">
         <span className="text-sm font-semibold text-ink-700 shrink-0">Tasks</span>
         <div className="flex gap-3 flex-wrap">
           <span className={cn(
@@ -353,7 +351,7 @@ function InstructorDashboard({ user }) {
           <Loader2 size={20} className="animate-spin text-ink-300" />
         </div>
       ) : offeringSummaries.length === 0 ? (
-        <div className="rounded-lg border border-border bg-white p-10 text-center">
+        <div className="rounded-2xl border border-border bg-white p-10 text-center">
           <p className="text-sm text-ink-400">No course offerings assigned to you yet.</p>
         </div>
       ) : (
@@ -361,7 +359,7 @@ function InstructorDashboard({ user }) {
           {offeringSummaries.map((o) => (
             <div
               key={String(o._id)}
-              className="rounded-lg border border-border bg-white shadow-xs p-5 flex flex-col"
+              className="rounded-2xl border border-border bg-white shadow-sm p-6 flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
               {/* Header */}
               <div className="flex-1 mb-3">
@@ -457,7 +455,7 @@ function StudentDashboard({ user }) {
   const totalDueSoon = workspaces.reduce((s, ws) => s + (ws.taskSummary?.dueSoon ?? 0), 0);
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <p className="eyebrow mb-2">My Groups</p>
       <h2 className="text-ink-900 mb-1">
         Welcome, {user?.fullName?.split(' ')[0] ?? 'there'}
@@ -505,7 +503,7 @@ function StudentDashboard({ user }) {
           <Loader2 size={22} className="animate-spin text-ink-300" />
         </div>
       ) : workspaces.length === 0 ? (
-        <div className="rounded-lg border border-border bg-white p-12 text-center">
+        <div className="rounded-2xl border border-border bg-white p-12 text-center">
           <Users2 size={32} className="mx-auto text-ink-200 mb-3" />
           <p className="text-sm text-ink-500 font-medium">Not in a group yet</p>
           <p className="text-xs text-ink-300 mt-1">Check back after your instructor generates groups.</p>
@@ -533,7 +531,7 @@ function StudentDashboard({ user }) {
               return (
                 <div
                   key={ws._id}
-                  className="rounded-lg border border-border bg-white shadow-xs p-5 flex flex-col gap-4"
+                  className="rounded-2xl border border-border bg-white shadow-sm p-6 flex flex-col gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
                   {/* Header */}
                   <div>

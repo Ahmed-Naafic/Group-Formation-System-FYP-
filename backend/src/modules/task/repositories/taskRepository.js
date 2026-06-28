@@ -32,6 +32,13 @@ const taskRepository = {
     }).populate(BASE_POPULATE).sort({ createdAt: -1 });
   },
 
+  closeExpiredByOffering(courseOfferingId) {
+    return Task.updateMany(
+      { courseOfferingId, status: 'open', deadline: { $lt: new Date() } },
+      { $set: { status: 'closed' } },
+    );
+  },
+
   updateById(id, updates) {
     return Task.findByIdAndUpdate(id, { $set: updates }, { new: true }).populate(BASE_POPULATE);
   },

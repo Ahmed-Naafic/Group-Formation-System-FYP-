@@ -14,6 +14,18 @@ function toCsv(rows) {
 }
 
 const reportController = {
+  // GET /api/reports/groups/formatted?courseOfferingId=
+  formattedGroupReport: asyncHandler(async (req, res) => {
+    const { courseOfferingId } = req.query;
+    if (!courseOfferingId) throw new BadRequestError('courseOfferingId is required');
+
+    const wb = await reportService.exportFormattedGroupsExcel(courseOfferingId, req.context);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="group_list.xlsx"');
+    await wb.xlsx.write(res);
+    res.end();
+  }),
+
   // GET /api/reports/groups?courseOfferingId=&format=xlsx|csv
   groupReport: asyncHandler(async (req, res) => {
     const { courseOfferingId, format = 'xlsx' } = req.query;
