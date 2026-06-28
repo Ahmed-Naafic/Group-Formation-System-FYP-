@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/workspace_model.dart';
 import '../../../routes/app_pages.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -9,17 +10,13 @@ class WorkspaceDetailView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final workspace  = Get.arguments as WorkspaceModel;
-    final auth       = Get.find<AuthController>();
+    final workspace   = Get.arguments as WorkspaceModel;
+    final auth        = Get.find<AuthController>();
     final myStudentId = auth.userStudentId.value;
-    final amLeader   = workspace.isLeader(myStudentId);
+    final amLeader    = workspace.isLeader(myStudentId);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F9),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
-        elevation: 0,
         title: Text(
           workspace.groupName,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -28,7 +25,7 @@ class WorkspaceDetailView extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Course info card ───────────────────────────────────────────────
+          // ── Course info card ─────────────────────────────────────────────────
           _Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,9 +36,7 @@ class WorkspaceDetailView extends StatelessWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
+                          horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E3A8A),
                         borderRadius: BorderRadius.circular(8),
@@ -60,35 +55,30 @@ class WorkspaceDetailView extends StatelessWidget {
                     Expanded(
                       child: Text(
                         workspace.courseName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF0E1320),
+                          color: context.textPrimary,
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                _InfoRow(
-                  icon: Icons.school_outlined,
-                  label: workspace.semesterName,
-                ),
+                _InfoRow(icon: Icons.school_outlined,    label: workspace.semesterName),
                 const SizedBox(height: 6),
-                _InfoRow(
-                  icon: Icons.group_work_outlined,
-                  label: workspace.cohortName,
-                ),
+                _InfoRow(icon: Icons.group_work_outlined, label: workspace.cohortName),
               ],
             ),
           ),
           const SizedBox(height: 12),
 
-          // ── Leader banner if you are the leader ────────────────────────────
+          // ── Leader banner ────────────────────────────────────────────────────
           if (amLeader)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF3CD),
                 borderRadius: BorderRadius.circular(14),
@@ -110,7 +100,7 @@ class WorkspaceDetailView extends StatelessWidget {
               ),
             ),
 
-          // ── Members card ───────────────────────────────────────────────────
+          // ── Members card ─────────────────────────────────────────────────────
           _Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,10 +111,7 @@ class WorkspaceDetailView extends StatelessWidget {
                     const Spacer(),
                     Text(
                       '${workspace.members.length} total',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF8A92A4),
-                      ),
+                      style: TextStyle(fontSize: 12, color: context.textMuted),
                     ),
                   ],
                 ),
@@ -142,7 +129,7 @@ class WorkspaceDetailView extends StatelessWidget {
             ),
           ),
 
-          // ── Action buttons ────────────────────────────────────────────────
+          // ── Action buttons ───────────────────────────────────────────────────
           const SizedBox(height: 12),
           Row(
             children: [
@@ -151,17 +138,15 @@ class WorkspaceDetailView extends StatelessWidget {
                   onPressed: () =>
                       Get.toNamed(Routes.tasks, arguments: workspace),
                   icon: const Icon(Icons.assignment_outlined, size: 18),
-                  label: const Text(
-                    'Tasks',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
+                  label: const Text('Tasks',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E3A8A),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                        borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
                 ),
@@ -172,17 +157,15 @@ class WorkspaceDetailView extends StatelessWidget {
                   onPressed: () =>
                       Get.toNamed(Routes.chat, arguments: workspace),
                   icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                  label: const Text(
-                    'Chat',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
+                  label: const Text('Chat',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D7850),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                        borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
                 ),
@@ -193,17 +176,15 @@ class WorkspaceDetailView extends StatelessWidget {
                   onPressed: () =>
                       Get.toNamed(Routes.files, arguments: workspace),
                   icon: const Icon(Icons.folder_outlined, size: 18),
-                  label: const Text(
-                    'Files',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
+                  label: const Text('Files',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF856404),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                        borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
                 ),
@@ -226,17 +207,7 @@ class _Card extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(12),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+        decoration: context.cardDecoration(),
         child: child,
       );
 }
@@ -248,10 +219,10 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         text.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: Color(0xFF8A92A4),
+          color: context.textMuted,
           letterSpacing: 0.8,
         ),
       );
@@ -265,12 +236,11 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
         children: [
-          Icon(icon, size: 15, color: const Color(0xFF8A92A4)),
+          Icon(icon, size: 15, color: context.textMuted),
           const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF596070)),
-          ),
+          Text(label,
+              style:
+                  TextStyle(fontSize: 13, color: context.textSecondary)),
         ],
       );
 }
@@ -295,7 +265,6 @@ class _MemberRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          // Avatar
           CircleAvatar(
             radius: 20,
             backgroundColor: isMe
@@ -323,35 +292,31 @@ class _MemberRow extends StatelessWidget {
                         fontSize: 14,
                         fontWeight:
                             isMe ? FontWeight.w700 : FontWeight.w500,
-                        color: const Color(0xFF0E1320),
+                        color: context.textPrimary,
                       ),
                     ),
                     if (isMe) ...[
                       const SizedBox(width: 6),
-                      const Text(
+                      Text(
                         '(You)',
                         style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF8A92A4),
-                        ),
+                            fontSize: 12, color: context.textMuted),
                       ),
                     ],
                   ],
                 ),
                 Text(
                   member.studentId,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF8A92A4),
-                  ),
+                  style:
+                      TextStyle(fontSize: 12, color: context.textMuted),
                 ),
               ],
             ),
           ),
-          // Leader badge
           if (isLeader)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF3CD),
                 borderRadius: BorderRadius.circular(8),
@@ -359,7 +324,8 @@ class _MemberRow extends StatelessWidget {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.star_rounded, size: 11, color: Color(0xFF856404)),
+                  Icon(Icons.star_rounded,
+                      size: 11, color: Color(0xFF856404)),
                   SizedBox(width: 3),
                   Text(
                     'Leader',
@@ -377,4 +343,3 @@ class _MemberRow extends StatelessWidget {
     );
   }
 }
-

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/chat_message_model.dart';
 import '../../../routes/app_pages.dart';
 import '../controllers/chat_controller.dart';
@@ -14,41 +15,33 @@ class ChatView extends StatelessWidget {
     final ctrl = Get.find<ChatController>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: context.chatBgColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
-        elevation: 0,
         title: Obx(() => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   ctrl.workspace?.groupName ?? 'Group Chat',
                   style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+                      fontSize: 15, fontWeight: FontWeight.w600),
                 ),
                 Text(
                   '${ctrl.messages.length} messages',
                   style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFFB0C4F0),
-                  ),
+                      fontSize: 11, color: Color(0xFFB0C4F0)),
                 ),
               ],
             )),
       ),
       body: Column(
         children: [
-          // ── Message list ─────────────────────────────────────────────────────
+          // ── Message list ───────────────────────────────────────────────────
           Expanded(
             child: Obx(() {
               if (ctrl.isLoading.value) {
                 return const Center(
                   child: CircularProgressIndicator(
-                    color: Color(0xFF1E3A8A),
-                  ),
+                      color: Color(0xFF1E3A8A)),
                 );
               }
               if (ctrl.errorMessage.isNotEmpty) {
@@ -59,19 +52,14 @@ class ChatView extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 48,
-                          color: Color(0xFFCDD5E0),
-                        ),
+                        Icon(Icons.chat_bubble_outline_rounded,
+                            size: 48, color: context.textPlaceholder),
                         const SizedBox(height: 16),
                         Text(
                           ctrl.errorMessage.value,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Color(0xFF596070),
-                            fontSize: 14,
-                          ),
+                          style: TextStyle(
+                              color: context.textSecondary, fontSize: 14),
                         ),
                         const SizedBox(height: 20),
                         ElevatedButton(
@@ -82,10 +70,10 @@ class ChatView extends StatelessWidget {
                             backgroundColor: const Color(0xFF1E3A8A),
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+                                borderRadius: BorderRadius.circular(10)),
                           ),
-                          child: Text(noWorkspace ? 'Go to Dashboard' : 'Retry'),
+                          child: Text(
+                              noWorkspace ? 'Go to Dashboard' : 'Retry'),
                         ),
                       ],
                     ),
@@ -93,23 +81,18 @@ class ChatView extends StatelessWidget {
                 );
               }
               if (ctrl.messages.isEmpty) {
-                return const Center(
+                return Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.chat_bubble_outline_rounded,
-                        size: 56,
-                        color: Color(0xFFCDD5E0),
-                      ),
-                      SizedBox(height: 16),
+                      Icon(Icons.chat_bubble_outline_rounded,
+                          size: 56, color: context.textPlaceholder),
+                      const SizedBox(height: 16),
                       Text(
                         'No messages yet.\nSay hello to your group!',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 15,
-                          color: Color(0xFF8A92A4),
-                        ),
+                            fontSize: 15, color: context.textMuted),
                       ),
                     ],
                   ),
@@ -117,13 +100,15 @@ class ChatView extends StatelessWidget {
               }
               return ListView.builder(
                 controller: ctrl.scrollCtrl,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 12),
                 itemCount: ctrl.messages.length,
                 itemBuilder: (_, i) {
                   final msg  = ctrl.messages[i];
                   final prev = i > 0 ? ctrl.messages[i - 1] : null;
                   final showSenderName = !ctrl.isMyMessage(msg) &&
-                      (prev == null || prev.sender.id != msg.sender.id);
+                      (prev == null ||
+                          prev.sender.id != msg.sender.id);
                   final showDateDivider = prev == null ||
                       !_sameDay(prev.createdAt, msg.createdAt);
 
@@ -143,10 +128,10 @@ class ChatView extends StatelessWidget {
             }),
           ),
 
-          // ── Typing indicator ─────────────────────────────────────────────────
+          // ── Typing indicator ───────────────────────────────────────────────
           _TypingIndicator(ctrl: ctrl),
 
-          // ── Input bar ────────────────────────────────────────────────────────
+          // ── Input bar ──────────────────────────────────────────────────────
           _InputBar(ctrl: ctrl),
         ],
       ),
@@ -170,19 +155,19 @@ class _DateDivider extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          const Expanded(child: Divider(color: Color(0xFFCDD5E0))),
+          Expanded(child: Divider(color: context.borderColor)),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: Color(0xFF8A92A4),
+                color: context.textMuted,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ),
-          const Expanded(child: Divider(color: Color(0xFFCDD5E0))),
+          Expanded(child: Divider(color: context.borderColor)),
         ],
       ),
     );
@@ -217,7 +202,7 @@ class _MessageBubble extends StatelessWidget {
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: EdgeInsets.only(
-          top: showSenderName ? 8 : 2,
+          top:   showSenderName ? 8 : 2,
           bottom: 2,
           left:  isMe ? 48 : 0,
           right: isMe ? 0 : 48,
@@ -239,9 +224,12 @@ class _MessageBubble extends StatelessWidget {
                 ),
               ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isMe ? const Color(0xFF1E3A8A) : Colors.white,
+                color: isMe
+                    ? const Color(0xFF1E3A8A)
+                    : context.chatBubbleOther,
                 borderRadius: BorderRadius.only(
                   topLeft:     const Radius.circular(18),
                   topRight:    const Radius.circular(18),
@@ -265,17 +253,18 @@ class _MessageBubble extends StatelessWidget {
                     msg.content,
                     style: TextStyle(
                       fontSize: 14,
-                      color: isMe ? Colors.white : const Color(0xFF0E1320),
+                      color: isMe ? Colors.white : context.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    DateFormat('h:mm a').format(msg.createdAt.toLocal()),
+                    DateFormat('h:mm a')
+                        .format(msg.createdAt.toLocal()),
                     style: TextStyle(
                       fontSize: 10,
                       color: isMe
                           ? Colors.white.withAlpha(160)
-                          : const Color(0xFF8A92A4),
+                          : context.textMuted,
                     ),
                   ),
                 ],
@@ -322,7 +311,7 @@ class _TypingBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF0F2F5),
+      color: context.chatBgColor,
       padding: const EdgeInsets.fromLTRB(12, 2, 64, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,10 +329,11 @@ class _TypingBubble extends StatelessWidget {
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 11),
             alignment: Alignment.centerLeft,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.chatBubbleOther,
               borderRadius: const BorderRadius.only(
                 topLeft:     Radius.circular(18),
                 topRight:    Radius.circular(18),
@@ -401,9 +391,7 @@ class _BouncingDotsState extends State<_BouncingDots>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: List.generate(3, (i) {
-            // Each dot is staggered by 0.18 of the cycle
-            final t = (_ac.value - i * 0.18) % 1.0;
-            // sin over [0, π] gives a smooth rise-and-fall bounce
+            final t      = (_ac.value - i * 0.18) % 1.0;
             final bounce = math.sin(t * math.pi).clamp(0.0, 1.0);
             return Transform.translate(
               offset: Offset(0, -bounce * 7),
@@ -414,7 +402,7 @@ class _BouncingDotsState extends State<_BouncingDots>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Color.lerp(
-                    const Color(0xFFCDD5E0),
+                    context.borderColor,
                     const Color(0xFF1E3A8A),
                     bounce,
                   ),
@@ -438,13 +426,14 @@ class _InputBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: context.inputBarBg,
         boxShadow: [
           BoxShadow(
-            color: Color(0x14000000),
+            color: Colors.black.withAlpha(
+                Theme.of(context).brightness == Brightness.dark ? 40 : 20),
             blurRadius: 8,
-            offset: Offset(0, -2),
+            offset: const Offset(0, -2),
           ),
         ],
       ),
@@ -459,18 +448,15 @@ class _InputBar extends StatelessWidget {
                 textInputAction: TextInputAction.send,
                 onChanged: ctrl.onTextChanged,
                 onSubmitted: (_) => ctrl.sendMessage(),
+                style: TextStyle(color: context.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Message your group…',
-                  hintStyle: const TextStyle(
-                    color: Color(0xFF8A92A4),
-                    fontSize: 14,
-                  ),
+                  hintStyle: TextStyle(
+                      color: context.textMuted, fontSize: 14),
                   filled: true,
-                  fillColor: const Color(0xFFF5F6F9),
+                  fillColor: context.inputFill,
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
+                      horizontal: 16, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
@@ -487,11 +473,8 @@ class _InputBar extends StatelessWidget {
                 onTap: ctrl.sendMessage,
                 child: const Padding(
                   padding: EdgeInsets.all(12),
-                  child: Icon(
-                    Icons.send_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+                  child: Icon(Icons.send_rounded,
+                      color: Colors.white, size: 20),
                 ),
               ),
             ),

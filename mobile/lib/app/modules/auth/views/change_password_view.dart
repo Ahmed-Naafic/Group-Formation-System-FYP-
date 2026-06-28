@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/theme/app_theme.dart';
 import '../controllers/auth_controller.dart';
 
 class ChangePasswordView extends StatefulWidget {
@@ -75,11 +76,11 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
                 ),
                 const SizedBox(height: 36),
 
-                // Card
+                // Card — adapts to theme
                 Container(
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.cardColor,
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
@@ -98,9 +99,10 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
                           controller: _newPassCtrl,
                           obscureText: _obscureNew.value,
                           textInputAction: TextInputAction.next,
-                          decoration:
-                              _inputDecoration('New Password').copyWith(
+                          style: TextStyle(color: context.textPrimary),
+                          decoration: _inputDecoration(context, 'New Password').copyWith(
                             suffixIcon: _visibilityBtn(
+                              context,
                               _obscureNew.value,
                               () => _obscureNew.value = !_obscureNew.value,
                             ),
@@ -115,29 +117,25 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
                           controller: _confirmPassCtrl,
                           obscureText: _obscureConfirm.value,
                           textInputAction: TextInputAction.done,
+                          style: TextStyle(color: context.textPrimary),
                           onSubmitted: (_) => _controller.changePassword(
                             _newPassCtrl.text,
                             _confirmPassCtrl.text,
                           ),
-                          decoration:
-                              _inputDecoration('Confirm Password').copyWith(
+                          decoration: _inputDecoration(context, 'Confirm Password').copyWith(
                             suffixIcon: _visibilityBtn(
+                              context,
                               _obscureConfirm.value,
-                              () => _obscureConfirm.value =
-                                  !_obscureConfirm.value,
+                              () => _obscureConfirm.value = !_obscureConfirm.value,
                             ),
                           ),
                         ),
                       ),
 
-                      // Password hint
                       const SizedBox(height: 10),
-                      const Text(
+                      Text(
                         'Min 8 characters · uppercase · lowercase · number',
-                        style: TextStyle(
-                          color: Color(0xFF8A92A4),
-                          fontSize: 11,
-                        ),
+                        style: TextStyle(color: context.textMuted, fontSize: 11),
                       ),
 
                       // Error banner
@@ -148,31 +146,22 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
                         return Container(
                           margin: const EdgeInsets.only(top: 14),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
+                              horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF2F2),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: const Color(0xFFFECACA),
-                            ),
+                            border: Border.all(color: const Color(0xFFFECACA)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.error_outline_rounded,
-                                color: Color(0xFFB23A3A),
-                                size: 16,
-                              ),
+                              const Icon(Icons.error_outline_rounded,
+                                  color: Color(0xFFB23A3A), size: 16),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   _controller.errorMessage.value,
                                   style: const TextStyle(
-                                    color: Color(0xFFB23A3A),
-                                    fontSize: 13,
-                                  ),
+                                      color: Color(0xFFB23A3A), fontSize: 13),
                                 ),
                               ),
                             ],
@@ -216,9 +205,8 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
                                 : const Text(
                                     'Set Password & Continue',
                                     style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600),
                                   ),
                           ),
                         ),
@@ -234,40 +222,30 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
     );
   }
 
-  InputDecoration _inputDecoration(String label) => InputDecoration(
+  InputDecoration _inputDecoration(BuildContext context, String label) =>
+      InputDecoration(
         labelText: label,
-        labelStyle:
-            const TextStyle(color: Color(0xFF8A92A4), fontSize: 14),
-        prefixIcon: const Icon(
-          Icons.lock_outline_rounded,
-          color: Color(0xFF8A92A4),
-          size: 20,
-        ),
+        labelStyle: TextStyle(color: context.textMuted, fontSize: 14),
+        prefixIcon: Icon(Icons.lock_outline_rounded,
+            color: context.textMuted, size: 20),
         filled: true,
-        fillColor: const Color(0xFFF5F6F9),
+        fillColor: context.inputFill,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFECEEF2)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: Color(0xFF1E3A8A), width: 1.5),
-        ),
+        border: context.inputBorderNone(),
+        enabledBorder: context.inputBorderEnabled(),
+        focusedBorder: context.inputBorderFocused,
       );
 
-  Widget _visibilityBtn(bool obscure, VoidCallback onTap) => IconButton(
+  Widget _visibilityBtn(
+    BuildContext context,
+    bool obscure,
+    VoidCallback onTap,
+  ) =>
+      IconButton(
         icon: Icon(
-          obscure
-              ? Icons.visibility_off_outlined
-              : Icons.visibility_outlined,
-          color: const Color(0xFF8A92A4),
+          obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+          color: context.textMuted,
         ),
         onPressed: onTap,
       );

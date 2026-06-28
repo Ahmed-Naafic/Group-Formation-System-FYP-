@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/notification_model.dart';
 import '../controllers/notification_controller.dart';
 
@@ -12,11 +13,7 @@ class NotificationsView extends StatelessWidget {
     final ctrl = Get.find<NotificationController>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F9),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
-        elevation: 0,
         title: const Text(
           'Notifications',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -41,16 +38,16 @@ class NotificationsView extends StatelessWidget {
           );
         }
         if (ctrl.notifications.isEmpty) {
-          return const Center(
+          return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.notifications_none_rounded,
-                    size: 56, color: Color(0xFFCDD5E0)),
-                SizedBox(height: 16),
+                    size: 56, color: context.textPlaceholder),
+                const SizedBox(height: 16),
                 Text(
                   'No notifications yet.',
-                  style: TextStyle(fontSize: 15, color: Color(0xFF8A92A4)),
+                  style: TextStyle(fontSize: 15, color: context.textMuted),
                 ),
               ],
             ),
@@ -62,8 +59,12 @@ class NotificationsView extends StatelessWidget {
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: ctrl.notifications.length,
-            separatorBuilder: (_, _) =>
-                const Divider(height: 1, indent: 70, endIndent: 16),
+            separatorBuilder: (_, _) => Divider(
+              height: 1,
+              indent: 70,
+              endIndent: 16,
+              color: context.dividerColor,
+            ),
             itemBuilder: (_, i) {
               final n = ctrl.notifications[i];
               return _NotificationTile(n: n, onTap: () => ctrl.markRead(n.id));
@@ -86,7 +87,7 @@ class _NotificationTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        color: n.isRead ? Colors.white : const Color(0xFFEFF4FF),
+        color: n.isRead ? context.cardColor : context.unreadBg,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,10 +113,9 @@ class _NotificationTile extends StatelessWidget {
                           n.title,
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: n.isRead
-                                ? FontWeight.w500
-                                : FontWeight.w700,
-                            color: const Color(0xFF0E1320),
+                            fontWeight:
+                                n.isRead ? FontWeight.w500 : FontWeight.w700,
+                            color: context.textPrimary,
                           ),
                         ),
                       ),
@@ -132,17 +132,13 @@ class _NotificationTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    n.message,
-                    style: const TextStyle(
-                        fontSize: 13, color: Color(0xFF596070)),
-                  ),
+                  Text(n.message,
+                      style:
+                          TextStyle(fontSize: 13, color: context.textSecondary)),
                   const SizedBox(height: 6),
-                  Text(
-                    timeLabel,
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF8A92A4)),
-                  ),
+                  Text(timeLabel,
+                      style:
+                          TextStyle(fontSize: 11, color: context.textMuted)),
                 ],
               ),
             ),

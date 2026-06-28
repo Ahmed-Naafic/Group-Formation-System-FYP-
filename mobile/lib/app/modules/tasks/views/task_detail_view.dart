@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/file_model.dart';
 import '../../../data/models/task_model.dart';
 import '../controllers/task_controller.dart';
@@ -29,11 +30,7 @@ class _TaskDetailViewState extends State<TaskDetailView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F9),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
-        elevation: 0,
         title: const Text(
           'Task Detail',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
@@ -51,8 +48,8 @@ class _TaskDetailViewState extends State<TaskDetailView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Task info card ───────────────────────────────────────────────
-              _card(Column(
+              // ── Task info card ─────────────────────────────────────────────
+              _card(context, Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Status + title
@@ -62,10 +59,10 @@ class _TaskDetailViewState extends State<TaskDetailView> {
                       Expanded(
                         child: Text(
                           task.title,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF0E1320),
+                            color: context.textPrimary,
                           ),
                         ),
                       ),
@@ -80,7 +77,7 @@ class _TaskDetailViewState extends State<TaskDetailView> {
                     _DeadlineRow(task: task),
                   ],
 
-                  // Attachment
+                  // Attachment download
                   if (task.hasAttachment) ...[
                     const SizedBox(height: 10),
                     Obx(() {
@@ -95,7 +92,8 @@ class _TaskDetailViewState extends State<TaskDetailView> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFEFF3FB),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFBFCFEE)),
+                            border:
+                                Border.all(color: const Color(0xFFBFCFEE)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -134,23 +132,23 @@ class _TaskDetailViewState extends State<TaskDetailView> {
                   // Description
                   if (task.description.isNotEmpty) ...[
                     const SizedBox(height: 14),
-                    const Divider(height: 1, color: Color(0xFFECEEF2)),
+                    Divider(height: 1, color: context.dividerColor),
                     const SizedBox(height: 14),
-                    const Text(
+                    Text(
                       'DESCRIPTION',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF8A92A4),
+                        color: context.textMuted,
                         letterSpacing: 0.8,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       task.description,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF1A1F2E),
+                        color: context.textBody,
                         height: 1.55,
                       ),
                     ),
@@ -160,37 +158,33 @@ class _TaskDetailViewState extends State<TaskDetailView> {
 
               const SizedBox(height: 12),
 
-              // ── Submission section ───────────────────────────────────────────
+              // ── Submission section ─────────────────────────────────────────
               Obx(() {
                 final sub = controller.currentSubmission.value;
 
-                // Already graded
                 if (sub != null && sub.isReviewed) {
                   return _GradedCard(sub: sub);
                 }
 
-                // Already submitted (not yet graded)
                 if (sub != null && sub.isSubmitted) {
                   return _SubmittedCard(sub: sub);
                 }
 
-                // Task is closed and nothing submitted
                 if (task.isClosed && sub == null) {
-                  return _card(const Row(
+                  return _card(context, Row(
                     children: [
                       Icon(Icons.lock_outline_rounded,
-                          color: Color(0xFF8A92A4), size: 18),
-                      SizedBox(width: 10),
+                          color: context.textMuted, size: 18),
+                      const SizedBox(width: 10),
                       Text(
                         'This task is closed — no submission recorded.',
-                        style:
-                            TextStyle(fontSize: 13, color: Color(0xFF596070)),
+                        style: TextStyle(
+                            fontSize: 13, color: context.textSecondary),
                       ),
                     ],
                   ));
                 }
 
-                // Draft or not started — show submission form
                 return _SubmissionForm(controller: controller, sub: sub);
               }),
             ],
@@ -200,20 +194,10 @@ class _TaskDetailViewState extends State<TaskDetailView> {
     );
   }
 
-  Widget _card(Widget child) => Container(
+  Widget _card(BuildContext context, Widget child) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(12),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+        decoration: context.cardDecoration(),
         child: child,
       );
 
@@ -221,34 +205,20 @@ class _TaskDetailViewState extends State<TaskDetailView> {
     String label;
     Color color, bg;
     if (task.isClosed) {
-      label = 'Closed';
-      color = const Color(0xFF8A92A4);
-      bg    = const Color(0xFFF0F1F4);
+      label = 'Closed';  color = const Color(0xFF8A92A4); bg = const Color(0xFFF0F1F4);
     } else if (task.isOverdue) {
-      label = 'Overdue';
-      color = const Color(0xFFB23A3A);
-      bg    = const Color(0xFFFEF2F2);
+      label = 'Overdue'; color = const Color(0xFFB23A3A); bg = const Color(0xFFFEF2F2);
     } else if (task.isDueSoon) {
-      label = 'Due Soon';
-      color = const Color(0xFFB45309);
-      bg    = const Color(0xFFFEF3C7);
+      label = 'Due Soon'; color = const Color(0xFFB45309); bg = const Color(0xFFFEF3C7);
     } else {
-      label = 'Open';
-      color = const Color(0xFF15803D);
-      bg    = const Color(0xFFDCFCE7);
+      label = 'Open';    color = const Color(0xFF15803D); bg = const Color(0xFFDCFCE7);
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w600, color: color)),
     );
   }
 }
@@ -267,15 +237,12 @@ class _DeadlineRow extends StatelessWidget {
         ? const Color(0xFFB23A3A)
         : task.isDueSoon
             ? const Color(0xFFB45309)
-            : const Color(0xFF596070);
+            : context.textSecondary;
     return Row(
       children: [
         Icon(Icons.schedule_rounded, size: 15, color: color),
         const SizedBox(width: 6),
-        Text(
-          'Due $date',
-          style: TextStyle(fontSize: 13, color: color),
-        ),
+        Text('Due $date', style: TextStyle(fontSize: 13, color: color)),
       ],
     );
   }
@@ -302,26 +269,28 @@ class _GradedCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.cardColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withAlpha(60)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: Theme.of(context).brightness == Brightness.dark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withAlpha(12),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'GRADE',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF8A92A4),
+              color: context.textMuted,
               letterSpacing: 0.8,
             ),
           ),
@@ -351,30 +320,27 @@ class _GradedCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Graded ${DateFormat('MMM d, yyyy').format(sub.gradedAt!.toLocal())}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF8A92A4)),
+              style: TextStyle(fontSize: 12, color: context.textMuted),
             ),
           ],
           if (sub.notes != null && sub.notes!.isNotEmpty) ...[
             const SizedBox(height: 14),
-            const Divider(height: 1, color: Color(0xFFECEEF2)),
+            Divider(height: 1, color: context.dividerColor),
             const SizedBox(height: 14),
-            const Text(
+            Text(
               'YOUR SUBMISSION NOTES',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF8A92A4),
+                color: context.textMuted,
                 letterSpacing: 0.8,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               sub.notes!,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF1A1F2E),
-                height: 1.5,
-              ),
+              style: TextStyle(
+                  fontSize: 13, color: context.textBody, height: 1.5),
             ),
           ],
         ],
@@ -395,17 +361,7 @@ class _SubmittedCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      decoration: context.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -437,36 +393,33 @@ class _SubmittedCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               'Submitted ${DateFormat('MMM d, yyyy · HH:mm').format(sub.submittedAt!.toLocal())}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF8A92A4)),
+              style: TextStyle(fontSize: 12, color: context.textMuted),
             ),
           ],
           if (sub.notes != null && sub.notes!.isNotEmpty) ...[
             const SizedBox(height: 14),
-            const Divider(height: 1, color: Color(0xFFECEEF2)),
+            Divider(height: 1, color: context.dividerColor),
             const SizedBox(height: 14),
-            const Text(
+            Text(
               'YOUR NOTES',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF8A92A4),
+                color: context.textMuted,
                 letterSpacing: 0.8,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               sub.notes!,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF1A1F2E),
-                height: 1.5,
-              ),
+              style: TextStyle(
+                  fontSize: 13, color: context.textBody, height: 1.5),
             ),
           ],
           const SizedBox(height: 14),
-          const Text(
+          Text(
             'Awaiting grade from instructor.',
-            style: TextStyle(fontSize: 12, color: Color(0xFF8A92A4)),
+            style: TextStyle(fontSize: 12, color: context.textMuted),
           ),
         ],
       ),
@@ -478,7 +431,7 @@ class _SubmittedCard extends StatelessWidget {
 
 class _SubmissionForm extends StatelessWidget {
   final TaskController controller;
-  final SubmissionModel? sub; // null = not started, non-null = draft
+  final SubmissionModel? sub;
 
   const _SubmissionForm({required this.controller, required this.sub});
 
@@ -489,34 +442,24 @@ class _SubmissionForm extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      decoration: context.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             isDraft ? 'YOUR DRAFT' : 'SUBMIT YOUR WORK',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF8A92A4),
+              color: context.textMuted,
               letterSpacing: 0.8,
             ),
           ),
           if (isDraft && sub?.submittedAt == null) ...[
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Draft saved — not yet submitted.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF8A92A4)),
+              style: TextStyle(fontSize: 12, color: context.textMuted),
             ),
           ],
           const SizedBox(height: 14),
@@ -527,46 +470,35 @@ class _SubmissionForm extends StatelessWidget {
             maxLines: 5,
             minLines: 3,
             textInputAction: TextInputAction.newline,
+            style: TextStyle(color: context.textPrimary),
             decoration: InputDecoration(
               hintText: 'Add notes or a summary of your work…',
-              hintStyle: const TextStyle(
-                color: Color(0xFFB0B8CC),
-                fontSize: 14,
-              ),
+              hintStyle: TextStyle(color: context.textPlaceholder, fontSize: 14),
               filled: true,
-              fillColor: const Color(0xFFF5F6F9),
+              fillColor: context.inputFill,
               contentPadding: const EdgeInsets.all(14),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFECEEF2)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide:
-                    const BorderSide(color: Color(0xFF1E3A8A), width: 1.5),
-              ),
+              border: context.inputBorderNone(),
+              enabledBorder: context.inputBorderEnabled(),
+              focusedBorder: context.inputBorderFocused,
             ),
           ),
 
-          // ── Workspace file selection ─────────────────────────────────────────
+          // Workspace file selection
           Obx(() {
             if (controller.isLoadingFiles.value) {
-              return const Padding(
-                padding: EdgeInsets.only(top: 14),
+              return Padding(
+                padding: const EdgeInsets.only(top: 14),
                 child: Row(
                   children: [
                     SizedBox(
                       width: 14, height: 14,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Color(0xFF8A92A4)),
+                          strokeWidth: 2, color: context.textMuted),
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Text('Loading workspace files…',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF8A92A4))),
+                        style: TextStyle(
+                            fontSize: 12, color: context.textMuted)),
                   ],
                 ),
               );
@@ -577,26 +509,29 @@ class _SubmissionForm extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-                const Divider(height: 1, color: Color(0xFFECEEF2)),
+                Divider(height: 1, color: context.dividerColor),
                 const SizedBox(height: 14),
-                const Text(
+                Text(
                   'ATTACH WORKSPACE FILES',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF8A92A4),
+                    color: context.textMuted,
                     letterSpacing: 0.8,
                   ),
                 ),
                 const SizedBox(height: 6),
-                ...files.map((f) => _FileCheckRow(f: f, controller: controller)),
+                ...files.map((f) =>
+                    _FileCheckRow(f: f, controller: controller)),
               ],
             );
           }),
 
           // Error banner
           Obx(() {
-            if (controller.submitError.isEmpty) return const SizedBox(height: 14);
+            if (controller.submitError.isEmpty) {
+              return const SizedBox(height: 14);
+            }
             return Container(
               margin: const EdgeInsets.only(top: 12),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -640,7 +575,8 @@ class _SubmissionForm extends StatelessWidget {
                   SizedBox(width: 8),
                   Text(
                     'Submitted successfully!',
-                    style: TextStyle(color: Color(0xFF15803D), fontSize: 13),
+                    style:
+                        TextStyle(color: Color(0xFF15803D), fontSize: 13),
                   ),
                 ],
               ),
@@ -654,7 +590,6 @@ class _SubmissionForm extends StatelessWidget {
             final loading = controller.isSubmitting.value;
             return Row(
               children: [
-                // Save draft
                 Expanded(
                   child: OutlinedButton(
                     onPressed: loading ? null : controller.saveDraft,
@@ -662,25 +597,23 @@ class _SubmissionForm extends StatelessWidget {
                       foregroundColor: const Color(0xFF1E3A8A),
                       side: const BorderSide(color: Color(0xFF1E3A8A)),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     child: loading
                         ? const SizedBox(
-                            width: 18,
-                            height: 18,
+                            width: 18, height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               color: Color(0xFF1E3A8A),
                             ),
                           )
                         : const Text('Save Draft',
-                            style: TextStyle(fontWeight: FontWeight.w600)),
+                            style:
+                                TextStyle(fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Submit
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
@@ -691,15 +624,13 @@ class _SubmissionForm extends StatelessWidget {
                       disabledBackgroundColor:
                           const Color(0xFF1E3A8A).withAlpha(120),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 0,
                     ),
                     child: loading
                         ? const SizedBox(
-                            width: 18,
-                            height: 18,
+                            width: 18, height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               color: Colors.white,
@@ -707,7 +638,8 @@ class _SubmissionForm extends StatelessWidget {
                           )
                         : const Text('Submit',
                             style: TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 15)),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15)),
                   ),
                 ),
               ],
@@ -744,7 +676,7 @@ class _FileCheckRow extends StatelessWidget {
                 size: 20,
                 color: selected
                     ? const Color(0xFF1E3A8A)
-                    : const Color(0xFFB0B8CC),
+                    : context.textPlaceholder,
               ),
               const SizedBox(width: 10),
               Icon(f.icon, size: 18, color: f.iconColor),
@@ -755,8 +687,8 @@ class _FileCheckRow extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     color: selected
-                        ? const Color(0xFF1A1F2E)
-                        : const Color(0xFF596070),
+                        ? context.textBody
+                        : context.textSecondary,
                     fontWeight: selected
                         ? FontWeight.w500
                         : FontWeight.normal,
@@ -768,8 +700,7 @@ class _FileCheckRow extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 f.sizeLabel,
-                style: const TextStyle(
-                    fontSize: 11, color: Color(0xFF8A92A4)),
+                style: TextStyle(fontSize: 11, color: context.textMuted),
               ),
             ],
           ),

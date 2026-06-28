@@ -13,7 +13,6 @@ class _SplashViewState extends State<SplashView> {
   @override
   void initState() {
     super.initState();
-    // Run after first frame so GetX navigation works correctly.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Get.find<AuthController>().checkAuth();
     });
@@ -21,40 +20,16 @@ class _SplashViewState extends State<SplashView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0C1738),
+    // Branded login background — stays consistent in both themes.
+    return const Scaffold(
+      backgroundColor: Color(0xFF0C1738),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Brand mark
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(80),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: const Center(
-                child: Text(
-                  'J',
-                  style: TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E3A8A),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
+            _BrandMark(),
+            SizedBox(height: 20),
+            Text(
               'JUST',
               style: TextStyle(
                 color: Colors.white,
@@ -63,8 +38,8 @@ class _SplashViewState extends State<SplashView> {
                 letterSpacing: 2,
               ),
             ),
-            const SizedBox(height: 40),
-            const SizedBox(
+            SizedBox(height: 40),
+            SizedBox(
               width: 24,
               height: 24,
               child: CircularProgressIndicator(
@@ -77,4 +52,35 @@ class _SplashViewState extends State<SplashView> {
       ),
     );
   }
+}
+
+class _BrandMark extends StatelessWidget {
+  const _BrandMark();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(80),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Text(
+            'J',
+            style: TextStyle(
+              fontSize: 40,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1E3A8A),
+            ),
+          ),
+        ),
+      );
 }

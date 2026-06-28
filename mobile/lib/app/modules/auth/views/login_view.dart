@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/theme/app_theme.dart';
 import '../controllers/auth_controller.dart';
 
 class LoginView extends StatefulWidget {
@@ -19,7 +20,6 @@ class _LoginViewState extends State<LoginView> {
   void initState() {
     super.initState();
     _controller = Get.find<AuthController>();
-    // Clear any leftover error from a previous session
     _controller.errorMessage.value = '';
   }
 
@@ -41,7 +41,7 @@ class _LoginViewState extends State<LoginView> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // ── Brand mark ──────────────────────────────────────────────
+                // Brand mark
                 Container(
                   width: 80,
                   height: 80,
@@ -84,11 +84,11 @@ class _LoginViewState extends State<LoginView> {
                 ),
                 const SizedBox(height: 40),
 
-                // ── Form card ────────────────────────────────────────────────
+                // Form card — adapts to theme
                 Container(
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.cardColor,
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
@@ -101,19 +101,18 @@ class _LoginViewState extends State<LoginView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Sign In',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF0E1320),
+                          color: context.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
+                      Text(
                         'Student portal',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF8A92A4)),
+                        style: TextStyle(fontSize: 13, color: context.textMuted),
                       ),
                       const SizedBox(height: 28),
 
@@ -121,7 +120,9 @@ class _LoginViewState extends State<LoginView> {
                       TextField(
                         controller: _identifierCtrl,
                         textInputAction: TextInputAction.next,
+                        style: TextStyle(color: context.textPrimary),
                         decoration: _inputDecoration(
+                          context: context,
                           label: 'Student ID or Email',
                           icon: Icons.person_outline_rounded,
                         ),
@@ -134,11 +135,13 @@ class _LoginViewState extends State<LoginView> {
                           controller: _passwordCtrl,
                           obscureText: _obscure.value,
                           textInputAction: TextInputAction.done,
+                          style: TextStyle(color: context.textPrimary),
                           onSubmitted: (_) => _controller.login(
                             _identifierCtrl.text,
                             _passwordCtrl.text,
                           ),
                           decoration: _inputDecoration(
+                            context: context,
                             label: 'Password',
                             icon: Icons.lock_outline_rounded,
                           ).copyWith(
@@ -147,7 +150,7 @@ class _LoginViewState extends State<LoginView> {
                                 _obscure.value
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: const Color(0xFF8A92A4),
+                                color: context.textMuted,
                               ),
                               onPressed: () =>
                                   _obscure.value = !_obscure.value,
@@ -164,30 +167,22 @@ class _LoginViewState extends State<LoginView> {
                         return Container(
                           margin: const EdgeInsets.only(top: 14),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
+                              horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF2F2),
                             borderRadius: BorderRadius.circular(10),
-                            border:
-                                Border.all(color: const Color(0xFFFECACA)),
+                            border: Border.all(color: const Color(0xFFFECACA)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.error_outline_rounded,
-                                color: Color(0xFFB23A3A),
-                                size: 16,
-                              ),
+                              const Icon(Icons.error_outline_rounded,
+                                  color: Color(0xFFB23A3A), size: 16),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   _controller.errorMessage.value,
                                   style: const TextStyle(
-                                    color: Color(0xFFB23A3A),
-                                    fontSize: 13,
-                                  ),
+                                      color: Color(0xFFB23A3A), fontSize: 13),
                                 ),
                               ),
                             ],
@@ -231,9 +226,8 @@ class _LoginViewState extends State<LoginView> {
                                 : const Text(
                                     'Sign In',
                                     style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600),
                                   ),
                           ),
                         ),
@@ -246,8 +240,7 @@ class _LoginViewState extends State<LoginView> {
                 const Text(
                   'Jamhuriya University of Science & Technology',
                   textAlign: TextAlign.center,
-                  style:
-                      TextStyle(color: Color(0xFF424A5E), fontSize: 11),
+                  style: TextStyle(color: Color(0xFF424A5E), fontSize: 11),
                 ),
               ],
             ),
@@ -258,30 +251,20 @@ class _LoginViewState extends State<LoginView> {
   }
 
   InputDecoration _inputDecoration({
+    required BuildContext context,
     required String label,
     required IconData icon,
   }) =>
       InputDecoration(
         labelText: label,
-        labelStyle:
-            const TextStyle(color: Color(0xFF8A92A4), fontSize: 14),
-        prefixIcon: Icon(icon, color: const Color(0xFF8A92A4), size: 20),
+        labelStyle: TextStyle(color: context.textMuted, fontSize: 14),
+        prefixIcon: Icon(icon, color: context.textMuted, size: 20),
         filled: true,
-        fillColor: const Color(0xFFF5F6F9),
+        fillColor: context.inputFill,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFECEEF2)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: Color(0xFF1E3A8A), width: 1.5),
-        ),
+        border: context.inputBorderNone(),
+        enabledBorder: context.inputBorderEnabled(),
+        focusedBorder: context.inputBorderFocused,
       );
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../../data/models/workspace_model.dart';
 import '../../../routes/app_pages.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -14,11 +16,7 @@ class DashboardView extends GetView<DashboardController> {
     final auth = Get.find<AuthController>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F9),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
-        elevation: 0,
         title: Obx(() => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -39,6 +37,17 @@ class DashboardView extends GetView<DashboardController> {
         )),
         actions: [
           _NotificationBell(),
+          // Theme toggle
+          Obx(() {
+            final tc = Get.find<ThemeController>();
+            return IconButton(
+              tooltip: tc.isDark.value ? 'Light mode' : 'Dark mode',
+              icon: Icon(tc.isDark.value
+                  ? Icons.light_mode_rounded
+                  : Icons.dark_mode_rounded),
+              onPressed: tc.toggle,
+            );
+          }),
           IconButton(
             tooltip: 'Logout',
             icon: const Icon(Icons.logout_rounded),
@@ -71,7 +80,7 @@ class DashboardView extends GetView<DashboardController> {
             padding: const EdgeInsets.all(16),
             itemCount: controller.workspaces.length,
             itemBuilder: (_, i) => _WorkspaceCard(
-              workspace:  controller.workspaces[i],
+              workspace:   controller.workspaces[i],
               myStudentId: auth.userStudentId.value,
             ),
           ),
@@ -83,9 +92,7 @@ class DashboardView extends GetView<DashboardController> {
   Widget _logoutDialog(AuthController auth) => AlertDialog(
         title: const Text('Sign Out'),
         content: const Text('Are you sure you want to sign out?'),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
           TextButton(
             onPressed: () => Get.back(),
@@ -100,8 +107,7 @@ class DashboardView extends GetView<DashboardController> {
               backgroundColor: const Color(0xFF1E3A8A),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+                  borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Sign Out'),
           ),
@@ -133,7 +139,8 @@ class _NotificationBell extends StatelessWidget {
               right: 8,
               child: Container(
                 padding: const EdgeInsets.all(2),
-                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                constraints:
+                    const BoxConstraints(minWidth: 16, minHeight: 16),
                 decoration: const BoxDecoration(
                   color: Color(0xFFE53E3E),
                   shape: BoxShape.circle,
@@ -175,17 +182,7 @@ class _WorkspaceCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(12),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+        decoration: context.cardDecoration(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -194,9 +191,7 @@ class _WorkspaceCard extends StatelessWidget {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
+                      horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E3A8A).withAlpha(15),
                     borderRadius: BorderRadius.circular(8),
@@ -215,9 +210,7 @@ class _WorkspaceCard extends StatelessWidget {
                 if (amLeader)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
+                        horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFF3CD),
                       borderRadius: BorderRadius.circular(8),
@@ -225,11 +218,8 @@ class _WorkspaceCard extends StatelessWidget {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.star_rounded,
-                          size: 12,
-                          color: Color(0xFF856404),
-                        ),
+                        Icon(Icons.star_rounded,
+                            size: 12, color: Color(0xFF856404)),
                         SizedBox(width: 4),
                         Text(
                           'Leader',
@@ -243,11 +233,8 @@ class _WorkspaceCard extends StatelessWidget {
                     ),
                   ),
                 const Spacer(),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFFB0B8CC),
-                  size: 20,
-                ),
+                Icon(Icons.chevron_right_rounded,
+                    color: context.textPlaceholder, size: 20),
               ],
             ),
             const SizedBox(height: 10),
@@ -255,71 +242,59 @@ class _WorkspaceCard extends StatelessWidget {
             // Group name
             Text(
               workspace.groupName,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0E1320),
+                color: context.textPrimary,
               ),
             ),
             const SizedBox(height: 3),
 
-            // Course name
             Text(
               workspace.courseName,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF596070),
-              ),
+              style: TextStyle(fontSize: 13, color: context.textSecondary),
             ),
             const SizedBox(height: 2),
 
-            // Semester · Cohort
             Text(
               '${workspace.semesterName} · ${workspace.cohortName}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF8A92A4),
-              ),
+              style: TextStyle(fontSize: 12, color: context.textMuted),
             ),
             const SizedBox(height: 14),
 
             // Footer: members + task summary
             Row(
               children: [
-                const Icon(
-                  Icons.people_outline_rounded,
-                  size: 15,
-                  color: Color(0xFF8A92A4),
-                ),
+                Icon(Icons.people_outline_rounded,
+                    size: 15, color: context.textMuted),
                 const SizedBox(width: 5),
                 Text(
                   '${workspace.members.length} members',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF8A92A4),
-                  ),
+                  style: TextStyle(fontSize: 12, color: context.textMuted),
                 ),
                 const Spacer(),
                 if (workspace.taskSummary.total > 0) ...[
                   _TaskChip(
-                    label: '${workspace.taskSummary.done}/${workspace.taskSummary.total}',
-                    icon: Icons.check_circle_outline_rounded,
+                    label:
+                        '${workspace.taskSummary.done}/${workspace.taskSummary.total}',
+                    icon:  Icons.check_circle_outline_rounded,
                     color: const Color(0xFF15803D),
-                    bg:   const Color(0xFFDCFCE7),
+                    bg:    const Color(0xFFDCFCE7),
                   ),
                   if (workspace.taskSummary.dueSoon > 0) ...[
                     const SizedBox(width: 6),
                     _TaskChip(
                       label: '${workspace.taskSummary.dueSoon} due soon',
-                      icon: Icons.schedule_rounded,
+                      icon:  Icons.schedule_rounded,
                       color: const Color(0xFFB45309),
-                      bg:   const Color(0xFFFEF3C7),
+                      bg:    const Color(0xFFFEF3C7),
                     ),
                   ],
                 ] else
-                  const Text(
+                  Text(
                     'No tasks yet',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF8A92A4)),
+                    style:
+                        TextStyle(fontSize: 12, color: context.textMuted),
                   ),
               ],
             ),
@@ -358,10 +333,7 @@ class _TaskChip extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
+                  fontSize: 11, fontWeight: FontWeight.w600, color: color),
             ),
           ],
         ),
@@ -385,25 +357,21 @@ class _EmptyState extends StatelessWidget {
                 color: const Color(0xFF1E3A8A).withAlpha(15),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: const Icon(
-                Icons.groups_outlined,
-                color: Color(0xFF1E3A8A),
-                size: 36,
-              ),
+              child: const Icon(Icons.groups_outlined,
+                  color: Color(0xFF1E3A8A), size: 36),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No groups yet',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF0E1320),
-              ),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: context.textPrimary),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               "You haven't been assigned to any groups.",
-              style: TextStyle(fontSize: 13, color: Color(0xFF8A92A4)),
+              style: TextStyle(fontSize: 13, color: context.textMuted),
             ),
           ],
         ),
@@ -423,19 +391,12 @@ class _ErrorState extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.wifi_off_rounded,
-                color: Color(0xFF8A92A4),
-                size: 48,
-              ),
+              Icon(Icons.wifi_off_rounded, color: context.textMuted, size: 48),
               const SizedBox(height: 16),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF596070),
-                ),
+                style: TextStyle(fontSize: 14, color: context.textSecondary),
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
@@ -446,8 +407,7 @@ class _ErrorState extends StatelessWidget {
                   backgroundColor: const Color(0xFF1E3A8A),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
             ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/task_model.dart';
 import '../../../routes/app_pages.dart';
 import '../controllers/task_controller.dart';
@@ -11,11 +12,7 @@ class TaskListView extends GetView<TaskController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F9),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E3A8A),
-        foregroundColor: Colors.white,
-        elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -79,17 +76,7 @@ class _TaskCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(12),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+        decoration: context.cardDecoration(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -99,10 +86,10 @@ class _TaskCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     task.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0E1320),
+                      color: context.textPrimary,
                     ),
                   ),
                 ),
@@ -118,9 +105,9 @@ class _TaskCard extends StatelessWidget {
                 task.description,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  color: Color(0xFF596070),
+                  color: context.textSecondary,
                   height: 1.4,
                 ),
               ),
@@ -131,33 +118,25 @@ class _TaskCard extends StatelessWidget {
             // Footer: deadline + attachment
             Row(
               children: [
-                _deadlineWidget(task),
+                _deadlineWidget(context, task),
                 const Spacer(),
                 if (task.hasAttachment)
-                  const Row(
+                  Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.attach_file_rounded,
-                        size: 14,
-                        color: Color(0xFF8A92A4),
-                      ),
-                      SizedBox(width: 3),
+                      Icon(Icons.attach_file_rounded,
+                          size: 14, color: context.textMuted),
+                      const SizedBox(width: 3),
                       Text(
                         'Attachment',
                         style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF8A92A4),
-                        ),
+                            fontSize: 11, color: context.textMuted),
                       ),
                     ],
                   ),
                 const SizedBox(width: 8),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFFB0B8CC),
-                  size: 18,
-                ),
+                Icon(Icons.chevron_right_rounded,
+                    color: context.textPlaceholder, size: 18),
               ],
             ),
           ],
@@ -168,32 +147,32 @@ class _TaskCard extends StatelessWidget {
 
   Widget _statusChip(TaskModel task) {
     if (task.isClosed) {
-      return _Chip(label: 'Closed', color: const Color(0xFF8A92A4), bg: const Color(0xFFF0F1F4));
+      return _Chip(label: 'Closed',   color: const Color(0xFF8A92A4), bg: const Color(0xFFF0F1F4));
     }
     if (task.isOverdue) {
-      return _Chip(label: 'Overdue', color: const Color(0xFFB23A3A), bg: const Color(0xFFFEF2F2));
+      return _Chip(label: 'Overdue',  color: const Color(0xFFB23A3A), bg: const Color(0xFFFEF2F2));
     }
     if (task.isDueSoon) {
       return _Chip(label: 'Due Soon', color: const Color(0xFFB45309), bg: const Color(0xFFFEF3C7));
     }
-    return _Chip(label: 'Open', color: const Color(0xFF15803D), bg: const Color(0xFFDCFCE7));
+    return _Chip(label: 'Open',       color: const Color(0xFF15803D), bg: const Color(0xFFDCFCE7));
   }
 
-  Widget _deadlineWidget(TaskModel task) {
+  Widget _deadlineWidget(BuildContext context, TaskModel task) {
     if (task.deadline == null) {
-      return const Text(
+      return Text(
         'No deadline',
-        style: TextStyle(fontSize: 12, color: Color(0xFF8A92A4)),
+        style: TextStyle(fontSize: 12, color: context.textMuted),
       );
     }
-    final fmt      = DateFormat('MMM d, yyyy');
-    final dateStr  = fmt.format(task.deadline!.toLocal());
-    final color    = task.isOverdue
+    final fmt     = DateFormat('MMM d, yyyy');
+    final dateStr = fmt.format(task.deadline!.toLocal());
+    final color   = task.isOverdue
         ? const Color(0xFFB23A3A)
         : task.isDueSoon
             ? const Color(0xFFB45309)
-            : const Color(0xFF8A92A4);
-    final icon     = task.isOverdue
+            : context.textMuted;
+    final icon    = task.isOverdue
         ? Icons.warning_amber_rounded
         : Icons.schedule_rounded;
 
@@ -202,10 +181,7 @@ class _TaskCard extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 4),
-        Text(
-          dateStr,
-          style: TextStyle(fontSize: 12, color: color),
-        ),
+        Text(dateStr, style: TextStyle(fontSize: 12, color: color)),
       ],
     );
   }
@@ -220,17 +196,12 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration:
+            BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
+              fontSize: 11, fontWeight: FontWeight.w600, color: color),
         ),
       );
 }
@@ -252,25 +223,21 @@ class _EmptyState extends StatelessWidget {
                 color: const Color(0xFF1E3A8A).withAlpha(15),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: const Icon(
-                Icons.assignment_outlined,
-                color: Color(0xFF1E3A8A),
-                size: 36,
-              ),
+              child: const Icon(Icons.assignment_outlined,
+                  color: Color(0xFF1E3A8A), size: 36),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No tasks yet',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF0E1320),
-              ),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: context.textPrimary),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Tasks assigned to your group will appear here.',
-              style: TextStyle(fontSize: 13, color: Color(0xFF8A92A4)),
+              style: TextStyle(fontSize: 13, color: context.textMuted),
             ),
           ],
         ),
@@ -289,12 +256,12 @@ class _ErrorState extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.wifi_off_rounded, color: Color(0xFF8A92A4), size: 48),
+              Icon(Icons.wifi_off_rounded, color: context.textMuted, size: 48),
               const SizedBox(height: 16),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Color(0xFF596070)),
+                style: TextStyle(fontSize: 14, color: context.textSecondary),
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
@@ -305,8 +272,7 @@ class _ErrorState extends StatelessWidget {
                   backgroundColor: const Color(0xFF1E3A8A),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
             ],
