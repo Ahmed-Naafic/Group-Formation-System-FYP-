@@ -20,5 +20,7 @@ router.post(
 // Full token required
 router.get('/me', authenticate, authController.me);
 router.post('/logout', authenticate, authController.logout);
+router.post('/fcm-token', authenticate, authController.registerFcmToken);
+router.delete('/fcm-token', authenticate, authController.clearFcmToken);
 
 module.exports = router;

@@ -1,4 +1,5 @@
-
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'app/core/theme/app_theme.dart';
@@ -7,7 +8,16 @@ import 'app/modules/auth/controllers/auth_controller.dart';
 import 'app/modules/notifications/controllers/notification_controller.dart';
 import 'app/routes/app_pages.dart';
 
-void main() {
+// Must be a top-level function — called by FCM when app is terminated
+@pragma('vm:entry-point')
+Future<void> _onBackgroundMessage(RemoteMessage _) async {
+  await Firebase.initializeApp();
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(_onBackgroundMessage);
   runApp(const GroupFormationApp());
 }
 

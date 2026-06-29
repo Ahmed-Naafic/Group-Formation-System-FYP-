@@ -1,5 +1,6 @@
 const { authService, TOKEN_SCOPES } = require('../services/authService');
 const userService = require('../../user/services/userService');
+const userRepository = require('../../user/repositories/userRepository');
 const { sendSuccess } = require('../../../common/responses/apiResponse');
 const asyncHandler = require('../../../common/utils/asyncHandler');
 
@@ -61,6 +62,20 @@ const authController = {
     // Stateless logout — client discards the token.
     // A token blacklist (Redis) can be layered on here later without changing this contract.
     return sendSuccess(res, { message: 'Logged out successfully', data: null });
+  }),
+
+  registerFcmToken: asyncHandler(async (req, res) => {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, error: { message: 'token is required' } });
+    }
+    await userRepository.saveFcmToken(req.context.userId, token);
+    return sendSuccess(res, { message: 'FCM token registered', data: null });
+  }),
+
+  clearFcmToken: asyncHandler(async (req, res) => {
+    await userRepository.saveFcmToken(req.context.userId, null);
+    return sendSuccess(res, { message: 'FCM token cleared', data: null });
   }),
 };
 

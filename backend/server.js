@@ -34,6 +34,9 @@ mongoose.connection.once('open', async () => {
 connect();
 
 const { initSocket } = require('./src/sockets');
+const { initFirebase } = require('./src/config/firebase');
+
+initFirebase();
 
 const server = app.listen(PORT, () => {
   logger.info(`Server running`, { port: PORT, env: process.env.NODE_ENV });

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import '../../../data/providers/api_client.dart';
 import '../../../routes/app_pages.dart';
+import '../../../services/push_notification_service.dart';
 import '../../notifications/controllers/notification_controller.dart';
 
 class AuthController extends GetxController {
@@ -31,6 +32,7 @@ class AuthController extends GetxController {
         userRole.value      = (saved['role']       ?? '') as String;
         userStudentId.value = (saved['studentId']  ?? '') as String;
       }
+      await PushNotificationService.instance.init();
       Get.offAllNamed(Routes.dashboard);
     } else {
       Get.offAllNamed(Routes.login);
@@ -64,6 +66,7 @@ class AuthController extends GetxController {
       }
 
       await _storeSession(data);
+      await PushNotificationService.instance.init();
       Get.offAllNamed(Routes.dashboard);
     } on DioException catch (e) {
       errorMessage.value =
@@ -105,6 +108,7 @@ class AuthController extends GetxController {
 
       final data = response.data['data'] as Map<String, dynamic>;
       await _storeSession(data);
+      await PushNotificationService.instance.init();
       Get.offAllNamed(Routes.dashboard);
     } on DioException catch (e) {
       errorMessage.value =
@@ -120,6 +124,7 @@ class AuthController extends GetxController {
   // ── Logout ───────────────────────────────────────────────────────────────────
 
   Future<void> logout() async {
+    await PushNotificationService.instance.clearToken();
     Get.find<NotificationController>().disconnect();
     await _api.clearAll();
     userId.value        = '';

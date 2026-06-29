@@ -40,6 +40,17 @@ const userRepository = {
   existsWithRole(role) {
     return User.exists({ role });
   },
+
+  saveFcmToken(id, token) {
+    return User.findByIdAndUpdate(id, { fcmToken: token ?? null }, { new: true });
+  },
+
+  findFcmTokensByUserIds(ids) {
+    return User.find(
+      { _id: { $in: ids }, fcmToken: { $type: 'string' } },
+      { fcmToken: 1 }
+    ).lean();
+  },
 };
 
 module.exports = userRepository;

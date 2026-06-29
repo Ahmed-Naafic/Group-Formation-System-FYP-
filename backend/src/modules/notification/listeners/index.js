@@ -1,6 +1,8 @@
 const emitter            = require('../../../common/events/emitter');
 const notificationService = require('../services/notificationService');
 const auditLogService    = require('../../auditLog/services/auditLogService');
+const userRepository     = require('../../user/repositories/userRepository');
+const pushService        = require('../../../common/services/push/PushService');
 const logger             = require('../../../common/utils/logger');
 
 /**
@@ -10,11 +12,22 @@ const logger             = require('../../../common/utils/logger');
  * Each listener:
  *  1. Creates notification DB records
  *  2. Pushes to online users via their personal room `user:{userId}`
- *  3. Writes to the audit log where appropriate
+ *  3. Sends FCM push notification to offline devices
+ *  4. Writes to the audit log where appropriate
  */
 function initListeners(io) {
   function pushToUser(userId, notification) {
     io.to(`user:${userId}`).emit('notification', { notification });
+  }
+
+  async function sendFcmBatch(userIds, title, body, data = {}) {
+    try {
+      const users = await userRepository.findFcmTokensByUserIds(userIds);
+      const tokens = users.map((u) => u.fcmToken).filter(Boolean);
+      await pushService.sendBatch(tokens, title, body, data);
+    } catch (err) {
+      logger.warn('FCM batch lookup failed', { err: err.message });
+    }
   }
 
   // ── groups.generated ─────────────────────────────────────────────────────────
@@ -23,8 +36,8 @@ function initListeners(io) {
     try {
       const { groups, courseId, actorId, actorRole, ipAddress, userAgent } = payload;
 
-      // Build one notification per group member
       const docs = [];
+      const allUserIds = [];
       for (const group of groups) {
         for (const member of group.memberIds ?? []) {
           const userId  = member.userId?._id ?? member.userId;
@@ -36,11 +49,19 @@ function initListeners(io) {
             message: `You are now in ${group.name}${isLeader ? ' as the group leader' : ''}.`,
             relatedEntity: { kind: 'Group', id: group._id },
           });
+          allUserIds.push(userId);
         }
       }
 
       const created = await notificationService.createMany(docs);
       for (const n of created) pushToUser(String(n.userId), n);
+
+      await sendFcmBatch(
+        allUserIds,
+        'You have been placed in a group',
+        'Open the app to see your new group.',
+        { type: 'GROUP_FORMED' }
+      );
 
       await auditLogService.log({
         actorId, actorRole, ipAddress, userAgent,
@@ -60,8 +81,8 @@ function initListeners(io) {
     try {
       const { task, actorId, actorRole, ipAddress, userAgent } = payload;
 
-      // Notify all members of every assigned group
       const docs = [];
+      const allUserIds = [];
       for (const group of task.assignedGroups ?? []) {
         for (const member of group.memberIds ?? []) {
           const userId = member.userId?._id ?? member.userId;
@@ -72,11 +93,19 @@ function initListeners(io) {
             message: `"${task.title}" has been assigned to your group.`,
             relatedEntity: { kind: 'Task', id: task._id },
           });
+          allUserIds.push(userId);
         }
       }
 
       const created = await notificationService.createMany(docs);
       for (const n of created) pushToUser(String(n.userId), n);
+
+      await sendFcmBatch(
+        allUserIds,
+        'New task assigned',
+        `"${task.title}" has been assigned to your group.`,
+        { type: 'TASK_ASSIGNED', entityId: String(task._id) }
+      );
 
       await auditLogService.log({
         actorId, actorRole, ipAddress, userAgent,
@@ -96,7 +125,6 @@ function initListeners(io) {
     try {
       const { submission, task, actorId, actorRole, ipAddress, userAgent } = payload;
 
-      // Notify the student who submitted
       const submittedBy = submission.submittedBy;
       if (submittedBy) {
         const userId = submittedBy.userId?._id ?? submittedBy.userId ?? submittedBy;
@@ -108,6 +136,13 @@ function initListeners(io) {
           relatedEntity: { kind: 'Submission', id: submission._id },
         });
         pushToUser(String(userId), n);
+
+        await sendFcmBatch(
+          [userId],
+          'Your submission has been graded',
+          `"${task?.title ?? 'A task'}" — ${submission.grade}/100`,
+          { type: 'SUBMISSION_GRADED', entityId: String(submission._id) }
+        );
       }
 
       await auditLogService.log({
