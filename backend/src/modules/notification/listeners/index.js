@@ -2,6 +2,7 @@ const emitter            = require('../../../common/events/emitter');
 const notificationService = require('../services/notificationService');
 const auditLogService    = require('../../auditLog/services/auditLogService');
 const userRepository     = require('../../user/repositories/userRepository');
+const groupRepository    = require('../../group/repositories/groupRepository');
 const pushService        = require('../../../common/services/push/PushService');
 const logger             = require('../../../common/utils/logger');
 
@@ -83,7 +84,14 @@ function initListeners(io) {
 
       const docs = [];
       const allUserIds = [];
-      for (const group of task.assignedGroups ?? []) {
+
+      let groups = task.assignedGroups ?? [];
+      if (groups.length === 0) {
+        // Task applies to all groups in the offering — fetch them all
+        groups = await groupRepository.findActiveByOffering(task.courseOfferingId);
+      }
+
+      for (const group of groups) {
         for (const member of group.memberIds ?? []) {
           const userId = member.userId?._id ?? member.userId;
           docs.push({
