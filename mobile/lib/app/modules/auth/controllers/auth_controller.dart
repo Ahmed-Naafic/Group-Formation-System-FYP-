@@ -163,10 +163,19 @@ class AuthController extends GetxController {
       e.type == DioExceptionType.receiveTimeout ||
       e.type == DioExceptionType.sendTimeout;
 
-  static String _networkMessage(DioException e) =>
-      (e.type == DioExceptionType.connectionError)
-          ? 'No internet connection. Please check your network.'
-          : 'Connection timed out. Please try again.';
+  static String _networkMessage(DioException e) {
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout) {
+      return 'Connection timed out. Please try again.';
+    }
+    // connectionError covers: no internet, server unreachable, connection refused
+    final inner = e.error?.toString() ?? '';
+    if (inner.contains('unreachable') || inner.contains('Network is down')) {
+      return 'No internet connection. Please check your network.';
+    }
+    return 'Cannot reach the server. Check your internet connection.';
+  }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
