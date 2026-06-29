@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1054103270928",
+    "project_id": "gf-system-9c9c3",
+    "storage_bucket": "gf-system-9c9c3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1054103270928:android:7f3022e458caf78e953c95",
+        "android_client_info": {
+          "package_name": "com.just.gfs.group_formation"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLm0vMhPdcDcMxMZsE9-7b5R3nM_LyTKg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
