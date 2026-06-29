@@ -31,7 +31,7 @@ class AuthController extends GetxController {
         userStudentId.value = (saved['studentId']  ?? '') as String;
       }
       await PushNotificationService.instance.init();
-      Get.offAllNamed(Routes.dashboard);
+      Get.offAllNamed(Routes.main);
     } else {
       Get.offAllNamed(Routes.login);
     }
@@ -64,7 +64,7 @@ class AuthController extends GetxController {
 
       await _storeSession(data);
       await PushNotificationService.instance.init();
-      Get.offAllNamed(Routes.dashboard);
+      Get.offAllNamed(Routes.main);
     } on DioException catch (e) {
       errorMessage.value = _loginError(e);
     } catch (_) {
@@ -102,7 +102,7 @@ class AuthController extends GetxController {
       final data = response.data['data'] as Map<String, dynamic>;
       await _storeSession(data);
       await PushNotificationService.instance.init();
-      Get.offAllNamed(Routes.dashboard);
+      Get.offAllNamed(Routes.main);
     } on DioException catch (e) {
       errorMessage.value = _networkAwareError(
         e,

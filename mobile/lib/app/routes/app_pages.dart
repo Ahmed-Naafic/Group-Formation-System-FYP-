@@ -8,6 +8,7 @@ import '../modules/dashboard/bindings/dashboard_binding.dart';
 import '../modules/dashboard/views/dashboard_view.dart';
 import '../modules/files/bindings/files_binding.dart';
 import '../modules/files/views/files_view.dart';
+import '../modules/main/views/main_shell.dart';
 import '../modules/notifications/views/notifications_view.dart';
 import '../modules/splash/views/splash_view.dart';
 import '../modules/tasks/bindings/task_binding.dart';
@@ -34,6 +35,11 @@ class AppPages {
       name: Routes.changePassword,
       page: () => const ChangePasswordView(),
       binding: AuthBinding(),
+    ),
+    GetPage(
+      name: Routes.main,
+      page: () => const MainShell(),
+      binding: DashboardBinding(),
     ),
     GetPage(
       name: Routes.dashboard,
