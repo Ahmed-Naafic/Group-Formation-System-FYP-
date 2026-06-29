@@ -6,7 +6,7 @@ const objectId = Joi.string().pattern(/^[0-9a-fA-F]{24}$/).messages({
 // POST /api/groups/generate  and  POST /api/groups/regenerate
 const generateGroupsSchema = Joi.object({
   courseOfferingId: objectId.required(),
-  groupSize: Joi.number().integer().min(3).max(6).default(4),
+  groupSize: Joi.number().integer().min(3).max(12).default(4),
   options: Joi.object({
     attendanceThreshold: Joi.number().min(0).max(100).default(25),
   }).default({}),

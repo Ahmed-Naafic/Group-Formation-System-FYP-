@@ -48,7 +48,7 @@ const BALANCE_CONFIG = [
 function SizeButtons({ value, onChange }) {
   return (
     <div className="flex gap-2">
-      {[3, 4, 5, 6].map((n) => (
+      {[3, 4, 5, 6, 8, 10, 12].map((n) => (
         <button
           key={n}
           type="button"
