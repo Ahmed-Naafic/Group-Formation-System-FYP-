@@ -19,6 +19,8 @@ app.use(
     origin(origin, callback) {
       // Allow requests with no origin (curl, mobile apps, server-to-server)
       if (!origin) return callback(null, true);
+      // Wildcard — allow all origins
+      if (ALLOWED_ORIGINS.includes('*')) return callback(null, true);
       // In development, accept any localhost port so the Vite dev server can connect
       // regardless of which port it lands on (5173, 5174, …).
       if (IS_DEVELOPMENT && /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
