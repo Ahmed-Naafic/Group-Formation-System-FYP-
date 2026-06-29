@@ -25,3 +25,4 @@ const messageSchema = new mongoose.Schema(
 messageSchema.index({ workspaceId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);
+

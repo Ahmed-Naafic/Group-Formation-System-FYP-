@@ -1,4 +1,5 @@
-const admin = require('firebase-admin');
+const { initializeApp, cert, getApps } = require('firebase-admin/app');
+const { getMessaging } = require('firebase-admin/messaging');
 const logger = require('../common/utils/logger');
 
 let _messaging = null;
@@ -13,26 +14,26 @@ function initFirebase() {
   }
 
   try {
-    let credential;
+    let serviceAccount;
     if (json) {
-      credential = admin.credential.cert(JSON.parse(json));
+      serviceAccount = JSON.parse(json);
     } else {
-      credential = admin.credential.cert(require(path));
+      serviceAccount = require(require('path').resolve(path));
     }
 
-    if (!admin.apps.length) {
-      admin.initializeApp({ credential });
+    if (!getApps().length) {
+      initializeApp({ credential: cert(serviceAccount) });
     }
 
-    _messaging = admin.messaging();
+    _messaging = getMessaging();
     logger.info('Firebase Admin initialised — push notifications enabled');
   } catch (err) {
     logger.error('Firebase init failed — push notifications disabled', { err: err.message });
   }
 }
 
-function getMessaging() {
+function getMessagingInstance() {
   return _messaging;
 }
 
-module.exports = { initFirebase, getMessaging };
+module.exports = { initFirebase, getMessaging: getMessagingInstance };

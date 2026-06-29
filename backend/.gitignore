@@ -3,6 +3,10 @@
 .env.local
 .env.*.local
 
+# Firebase service account key (contains private key — never commit)
+firebase-service-account.json
+firebase-service-account.json.json
+
 # Dependencies
 node_modules/
 
