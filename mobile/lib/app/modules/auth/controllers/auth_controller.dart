@@ -19,8 +19,6 @@ class AuthController extends GetxController {
   final userStudentId = ''.obs;
 
   // ── Auto-login ───────────────────────────────────────────────────────────────
-  // Called from SplashView on startup. Navigates away before the user sees
-  // the login screen if a token is already stored.
 
   Future<void> checkAuth() async {
     final token = await _api.getToken();
@@ -58,7 +56,6 @@ class AuthController extends GetxController {
 
       final data = response.data['data'] as Map<String, dynamic>;
 
-      // mustChangePassword — store limited token and route to change-password
       if (data['mustChangePassword'] == true) {
         await _api.saveToken(data['token'] as String);
         Get.offAllNamed(Routes.changePassword);
@@ -69,9 +66,7 @@ class AuthController extends GetxController {
       await PushNotificationService.instance.init();
       Get.offAllNamed(Routes.dashboard);
     } on DioException catch (e) {
-      errorMessage.value =
-          (e.response?.data?['error']?['message'] as String?) ??
-          'Login failed. Please try again.';
+      errorMessage.value = _loginError(e);
     } catch (_) {
       errorMessage.value = 'Something went wrong. Please try again.';
     } finally {
@@ -82,7 +77,6 @@ class AuthController extends GetxController {
   // ── Change password (forced — limited token already stored) ──────────────────
 
   Future<void> changePassword(String newPassword, String confirm) async {
-    // Client-side validation matching backend rules (min 8, upper, lower, digit)
     if (newPassword != confirm) {
       errorMessage.value = 'Passwords do not match.';
       return;
@@ -101,7 +95,6 @@ class AuthController extends GetxController {
     errorMessage.value = '';
 
     try {
-      // Limited token already in storage — _AuthInterceptor attaches it
       final response = await _api.dio.post('/auth/change-password', data: {
         'newPassword': newPassword,
       });
@@ -111,9 +104,11 @@ class AuthController extends GetxController {
       await PushNotificationService.instance.init();
       Get.offAllNamed(Routes.dashboard);
     } on DioException catch (e) {
-      errorMessage.value =
-          (e.response?.data?['error']?['message'] as String?) ??
-          'Could not change password. Please try again.';
+      errorMessage.value = _networkAwareError(
+        e,
+        serverMessage: e.response?.data?['error']?['message'] as String?,
+        fallback: 'Could not change password. Please try again.',
+      );
     } catch (_) {
       errorMessage.value = 'Something went wrong. Please try again.';
     } finally {
@@ -133,6 +128,45 @@ class AuthController extends GetxController {
     userStudentId.value = '';
     Get.offAllNamed(Routes.login);
   }
+
+  // ── Error helpers ────────────────────────────────────────────────────────────
+
+  static String _loginError(DioException e) {
+    // Network-level errors (no internet, timeout, server unreachable)
+    if (_isNetworkError(e)) return _networkMessage(e);
+
+    final status  = e.response?.statusCode;
+    final message = e.response?.data?['error']?['message'] as String?;
+
+    if (status == 400 || status == 401) return 'Incorrect Student ID or password.';
+    if (status == 403) return 'Your account has been deactivated. Contact your instructor.';
+    if (status == 404) return 'No account found with that Student ID.';
+    if (status == 429) return 'Too many attempts. Please wait a moment and try again.';
+    if (status != null && status >= 500) return 'Server error. Please try again later.';
+    return message ?? 'Login failed. Please try again.';
+  }
+
+  static String _networkAwareError(
+    DioException e, {
+    String? serverMessage,
+    required String fallback,
+  }) {
+    if (_isNetworkError(e)) return _networkMessage(e);
+    final status = e.response?.statusCode;
+    if (status != null && status >= 500) return 'Server error. Please try again later.';
+    return serverMessage ?? fallback;
+  }
+
+  static bool _isNetworkError(DioException e) =>
+      e.type == DioExceptionType.connectionError ||
+      e.type == DioExceptionType.connectionTimeout ||
+      e.type == DioExceptionType.receiveTimeout ||
+      e.type == DioExceptionType.sendTimeout;
+
+  static String _networkMessage(DioException e) =>
+      (e.type == DioExceptionType.connectionError)
+          ? 'No internet connection. Please check your network.'
+          : 'Connection timed out. Please try again.';
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
