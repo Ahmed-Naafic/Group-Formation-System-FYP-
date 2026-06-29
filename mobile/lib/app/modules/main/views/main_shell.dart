@@ -39,40 +39,62 @@ class _MainShellState extends State<MainShell> {
       ),
       bottomNavigationBar: Obx(() {
         final unread = notif.unreadCount.value;
-        return NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: _switchTab,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            const NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
-              label: 'Home',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.groups_outlined),
-              selectedIcon: Icon(Icons.groups_rounded),
-              label: 'Groups',
-            ),
-            NavigationDestination(
-              icon: Badge(
-                isLabelVisible: unread > 0,
-                label: Text(unread > 99 ? '99+' : '$unread'),
-                child: const Icon(Icons.notifications_outlined),
+        return NavigationBarTheme(
+          data: NavigationBarThemeData(
+            backgroundColor: const Color(0xFF1E3A8A),
+            indicatorColor: Colors.white.withAlpha(38),
+            iconTheme: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return const IconThemeData(color: Colors.white);
+              }
+              return const IconThemeData(color: Colors.white54);
+            }),
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                );
+              }
+              return const TextStyle(color: Colors.white54, fontSize: 12);
+            }),
+          ),
+          child: NavigationBar(
+            selectedIndex: _index,
+            onDestinationSelected: _switchTab,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: [
+              const NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'Home',
               ),
-              selectedIcon: Badge(
-                isLabelVisible: unread > 0,
-                label: Text(unread > 99 ? '99+' : '$unread'),
-                child: const Icon(Icons.notifications_rounded),
+              const NavigationDestination(
+                icon: Icon(Icons.groups_outlined),
+                selectedIcon: Icon(Icons.groups_rounded),
+                label: 'Groups',
               ),
-              label: 'Alerts',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded),
-              selectedIcon: Icon(Icons.person_rounded),
-              label: 'Profile',
-            ),
-          ],
+              NavigationDestination(
+                icon: Badge(
+                  isLabelVisible: unread > 0,
+                  label: Text(unread > 99 ? '99+' : '$unread'),
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+                selectedIcon: Badge(
+                  isLabelVisible: unread > 0,
+                  label: Text(unread > 99 ? '99+' : '$unread'),
+                  child: const Icon(Icons.notifications_rounded),
+                ),
+                label: 'Alerts',
+              ),
+              const NavigationDestination(
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
+                label: 'Profile',
+              ),
+            ],
+          ),
         );
       }),
     );
