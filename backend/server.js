@@ -35,6 +35,7 @@ connect();
 
 const { initSocket } = require('./src/sockets');
 const { initFirebase } = require('./src/config/firebase');
+const { startDeadlineReminderJob } = require('./src/jobs/deadlineReminderJob');
 
 initFirebase();
 
@@ -43,6 +44,7 @@ const server = app.listen(PORT, () => {
 });
 
 initSocket(server);
+startDeadlineReminderJob();
 
 // Give the HTTP server a graceful shutdown path too
 process.on('SIGTERM', () => {

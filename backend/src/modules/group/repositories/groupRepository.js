@@ -68,6 +68,12 @@ const groupRepository = {
   countActiveByOffering(courseOfferingId) {
     return Group.countDocuments({ courseOfferingId, status: 'active' });
   },
+
+  // Returns active groups with memberIds populated (userId only) — used by deadline reminder job.
+  findActiveByOffering(courseOfferingId) {
+    return Group.find({ courseOfferingId, status: 'active' }, 'memberIds')
+      .populate({ path: 'memberIds', select: 'userId' });
+  },
 };
 
 module.exports = groupRepository;

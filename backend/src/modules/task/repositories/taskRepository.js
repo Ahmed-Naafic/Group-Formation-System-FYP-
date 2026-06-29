@@ -46,6 +46,27 @@ const taskRepository = {
   softDelete(id, deletedBy) {
     return Task.findById(id).then((t) => t?.softDelete(deletedBy));
   },
+
+  // Returns open tasks whose deadline falls within the next `hours` hours
+  // and haven't had a reminder sent yet.
+  findDueForReminder(hours = 24) {
+    const now  = new Date();
+    const soon = new Date(now.getTime() + hours * 60 * 60 * 1000);
+    return Task.find({
+      status:         'open',
+      deadline:       { $gte: now, $lte: soon },
+      reminderSentAt: null,
+      deletedAt:      null,
+    }).populate({
+      path:     'assignedGroups',
+      select:   'name memberIds',
+      populate: { path: 'memberIds', select: 'userId' },
+    });
+  },
+
+  markReminderSent(id) {
+    return Task.findByIdAndUpdate(id, { reminderSentAt: new Date() });
+  },
 };
 
 module.exports = taskRepository;
