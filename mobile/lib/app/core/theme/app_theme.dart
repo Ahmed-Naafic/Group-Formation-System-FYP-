@@ -8,13 +8,13 @@ extension AppColorsX on BuildContext {
   bool get _dark => Theme.of(this).brightness == Brightness.dark;
 
   // Backgrounds
-  Color get bgColor        => _dark ? const Color(0xFF0D1117) : const Color(0xFFF5F6F9);
-  Color get cardColor      => _dark ? const Color(0xFF161B22) : Colors.white;
-  Color get inputFill      => _dark ? const Color(0xFF161B22) : const Color(0xFFF5F6F9);
-  Color get chatBgColor    => _dark ? const Color(0xFF0D1117) : const Color(0xFFF0F2F5);
-  Color get inputBarBg     => _dark ? const Color(0xFF161B22) : Colors.white;
+  Color get bgColor        => _dark ? const Color(0xFF111827) : const Color(0xFFF5F6F9);
+  Color get cardColor      => _dark ? const Color(0xFF1E2640) : Colors.white;
+  Color get inputFill      => _dark ? const Color(0xFF1A2035) : const Color(0xFFF5F6F9);
+  Color get chatBgColor    => _dark ? const Color(0xFF1A2035) : const Color(0xFFF0F2F5);
+  Color get inputBarBg     => _dark ? const Color(0xFF242B42) : Colors.white;
   Color get unreadBg       => _dark ? const Color(0xFF1A2235) : const Color(0xFFEFF4FF);
-  Color get chatBubbleOther=> _dark ? const Color(0xFF1F2937) : Colors.white;
+  Color get chatBubbleOther=> _dark ? const Color(0xFF2A3350) : Colors.white;
 
   // Text
   Color get textPrimary     => _dark ? const Color(0xFFF0F6FC) : const Color(0xFF0E1320);
@@ -24,8 +24,8 @@ extension AppColorsX on BuildContext {
   Color get textPlaceholder => _dark ? const Color(0xFF3D4455) : const Color(0xFFB0B8CC);
 
   // Borders / dividers
-  Color get dividerColor => _dark ? const Color(0xFF21262D) : const Color(0xFFECEEF2);
-  Color get borderColor  => _dark ? const Color(0xFF30363D) : const Color(0xFFCDD5E0);
+  Color get dividerColor => _dark ? const Color(0xFF2A3350) : const Color(0xFFECEEF2);
+  Color get borderColor  => _dark ? const Color(0xFF354060) : const Color(0xFFCDD5E0);
 
   // Card decoration — shadow in light, border in dark
   BoxDecoration cardDecoration({double radius = 16}) => BoxDecoration(
@@ -85,12 +85,12 @@ class AppTheme {
       seedColor: _primary,
       brightness: Brightness.dark,
     ),
-    scaffoldBackgroundColor: const Color(0xFF0D1117),
+    scaffoldBackgroundColor: const Color(0xFF111827),
     appBarTheme: const AppBarTheme(
       backgroundColor: _primary,
       foregroundColor: Colors.white,
       elevation: 0,
     ),
-    dividerColor: const Color(0xFF21262D),
+    dividerColor: const Color(0xFF2A3350),
   );
 }
