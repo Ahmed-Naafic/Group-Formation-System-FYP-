@@ -17,6 +17,7 @@ class AuthController extends GetxController {
   final userName      = ''.obs;
   final userRole      = ''.obs;
   final userStudentId = ''.obs;
+  final userEmail     = ''.obs;
 
   // ── Auto-login ───────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ class AuthController extends GetxController {
         userName.value      = (saved['fullName']   ?? '') as String;
         userRole.value      = (saved['role']       ?? '') as String;
         userStudentId.value = (saved['studentId']  ?? '') as String;
+        userEmail.value     = (saved['email']      ?? '') as String;
       }
       await PushNotificationService.instance.init();
       Get.offAllNamed(Routes.main);
@@ -126,6 +128,7 @@ class AuthController extends GetxController {
     userName.value      = '';
     userRole.value      = '';
     userStudentId.value = '';
+    userEmail.value     = '';
     Get.offAllNamed(Routes.login);
   }
 
@@ -188,6 +191,7 @@ class AuthController extends GetxController {
       'fullName':  user['fullName']  ?? '',
       'role':      user['role']      ?? '',
       'studentId': user['studentId'] ?? '',
+      'email':     user['email']     ?? '',
     };
     await _api.saveUserData(userData);
 
@@ -195,5 +199,6 @@ class AuthController extends GetxController {
     userName.value      = userData['fullName']!;
     userRole.value      = userData['role']!;
     userStudentId.value = userData['studentId']!;
+    userEmail.value     = userData['email']!;
   }
 }

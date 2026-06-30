@@ -526,6 +526,7 @@ class _ProfileTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = Get.find<AuthController>();
     final tc   = Get.find<ThemeController>();
+    final dash = Get.find<DashboardController>();
 
     return Scaffold(
       appBar: AppBar(
@@ -535,99 +536,203 @@ class _ProfileTab extends StatelessWidget {
         ),
       ),
       body: Obx(() {
-        final name      = auth.userName.value;
-        final studentId = auth.userStudentId.value;
-        final words     = name.trim().split(RegExp(r'\s+'));
-        final initials  = words
-            .take(2)
-            .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
-            .join();
+        final name       = auth.userName.value;
+        final studentId  = auth.userStudentId.value;
+        final email      = auth.userEmail.value;
+        final role       = auth.userRole.value;
+        final workspaces = dash.workspaces;
+
+        final words    = name.trim().split(RegExp(r'\s+'));
+        final initials = words.take(2).map((w) => w.isNotEmpty ? w[0].toUpperCase() : '').join();
+
+        final totalTasks = workspaces.fold<int>(0, (s, w) => s + w.taskSummary.total);
+        final doneTasks  = workspaces.fold<int>(0, (s, w) => s + w.taskSummary.done);
+        final leaderOf   = workspaces.where((w) => w.isLeader(studentId)).length;
+
+        // Derive cohort + semester from the first workspace available
+        final firstWs     = workspaces.isNotEmpty ? workspaces.first : null;
+        final cohortName  = firstWs?.cohortName  ?? '';
+        final semesterName = firstWs?.semesterName ?? '';
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+          padding: const EdgeInsets.fromLTRB(20, 28, 20, 36),
           children: [
-            // Avatar
-            Center(
-              child: Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(22),
+            // ── Avatar + name header ──────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                child: Center(
-                  child: Text(
-                    initials.isNotEmpty ? initials : '?',
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(30),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Text(
+                        initials.isNotEmpty ? initials : '?',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    name.isNotEmpty ? name : 'Student',
                     style: const TextStyle(
-                      fontSize: 30,
+                      fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
                   ),
-                ),
+                  if (studentId.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'ID: $studentId',
+                      style: const TextStyle(
+                          fontSize: 13, color: Color(0xFFB0C4F0)),
+                    ),
+                  ],
+                  if (email.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      email,
+                      style: const TextStyle(
+                          fontSize: 13, color: Color(0xFFB0C4F0)),
+                    ),
+                  ],
+                  if (role.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(30),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        role[0].toUpperCase() + role.substring(1),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            Center(
-              child: Text(
-                name.isNotEmpty ? name : 'Student',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: context.textPrimary,
-                ),
-              ),
-            ),
-            if (studentId.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Center(
-                child: Text(
-                  'Student ID: $studentId',
-                  style: TextStyle(fontSize: 14, color: context.textSecondary),
-                ),
-              ),
-            ],
-            const SizedBox(height: 36),
+            const SizedBox(height: 20),
 
-            // Dark mode
-            Obx(() => Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: context.cardDecoration(),
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    leading: Icon(
-                      tc.isDark.value
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded,
-                      color: const Color(0xFF1E3A8A),
-                    ),
-                    title: Text('Dark Mode',
-                        style: TextStyle(color: context.textPrimary)),
-                    trailing: Switch(
-                      value: tc.isDark.value,
-                      onChanged: (_) => tc.toggle(),
-                      activeThumbColor: Colors.white,
-                      activeTrackColor: const Color(0xFF1E3A8A),
-                    ),
+            // ── Stats row ─────────────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: _ProfileStat(
+                    value: '${workspaces.length}',
+                    label: 'Groups',
+                    icon: Icons.groups_rounded,
                   ),
-                )),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ProfileStat(
+                    value: totalTasks > 0 ? '$doneTasks/$totalTasks' : '—',
+                    label: 'Tasks Done',
+                    icon: Icons.check_circle_outline_rounded,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ProfileStat(
+                    value: '$leaderOf',
+                    label: 'Leader of',
+                    icon: Icons.star_rounded,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
 
-            // Sign out
+            // ── Academic info ─────────────────────────────────────────────
+            if (cohortName.isNotEmpty || semesterName.isNotEmpty) ...[
+              _SectionHeader(title: 'Academic Info'),
+              const SizedBox(height: 10),
+              Container(
+                decoration: context.cardDecoration(radius: 14),
+                child: Column(
+                  children: [
+                    if (cohortName.isNotEmpty)
+                      _InfoRow(
+                        icon: Icons.school_outlined,
+                        label: 'Cohort',
+                        value: cohortName,
+                      ),
+                    if (cohortName.isNotEmpty && semesterName.isNotEmpty)
+                      Divider(height: 1, color: context.borderColor),
+                    if (semesterName.isNotEmpty)
+                      _InfoRow(
+                        icon: Icons.calendar_today_outlined,
+                        label: 'Semester',
+                        value: semesterName,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // ── Settings ──────────────────────────────────────────────────
+            _SectionHeader(title: 'Settings'),
+            const SizedBox(height: 10),
             Container(
-              decoration: context.cardDecoration(),
-              child: ListTile(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                leading:
-                    const Icon(Icons.logout_rounded, color: Color(0xFFE53E3E)),
-                title: Text('Sign Out',
-                    style: TextStyle(color: context.textPrimary)),
-                onTap: () => Get.dialog(_logoutDialog(auth)),
+              decoration: context.cardDecoration(radius: 14),
+              child: Column(
+                children: [
+                  Obx(() => ListTile(
+                        shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(14))),
+                        leading: Icon(
+                          tc.isDark.value
+                              ? Icons.dark_mode_rounded
+                              : Icons.light_mode_rounded,
+                          color: const Color(0xFF1E3A8A),
+                        ),
+                        title: Text('Dark Mode',
+                            style: TextStyle(color: context.textPrimary)),
+                        trailing: Switch(
+                          value: tc.isDark.value,
+                          onChanged: (_) => tc.toggle(),
+                          activeThumbColor: Colors.white,
+                          activeTrackColor: const Color(0xFF1E3A8A),
+                        ),
+                      )),
+                  Divider(height: 1, color: context.borderColor),
+                  ListTile(
+                    shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                            bottom: Radius.circular(14))),
+                    leading: const Icon(Icons.logout_rounded,
+                        color: Color(0xFFE53E3E)),
+                    title: Text('Sign Out',
+                        style: TextStyle(color: context.textPrimary)),
+                    onTap: () => Get.dialog(_logoutDialog(auth)),
+                  ),
+                ],
               ),
             ),
           ],
@@ -660,5 +765,69 @@ class _ProfileTab extends StatelessWidget {
             child: const Text('Sign Out'),
           ),
         ],
+      );
+}
+
+class _ProfileStat extends StatelessWidget {
+  final String value;
+  final String label;
+  final IconData icon;
+  const _ProfileStat({required this.value, required this.label, required this.icon});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: context.cardDecoration(radius: 12),
+        child: Column(
+          children: [
+            Icon(icon, color: const Color(0xFF1E3A8A), size: 22),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: context.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, color: context.textMuted),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _InfoRow({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: const Color(0xFF1E3A8A)),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, color: context.textSecondary),
+            ),
+            const Spacer(),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: context.textPrimary,
+              ),
+            ),
+          ],
+        ),
       );
 }
