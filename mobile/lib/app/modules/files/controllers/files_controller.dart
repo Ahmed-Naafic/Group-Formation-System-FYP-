@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -10,12 +11,15 @@ import '../../../data/models/workspace_model.dart';
 class FilesController extends GetxController {
   final _repo = FileRepository();
 
-  final files      = <FileModel>[].obs;
-  final isLoading  = false.obs;
-  final isUploading = false.obs;
-  final errorMessage = RxnString();
+  final files           = <FileModel>[].obs;
+  final isLoading       = false.obs;
+  final isUploading     = false.obs;
+  final errorMessage    = RxnString();
+  final retryCountdown  = 0.obs;
 
   WorkspaceModel? workspace;
+  Timer? _retryTimer;
+  Timer? _countdownTimer;
 
   @override
   void onInit() {
@@ -32,15 +36,44 @@ class FilesController extends GetxController {
   Future<void> _fetchFiles() async {
     final ws = workspace;
     if (ws == null) return;
-    isLoading.value = true;
+    _cancelRetry();
+    isLoading.value    = true;
     errorMessage.value = null;
+    retryCountdown.value = 0;
     try {
       files.assignAll(await _repo.getFiles(ws.id));
     } catch (e) {
-      errorMessage.value = e.toString();
+      errorMessage.value = 'Could not load files. The server may be waking up.';
+      _scheduleRetry();
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void _scheduleRetry() {
+    const seconds = 5;
+    retryCountdown.value = seconds;
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (retryCountdown.value > 1) {
+        retryCountdown.value--;
+      } else {
+        t.cancel();
+      }
+    });
+    _retryTimer = Timer(const Duration(seconds: seconds), _fetchFiles);
+  }
+
+  void _cancelRetry() {
+    _retryTimer?.cancel();
+    _countdownTimer?.cancel();
+    _retryTimer = _countdownTimer = null;
+    retryCountdown.value = 0;
+  }
+
+  @override
+  void onClose() {
+    _cancelRetry();
+    super.onClose();
   }
 
   @override

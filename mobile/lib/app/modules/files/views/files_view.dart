@@ -50,23 +50,37 @@ class FilesView extends StatelessWidget {
         }
         if (ctrl.errorMessage.value != null) {
           return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: Color(0xFFE53E3E)),
-                const SizedBox(height: 12),
-                Text(ctrl.errorMessage.value!,
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.wifi_off_rounded,
+                      size: 48, color: Color(0xFF9CA3AF)),
+                  const SizedBox(height: 12),
+                  Text(
+                    ctrl.errorMessage.value!,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: context.textSecondary)),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: ctrl.refresh,
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E3A8A),
-                      foregroundColor: Colors.white),
-                  child: const Text('Retry'),
-                ),
-              ],
+                    style: TextStyle(color: context.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  Obx(() => Text(
+                        ctrl.retryCountdown.value > 0
+                            ? 'Retrying in ${ctrl.retryCountdown.value}s…'
+                            : 'Retrying…',
+                        style: TextStyle(fontSize: 12, color: context.textMuted),
+                      )),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: ctrl.refresh,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Retry now'),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E3A8A),
+                        foregroundColor: Colors.white),
+                  ),
+                ],
+              ),
             ),
           );
         }
