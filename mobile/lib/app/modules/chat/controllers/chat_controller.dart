@@ -25,6 +25,10 @@ class ChatController extends GetxController {
   String _myStudentId = '';
   io.Socket? _socket;
   Timer? _typingTimer;
+  bool _disposed = false;
+
+  static const _maxAttempts = 4;
+  static const _delays = [800, 1500, 3000];
 
   bool isMyMessage(ChatMessage msg) =>
       _myStudentId.isNotEmpty && msg.sender.studentId == _myStudentId;
@@ -45,23 +49,35 @@ class ChatController extends GetxController {
     _connectSocket();
   }
 
-  Future<void> _loadHistory() async {
+  Future<void> _loadHistory({int attempt = 0}) async {
     final ws = workspace;
-    if (ws == null) return;
+    if (ws == null || _disposed) return;
     isLoading.value    = true;
     errorMessage.value = '';
     try {
       final msgs = await _repo.getHistory(ws.id);
-      messages.assignAll(msgs);
-      _scrollToBottom();
+      if (!_disposed) {
+        messages.assignAll(msgs);
+        isLoading.value = false;
+        _scrollToBottom();
+      }
     } catch (_) {
-      errorMessage.value = 'Could not load messages. Pull down to retry.';
-    } finally {
-      isLoading.value = false;
+      if (_disposed) return;
+      if (attempt < _maxAttempts - 1) {
+        final delay = _delays[attempt.clamp(0, _delays.length - 1)];
+        await Future.delayed(Duration(milliseconds: delay));
+        if (!_disposed) await _loadHistory(attempt: attempt + 1);
+      } else {
+        errorMessage.value = 'Could not load messages. Pull down to retry.';
+        if (!_disposed) isLoading.value = false;
+      }
     }
   }
 
-  Future<void> retry() => _loadHistory();
+  Future<void> retry() async {
+    _disposed = false;
+    await _loadHistory();
+  }
 
   Future<void> reconnect() async {
     _socket?.dispose();
@@ -221,6 +237,7 @@ class ChatController extends GetxController {
 
   @override
   void onClose() {
+    _disposed = true;
     _typingTimer?.cancel();
     final wsId = workspace?.id;
     if (_socket != null) {

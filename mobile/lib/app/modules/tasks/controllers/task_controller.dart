@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,10 @@ import '../../../data/repositories/task_repository.dart';
 class TaskController extends GetxController {
   final _repo     = TaskRepository();
   final _fileRepo = FileRepository();
+
+  static const _maxAttempts = 4;
+  static const _delays = [800, 1500, 3000];
+  bool _disposed = false;
 
   // ── List state ───────────────────────────────────────────────────────────────
   final isLoading    = true.obs;
@@ -46,23 +51,31 @@ class TaskController extends GetxController {
 
   @override
   void onClose() {
+    _disposed = true;
     notesCtrl.dispose();
     super.onClose();
   }
 
-  Future<void> fetchTasks() async {
+  Future<void> fetchTasks({int attempt = 0}) async {
+    if (_disposed) return;
     isLoading.value    = true;
     errorMessage.value = '';
     try {
       tasks.value = await _repo.getTasksForOffering(workspace.courseOfferingId);
-    } on DioException catch (e) {
-      errorMessage.value =
-          (e.response?.data?['error']?['message'] as String?) ??
-          'Could not load tasks.';
-    } catch (_) {
-      errorMessage.value = 'Something went wrong. Please try again.';
-    } finally {
-      isLoading.value = false;
+      if (!_disposed) isLoading.value = false;
+    } catch (e) {
+      if (_disposed) return;
+      if (attempt < _maxAttempts - 1) {
+        final delay = _delays[attempt.clamp(0, _delays.length - 1)];
+        await Future.delayed(Duration(milliseconds: delay));
+        if (!_disposed) await fetchTasks(attempt: attempt + 1);
+      } else {
+        final msg = e is DioException
+            ? (e.response?.data?['error']?['message'] as String?) ?? 'Could not load tasks.'
+            : 'Something went wrong. Please try again.';
+        errorMessage.value = msg;
+        if (!_disposed) isLoading.value = false;
+      }
     }
   }
 
