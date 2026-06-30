@@ -21,7 +21,13 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _index = 0;
 
-  void _switchTab(int i) => setState(() => _index = i);
+  void _switchTab(int i) {
+    setState(() => _index = i);
+    // Re-fetch if alerts tab is opened and notifications are still empty
+    if (i == 2) {
+      Get.find<NotificationController>().ensureLoaded();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

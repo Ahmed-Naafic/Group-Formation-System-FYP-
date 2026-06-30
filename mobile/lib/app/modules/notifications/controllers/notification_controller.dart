@@ -13,14 +13,24 @@ class NotificationController extends GetxController {
   final isLoading     = false.obs;
 
   io.Socket? _socket;
-  bool _connected = false;
+  bool _connected    = false;
+  bool _disposed     = false;
+
+  static const _maxAttempts = 4;
+  static const _delays      = [800, 1500, 3000];
 
   // Called from DashboardController after login to start real-time updates.
   Future<void> connect() async {
     if (_connected) return;
-    await _fetchAll();
+    final fetched = await _fetchAllWithRetry();
     await _openSocket();
-    _connected = true;
+    if (fetched) _connected = true;
+  }
+
+  // Called when returning to the alerts tab — re-fetch if not yet loaded.
+  Future<void> ensureLoaded() async {
+    if (notifications.isNotEmpty || isLoading.value) return;
+    await _fetchAllWithRetry();
   }
 
   // Called from AuthController.logout().
@@ -33,20 +43,35 @@ class NotificationController extends GetxController {
     unreadCount.value = 0;
   }
 
-  Future<void> _fetchAll() async {
+  // Returns true if fetch ultimately succeeded.
+  Future<bool> _fetchAllWithRetry({int attempt = 0}) async {
+    if (_disposed) return false;
     isLoading.value = true;
     try {
       final result = await _repo.getAll(limit: 50);
-      notifications.assignAll(result['notifications'] as List<NotificationModel>);
-      unreadCount.value = result['unreadCount'] as int;
-    } catch (_) {}
-    finally {
-      isLoading.value = false;
+      if (!_disposed) {
+        notifications.assignAll(result['notifications'] as List<NotificationModel>);
+        unreadCount.value = result['unreadCount'] as int;
+        isLoading.value   = false;
+      }
+      return true;
+    } catch (_) {
+      if (_disposed) return false;
+      if (attempt < _maxAttempts - 1) {
+        final delay = _delays[attempt.clamp(0, _delays.length - 1)];
+        await Future.delayed(Duration(milliseconds: delay));
+        return _fetchAllWithRetry(attempt: attempt + 1);
+      }
+      if (!_disposed) isLoading.value = false;
+      return false;
     }
   }
 
   @override
-  Future<void> refresh() => _fetchAll();
+  Future<void> refresh() async {
+    _disposed = false;
+    await _fetchAllWithRetry();
+  }
 
   Future<void> markRead(String id) async {
     try {
@@ -71,7 +96,7 @@ class NotificationController extends GetxController {
 
   Future<void> _openSocket() async {
     final token = await ApiClient().getToken();
-    if (token == null) return;
+    if (token == null || _disposed) return;
 
     _socket = io.io(
       kServerUrl,
@@ -84,6 +109,11 @@ class NotificationController extends GetxController {
           .setReconnectionDelay(3000)
           .build(),
     );
+
+    _socket!.onReconnect((_) {
+      // Re-fetch notifications after socket reconnects so nothing is missed.
+      _fetchAllWithRetry();
+    });
 
     _socket!.on('notification', (data) {
       try {
@@ -104,5 +134,12 @@ class NotificationController extends GetxController {
         unreadCount.value++;
       } catch (_) {}
     });
+  }
+
+  @override
+  void onClose() {
+    _disposed = true;
+    disconnect();
+    super.onClose();
   }
 }
