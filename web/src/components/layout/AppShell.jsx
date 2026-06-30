@@ -18,20 +18,20 @@ export default function AppShell() {
     ?? 'Dashboard';
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen w-full overflow-x-hidden bg-background">
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
 
       {/* Main content — offset by sidebar width on desktop */}
-      <div className="flex flex-1 flex-col lg:pl-60">
+      <div className="flex flex-1 min-w-0 flex-col lg:pl-60">
         <Topbar
           title={title}
           onMenuClick={() => setSidebarOpen(true)}
         />
 
-        <main className="flex-1 p-6 bg-ink-50">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 bg-ink-50 overflow-x-hidden">
           <Outlet />
         </main>
       </div>
