@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -37,9 +38,13 @@ class TaskController extends GetxController {
   final notesCtrl               = TextEditingController();
 
   // ── Workspace files for submission attachment ────────────────────────────────
-  final workspaceFiles   = <FileModel>[].obs;
-  final isLoadingFiles   = false.obs;
-  final selectedFileIds  = <String>[].obs;
+  final workspaceFiles    = <FileModel>[].obs;
+  final isLoadingFiles    = false.obs;
+  final selectedFileIds   = <String>[].obs;
+  final isUploadingFile   = false.obs;
+  final pickedFileName    = RxnString(); // name of picked device file
+  String? _pickedFilePath;
+  String? _pickedFileMime;
 
   @override
   void onInit() {
@@ -79,15 +84,61 @@ class TaskController extends GetxController {
     }
   }
 
-  Future<void> _loadWorkspaceFiles() async {
+  Future<void> _loadWorkspaceFiles({int attempt = 0}) async {
+    if (_disposed) return;
     isLoadingFiles.value = true;
     try {
       workspaceFiles.assignAll(await _fileRepo.getFiles(workspace.id));
+      if (!_disposed) isLoadingFiles.value = false;
     } catch (_) {
-      // Non-critical — submission can still be text-only
-    } finally {
-      isLoadingFiles.value = false;
+      if (_disposed) return;
+      if (attempt < _maxAttempts - 1) {
+        final delay = _delays[attempt.clamp(0, _delays.length - 1)];
+        await Future.delayed(Duration(milliseconds: delay));
+        if (!_disposed) await _loadWorkspaceFiles(attempt: attempt + 1);
+      } else {
+        if (!_disposed) isLoadingFiles.value = false;
+      }
     }
+  }
+
+  Future<void> pickFileForSubmission() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: false,
+      withReadStream: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final pf = result.files.single;
+    _pickedFilePath = pf.path;
+    _pickedFileMime = _guessMime(pf.name);
+    pickedFileName.value = pf.name;
+  }
+
+  void clearPickedFile() {
+    _pickedFilePath = null;
+    _pickedFileMime = null;
+    pickedFileName.value = null;
+  }
+
+  static String _guessMime(String name) {
+    final ext = name.split('.').last.toLowerCase();
+    const map = {
+      'pdf':  'application/pdf',
+      'doc':  'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls':  'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt':  'application/vnd.ms-powerpoint',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'png':  'image/png',
+      'jpg':  'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'gif':  'image/gif',
+      'zip':  'application/zip',
+      'txt':  'text/plain',
+    };
+    return map[ext] ?? 'application/octet-stream';
   }
 
   void toggleFile(String fileId) {
@@ -158,6 +209,28 @@ class TaskController extends GetxController {
     }
   }
 
+  Future<List<String>> _resolveFileIds() async {
+    final ids = List<String>.from(selectedFileIds);
+    final path = _pickedFilePath;
+    final name = pickedFileName.value;
+    final mime = _pickedFileMime;
+    if (path != null && name != null) {
+      isUploadingFile.value = true;
+      try {
+        final uploaded = await _fileRepo.uploadFile(
+          workspace.id, name, mime ?? 'application/octet-stream',
+          filePath: path,
+        );
+        workspaceFiles.insert(0, uploaded);
+        ids.add(uploaded.id);
+        clearPickedFile();
+      } finally {
+        isUploadingFile.value = false;
+      }
+    }
+    return ids;
+  }
+
   Future<void> submit() async {
     final task = currentTask.value;
     if (task == null) return;
@@ -167,8 +240,8 @@ class TaskController extends GetxController {
     submitSuccess.value = false;
 
     try {
-      final sub = await _repo.submit(
-          task.id, notesCtrl.text.trim(), List.from(selectedFileIds));
+      final ids = await _resolveFileIds();
+      final sub = await _repo.submit(task.id, notesCtrl.text.trim(), ids);
       currentSubmission.value = sub;
       submitSuccess.value     = true;
       fetchTasks();
@@ -192,8 +265,8 @@ class TaskController extends GetxController {
     submitSuccess.value = false;
 
     try {
-      final sub = await _repo.saveDraft(
-          task.id, notesCtrl.text.trim(), List.from(selectedFileIds));
+      final ids = await _resolveFileIds();
+      final sub = await _repo.saveDraft(task.id, notesCtrl.text.trim(), ids);
       currentSubmission.value = sub;
     } on DioException catch (e) {
       submitError.value =

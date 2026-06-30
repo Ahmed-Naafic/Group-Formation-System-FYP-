@@ -483,7 +483,65 @@ class _SubmissionForm extends StatelessWidget {
             ),
           ),
 
-          // Workspace file selection
+          // ── Attach a file from device ──────────────────────────────────
+          const SizedBox(height: 16),
+          Divider(height: 1, color: context.dividerColor),
+          const SizedBox(height: 14),
+          Text(
+            'ATTACH FILE',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: context.textMuted,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Obx(() {
+            final name = controller.pickedFileName.value;
+            final uploading = controller.isUploadingFile.value;
+            if (name != null) {
+              return Row(
+                children: [
+                  const Icon(Icons.attach_file_rounded,
+                      size: 18, color: Color(0xFF1E3A8A)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: context.textPrimary,
+                          fontWeight: FontWeight.w500),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (!uploading)
+                    GestureDetector(
+                      onTap: controller.clearPickedFile,
+                      child: const Icon(Icons.close_rounded,
+                          size: 18, color: Color(0xFFE53E3E)),
+                    ),
+                ],
+              );
+            }
+            return OutlinedButton.icon(
+              onPressed: controller.pickFileForSubmission,
+              icon: const Icon(Icons.upload_file_outlined, size: 18),
+              label: const Text('Pick a file from device'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF1E3A8A),
+                side: const BorderSide(color: Color(0xFF1E3A8A)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+              ),
+            );
+          }),
+
+          // ── Workspace file selection ───────────────────────────────────
           Obx(() {
             if (controller.isLoadingFiles.value) {
               return Padding(
@@ -512,7 +570,7 @@ class _SubmissionForm extends StatelessWidget {
                 Divider(height: 1, color: context.dividerColor),
                 const SizedBox(height: 14),
                 Text(
-                  'ATTACH WORKSPACE FILES',
+                  'OR ATTACH WORKSPACE FILES',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,

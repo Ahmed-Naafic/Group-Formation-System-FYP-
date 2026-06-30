@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../models/file_model.dart';
@@ -49,10 +50,14 @@ class FileRepository {
   }
 
   Future<String> downloadFile(String workspaceId, String fileId, String savePath) async {
-    await _client.dio.download(
+    final response = await _client.dio.get(
       '/workspaces/$workspaceId/files/$fileId/download',
-      savePath,
+      options: Options(
+        responseType: ResponseType.bytes,
+        receiveTimeout: const Duration(minutes: 2),
+      ),
     );
+    await File(savePath).writeAsBytes(response.data as List<int>);
     return savePath;
   }
 }
