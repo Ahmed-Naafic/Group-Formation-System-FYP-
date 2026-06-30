@@ -75,7 +75,7 @@ class ChatController extends GetxController {
     _socket = io.io(
       kServerUrl,
       io.OptionBuilder()
-          .setTransports(['websocket'])
+          .setTransports(['polling', 'websocket'])
           .setAuth({'token': token})
           .enableAutoConnect()
           .enableForceNew()
