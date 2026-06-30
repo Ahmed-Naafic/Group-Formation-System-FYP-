@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import '../../../data/models/workspace_model.dart';
@@ -11,10 +10,10 @@ class DashboardController extends GetxController {
   final isLoading    = true.obs;
   final errorMessage = ''.obs;
   final workspaces   = <WorkspaceModel>[].obs;
-  final retryCountdown = 0.obs;
 
-  Timer? _retryTimer;
-  Timer? _countdownTimer;
+  static const _maxAttempts = 4;
+  static const _delays = [800, 1500, 3000];
+  bool _disposed = false;
 
   @override
   void onInit() {
@@ -23,49 +22,32 @@ class DashboardController extends GetxController {
     Get.find<NotificationController>().connect();
   }
 
-  Future<void> fetchWorkspaces() async {
-    _cancelRetry();
-    isLoading.value      = true;
-    errorMessage.value   = '';
-    retryCountdown.value = 0;
+  Future<void> fetchWorkspaces({int attempt = 0}) async {
+    if (_disposed) return;
+    isLoading.value    = true;
+    errorMessage.value = '';
     try {
       workspaces.value = await _repo.getMyWorkspaces();
-    } on DioException catch (e) {
-      errorMessage.value =
-          (e.response?.data?['error']?['message'] as String?) ??
-          'Could not load workspaces.';
-      _scheduleRetry();
-    } catch (_) {
-      errorMessage.value = 'Something went wrong. Please try again.';
-      _scheduleRetry();
-    } finally {
-      isLoading.value = false;
-    }
-  }
-
-  void _scheduleRetry() {
-    const seconds = 5;
-    retryCountdown.value = seconds;
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (retryCountdown.value > 1) {
-        retryCountdown.value--;
+      if (!_disposed) isLoading.value = false;
+    } catch (e) {
+      if (_disposed) return;
+      if (attempt < _maxAttempts - 1) {
+        final delay = _delays[attempt.clamp(0, _delays.length - 1)];
+        await Future.delayed(Duration(milliseconds: delay));
+        if (!_disposed) await fetchWorkspaces(attempt: attempt + 1);
       } else {
-        t.cancel();
+        final msg = e is DioException
+            ? (e.response?.data?['error']?['message'] as String?) ?? 'Could not load workspaces.'
+            : 'Something went wrong. Please try again.';
+        errorMessage.value = msg;
+        if (!_disposed) isLoading.value = false;
       }
-    });
-    _retryTimer = Timer(const Duration(seconds: seconds), fetchWorkspaces);
-  }
-
-  void _cancelRetry() {
-    _retryTimer?.cancel();
-    _countdownTimer?.cancel();
-    _retryTimer = _countdownTimer = null;
-    retryCountdown.value = 0;
+    }
   }
 
   @override
   void onClose() {
-    _cancelRetry();
+    _disposed = true;
     super.onClose();
   }
 }
