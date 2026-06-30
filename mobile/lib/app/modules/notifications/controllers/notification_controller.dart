@@ -76,7 +76,7 @@ class NotificationController extends GetxController {
     _socket = io.io(
       kServerUrl,
       io.OptionBuilder()
-          .setTransports(['polling', 'websocket'])
+          .setTransports(['websocket'])
           .setAuth({'token': token})
           .enableAutoConnect()
           .build(),
