@@ -3,8 +3,6 @@ import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../data/models/notification_model.dart';
-import '../../../data/models/workspace_model.dart';
-import '../../../routes/app_pages.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../dashboard/controllers/dashboard_controller.dart';
 import '../../dashboard/views/dashboard_view.dart';
@@ -192,28 +190,30 @@ class _HomeTab extends StatelessWidget {
                   onAction: onAlertsTap,
                 ),
                 const SizedBox(height: 10),
-                ...notif.notifications.take(3).map((n) => _RecentAlertTile(
+                ...notif.notifications.take(5).map((n) => _RecentAlertTile(
                       n: n,
                       onTap: () {
                         notif.markRead(n.id);
                         onAlertsTap();
                       },
                     )),
-                const SizedBox(height: 20),
-              ],
-
-              // My groups quick links
-              if (workspaces.isNotEmpty) ...[
-                _SectionHeader(
-                  title: 'My Groups',
-                  actionLabel: workspaces.length > 3 ? 'See all' : null,
-                  onAction: workspaces.length > 3 ? onGroupsTap : null,
+              ] else ...[
+                const SizedBox(height: 32),
+                Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.notifications_none_rounded,
+                          size: 48, color: Colors.white.withAlpha(80)),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No notifications yet',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withAlpha(160)),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 10),
-                ...workspaces.take(3).map((w) => _QuickGroupTile(
-                      workspace: w,
-                      myStudentId: auth.userStudentId.value,
-                    )),
               ],
             ],
           ),
@@ -406,68 +406,6 @@ class _RecentAlertTile extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                 ),
-            ],
-          ),
-        ),
-      );
-}
-
-class _QuickGroupTile extends StatelessWidget {
-  final WorkspaceModel workspace;
-  final String myStudentId;
-
-  const _QuickGroupTile({required this.workspace, required this.myStudentId});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: () => Get.toNamed(Routes.workspace, arguments: workspace),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(14),
-          decoration: context.cardDecoration(radius: 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E3A8A).withAlpha(15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  workspace.courseCode,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E3A8A),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      workspace.groupName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: context.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      workspace.courseName,
-                      style: TextStyle(fontSize: 12, color: context.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              if (workspace.isLeader(myStudentId)) ...[
-                const Icon(Icons.star_rounded, size: 16, color: Color(0xFF856404)),
-                const SizedBox(width: 4),
-              ],
-              Icon(Icons.chevron_right_rounded,
-                  color: context.textPlaceholder, size: 20),
             ],
           ),
         ),

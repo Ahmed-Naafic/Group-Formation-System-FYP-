@@ -15,12 +15,12 @@ class ChatController extends GetxController {
   final messages          = <ChatMessage>[].obs;
   final isLoading         = true.obs;
   final errorMessage      = ''.obs;
+  final isConnecting      = true.obs;
   final isSocketConnected = false.obs;
-  final typingUsers       = <String>[].obs; // names of peers currently typing
+  final typingUsers       = <String>[].obs;
   final textCtrl          = TextEditingController();
   final scrollCtrl        = ScrollController();
 
-  // Nullable: Get.arguments is null on browser refresh / direct URL navigation.
   WorkspaceModel? workspace;
   String _myStudentId = '';
   io.Socket? _socket;
@@ -34,10 +34,9 @@ class ChatController extends GetxController {
     super.onInit();
     final args = Get.arguments;
     if (args is! WorkspaceModel) {
-      // Reached /chat without a workspace argument (e.g. browser refresh).
-      // Show an error state; the view will offer a back button.
       errorMessage.value = 'No workspace selected. Please open a group first.';
-      isLoading.value = false;
+      isLoading.value    = false;
+      isConnecting.value = false;
       return;
     }
     workspace    = args;
@@ -64,15 +63,23 @@ class ChatController extends GetxController {
 
   Future<void> retry() => _loadHistory();
 
+  Future<void> reconnect() async {
+    _socket?.dispose();
+    _socket = null;
+    isSocketConnected.value = false;
+    isConnecting.value      = true;
+    errorMessage.value      = '';
+    await _connectSocket();
+  }
+
   Future<void> _connectSocket() async {
     final ws    = workspace;
     final token = await ApiClient().getToken();
-    if (ws == null || token == null) return;
+    if (ws == null || token == null) {
+      isConnecting.value = false;
+      return;
+    }
 
-    // forceNew: true creates a fresh Manager each time, preventing connection
-    // reuse across different workspace chat sessions. Without this, the cached
-    // Manager's socket is already "connected" on second open, so onConnect never
-    // fires and join-workspace is never emitted — making send silently fail.
     _socket = io.io(
       kServerUrl,
       io.OptionBuilder()
@@ -80,12 +87,17 @@ class ChatController extends GetxController {
           .setAuth({'token': token})
           .enableAutoConnect()
           .enableForceNew()
+          .enableReconnection()
+          .setReconnectionAttempts(5)
+          .setReconnectionDelay(2000)
           .build(),
     );
 
     void joinWorkspace() {
       _socket!.emit('join-workspace', {'workspaceId': ws.id});
       isSocketConnected.value = true;
+      isConnecting.value      = false;
+      errorMessage.value      = '';
     }
 
     if (_socket!.connected) {
@@ -94,19 +106,29 @@ class ChatController extends GetxController {
       _socket!.onConnect((_) => joinWorkspace());
     }
 
-    _socket!.onConnectError((err) {
+    _socket!.onConnectError((_) {
       isSocketConnected.value = false;
-      errorMessage.value = 'Chat connection failed. Pull down to retry.';
+      isConnecting.value      = false;
     });
 
     _socket!.onDisconnect((_) {
       isSocketConnected.value = false;
+      isConnecting.value      = true; // reconnecting...
+    });
+
+    _socket!.onReconnect((_) {
+      // Re-join the workspace room after reconnect
+      _socket!.emit('join-workspace', {'workspaceId': ws.id});
+      isSocketConnected.value = true;
+      isConnecting.value      = false;
+    });
+
+    _socket!.onReconnectFailed((_) {
+      isConnecting.value = false;
     });
 
     _socket!.on('new-message', (data) {
       try {
-        // On Flutter Web the event payload may arrive as Map<dynamic, dynamic>
-        // rather than Map<String, dynamic> — cast explicitly to handle both.
         final Map<String, dynamic> raw;
         if (data is Map<String, dynamic>) {
           raw = data;
@@ -122,7 +144,6 @@ class ChatController extends GetxController {
               ? msgJson
               : Map<String, dynamic>.from(msgJson),
         );
-        // Avoid duplicates (sender sees their own message broadcast back).
         if (msg.id.isNotEmpty && !messages.any((m) => m.id == msg.id)) {
           messages.add(msg);
           _scrollToBottom();
@@ -151,7 +172,6 @@ class ChatController extends GetxController {
     });
 
     _socket!.on('error', (data) {
-      // Surface server-side errors (e.g. workspace access denied) to the user.
       final err = data is Map ? (data['message'] ?? 'Socket error') : 'Socket error';
       errorMessage.value = err.toString();
     });
@@ -159,11 +179,8 @@ class ChatController extends GetxController {
 
   void onTextChanged(String text) {
     final ws = workspace;
-    if (ws == null || _socket == null) return;
-    if (text.trim().isEmpty) {
-      _stopTyping();
-      return;
-    }
+    if (ws == null || _socket == null || !isSocketConnected.value) return;
+    if (text.trim().isEmpty) { _stopTyping(); return; }
     _socket!.emit('typing', {'workspaceId': ws.id});
     _typingTimer?.cancel();
     _typingTimer = Timer(const Duration(seconds: 2), _stopTyping);
@@ -181,10 +198,7 @@ class ChatController extends GetxController {
     final ws   = workspace;
     final text = textCtrl.text.trim();
     if (text.isEmpty || ws == null) return;
-    if (_socket == null || !_socket!.connected) {
-      errorMessage.value = 'Not connected to chat. Please wait or pull down to retry.';
-      return;
-    }
+    if (!isSocketConnected.value) return; // silently wait — UI shows connecting state
     _stopTyping();
     textCtrl.clear();
     _socket!.emit('send-message', {

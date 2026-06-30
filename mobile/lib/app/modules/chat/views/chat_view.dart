@@ -35,6 +35,55 @@ class ChatView extends StatelessWidget {
       ),
       body: Column(
         children: [
+          // ── Connection status banner ───────────────────────────────────────
+          Obx(() {
+            if (ctrl.isConnecting.value) {
+              return Container(
+                width: double.infinity,
+                color: const Color(0xFF1E3A8A).withAlpha(20),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 12, height: 12,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Color(0xFF1E3A8A)),
+                    ),
+                    SizedBox(width: 8),
+                    Text('Connecting to chat…',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF1E3A8A))),
+                  ],
+                ),
+              );
+            }
+            if (!ctrl.isSocketConnected.value && !ctrl.isConnecting.value && ctrl.workspace != null) {
+              return Container(
+                width: double.infinity,
+                color: const Color(0xFFE53E3E).withAlpha(20),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Chat disconnected',
+                        style: TextStyle(fontSize: 12, color: Color(0xFFE53E3E))),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: ctrl.reconnect,
+                      child: const Text('Reconnect',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF1E3A8A),
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.underline)),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          }),
+
           // ── Message list ───────────────────────────────────────────────────
           Expanded(
             child: Obx(() {
@@ -64,7 +113,7 @@ class ChatView extends StatelessWidget {
                         const SizedBox(height: 20),
                         ElevatedButton(
                           onPressed: noWorkspace
-                              ? () => Get.offAllNamed(Routes.dashboard)
+                              ? () => Get.offAllNamed(Routes.main)
                               : ctrl.retry,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF1E3A8A),

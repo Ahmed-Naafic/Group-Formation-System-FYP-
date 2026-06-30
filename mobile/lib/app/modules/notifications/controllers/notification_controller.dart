@@ -79,6 +79,9 @@ class NotificationController extends GetxController {
           .setTransports(['websocket'])
           .setAuth({'token': token})
           .enableAutoConnect()
+          .enableReconnection()
+          .setReconnectionAttempts(10)
+          .setReconnectionDelay(3000)
           .build(),
     );
 
