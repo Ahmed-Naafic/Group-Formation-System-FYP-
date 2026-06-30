@@ -64,8 +64,9 @@ class DashboardView extends GetView<DashboardController> {
 
         if (controller.errorMessage.isNotEmpty) {
           return _ErrorState(
-            message: controller.errorMessage.value,
-            onRetry: controller.fetchWorkspaces,
+            message:   controller.errorMessage.value,
+            onRetry:   controller.fetchWorkspaces,
+            countdown: controller.retryCountdown,
           );
         }
 
@@ -381,8 +382,13 @@ class _EmptyState extends StatelessWidget {
 class _ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
+  final RxInt countdown;
 
-  const _ErrorState({required this.message, required this.onRetry});
+  const _ErrorState({
+    required this.message,
+    required this.onRetry,
+    required this.countdown,
+  });
 
   @override
   Widget build(BuildContext context) => Center(
@@ -398,11 +404,18 @@ class _ErrorState extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: context.textSecondary),
               ),
+              const SizedBox(height: 12),
+              Obx(() => Text(
+                    countdown.value > 0
+                        ? 'Retrying in ${countdown.value}s…'
+                        : 'Retrying…',
+                    style: TextStyle(fontSize: 12, color: context.textMuted),
+                  )),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Retry'),
+                label: const Text('Retry now'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1E3A8A),
                   foregroundColor: Colors.white,

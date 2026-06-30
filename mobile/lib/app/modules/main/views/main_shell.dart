@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../data/models/notification_model.dart';
+import '../../../data/models/workspace_model.dart';
+import '../../../routes/app_pages.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../dashboard/controllers/dashboard_controller.dart';
 import '../../dashboard/views/dashboard_view.dart';
@@ -182,6 +184,28 @@ class _HomeTab extends StatelessWidget {
               ),
               const SizedBox(height: 28),
 
+              // Tasks due soon
+              () {
+                final dueSoon = workspaces
+                    .where((w) => w.taskSummary.dueSoon > 0)
+                    .toList();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionHeader(title: 'Tasks Due Soon'),
+                    const SizedBox(height: 10),
+                    if (dueSoon.isEmpty)
+                      _EmptyHint(
+                        icon: Icons.check_circle_outline_rounded,
+                        text: 'No upcoming deadlines',
+                      )
+                    else
+                      ...dueSoon.map((w) => _DueSoonTile(workspace: w)),
+                    const SizedBox(height: 28),
+                  ],
+                );
+              }(),
+
               // Recent alerts
               if (notif.notifications.isNotEmpty) ...[
                 _SectionHeader(
@@ -198,21 +222,9 @@ class _HomeTab extends StatelessWidget {
                       },
                     )),
               ] else ...[
-                const SizedBox(height: 32),
-                Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.notifications_none_rounded,
-                          size: 48, color: Colors.white.withAlpha(80)),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No notifications yet',
-                        style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white.withAlpha(160)),
-                      ),
-                    ],
-                  ),
+                _EmptyHint(
+                  icon: Icons.notifications_none_rounded,
+                  text: 'No notifications yet',
                 ),
               ],
             ],
@@ -410,6 +422,99 @@ class _RecentAlertTile extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _EmptyHint extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _EmptyHint({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: context.textPlaceholder),
+            const SizedBox(width: 8),
+            Text(
+              text,
+              style: TextStyle(fontSize: 13, color: context.textMuted),
+            ),
+          ],
+        ),
+      );
+}
+
+class _DueSoonTile extends StatelessWidget {
+  final WorkspaceModel workspace;
+  const _DueSoonTile({required this.workspace});
+
+  @override
+  Widget build(BuildContext context) {
+    final count = workspace.taskSummary.dueSoon;
+    return GestureDetector(
+      onTap: () => Get.toNamed(Routes.tasks, arguments: workspace),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: context.cardDecoration(radius: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFB45309).withAlpha(18),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.timer_outlined,
+                  color: Color(0xFFB45309), size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    workspace.groupName,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    workspace.courseCode,
+                    style: TextStyle(fontSize: 12, color: context.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFB45309).withAlpha(18),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '$count due',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFB45309),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded,
+                color: context.textPlaceholder, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Profile Tab ───────────────────────────────────────────────────────────────
