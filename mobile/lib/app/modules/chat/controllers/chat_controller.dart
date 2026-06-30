@@ -12,12 +12,13 @@ import '../../auth/controllers/auth_controller.dart';
 class ChatController extends GetxController {
   final _repo = ChatRepository();
 
-  final messages     = <ChatMessage>[].obs;
-  final isLoading    = true.obs;
-  final errorMessage = ''.obs;
-  final typingUsers  = <String>[].obs; // names of peers currently typing
-  final textCtrl     = TextEditingController();
-  final scrollCtrl   = ScrollController();
+  final messages          = <ChatMessage>[].obs;
+  final isLoading         = true.obs;
+  final errorMessage      = ''.obs;
+  final isSocketConnected = false.obs;
+  final typingUsers       = <String>[].obs; // names of peers currently typing
+  final textCtrl          = TextEditingController();
+  final scrollCtrl        = ScrollController();
 
   // Nullable: Get.arguments is null on browser refresh / direct URL navigation.
   WorkspaceModel? workspace;
@@ -82,16 +83,25 @@ class ChatController extends GetxController {
           .build(),
     );
 
-    void joinWorkspace() =>
-        _socket!.emit('join-workspace', {'workspaceId': ws.id});
+    void joinWorkspace() {
+      _socket!.emit('join-workspace', {'workspaceId': ws.id});
+      isSocketConnected.value = true;
+    }
 
-    // Belt-and-suspenders: emit join immediately if already connected (edge case),
-    // otherwise wait for onConnect.
     if (_socket!.connected) {
       joinWorkspace();
     } else {
       _socket!.onConnect((_) => joinWorkspace());
     }
+
+    _socket!.onConnectError((err) {
+      isSocketConnected.value = false;
+      errorMessage.value = 'Chat connection failed. Pull down to retry.';
+    });
+
+    _socket!.onDisconnect((_) {
+      isSocketConnected.value = false;
+    });
 
     _socket!.on('new-message', (data) {
       try {
@@ -170,7 +180,11 @@ class ChatController extends GetxController {
   void sendMessage() {
     final ws   = workspace;
     final text = textCtrl.text.trim();
-    if (text.isEmpty || _socket == null || ws == null) return;
+    if (text.isEmpty || ws == null) return;
+    if (_socket == null || !_socket!.connected) {
+      errorMessage.value = 'Not connected to chat. Please wait or pull down to retry.';
+      return;
+    }
     _stopTyping();
     textCtrl.clear();
     _socket!.emit('send-message', {
