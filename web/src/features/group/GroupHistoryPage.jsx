@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Loader2, Crown, ChevronRight, ChevronDown, History } from 'lucide-react';
+import { Loader2, Crown, ChevronRight, ChevronDown, History, Eye, EyeOff } from 'lucide-react';
 import { useGetGroupHistoryQuery } from './groupHistoryApi';
 import { useGetCohortByIdQuery } from '@/features/cohort/cohortApi';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 
 const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
 
@@ -16,6 +17,7 @@ function formatDate(iso) {
 
 function MemberList({ members, leaderId }) {
   const leaderStr = String(leaderId?._id ?? leaderId ?? '');
+  const { showCategory } = useCategoryVisibility();
   return (
     <div className="divide-y divide-border">
       {members.map((m) => {
@@ -29,12 +31,14 @@ function MemberList({ members, leaderId }) {
             <span className="font-mono text-xs text-ink-400 shrink-0">
               {m.userId?.studentId ?? '—'}
             </span>
-            <Badge
-              variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}
-              className="text-[10px] px-1.5 py-0 h-4 shrink-0"
-            >
-              {m.performanceCategory ?? 'UNG'}
-            </Badge>
+            {showCategory && (
+              <Badge
+                variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}
+                className="text-[10px] px-1.5 py-0 h-4 shrink-0"
+              >
+                {m.performanceCategory ?? 'UNG'}
+              </Badge>
+            )}
           </div>
         );
       })}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Loader2, Crown, Trash2, ArrowLeft, UserPlus, ExternalLink } from 'lucide-react';
+import { Loader2, Crown, Trash2, ArrowLeft, UserPlus, ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 import { toast } from 'sonner';
 import { useGetGroupByIdQuery, useGetGroupsQuery, useUpdateGroupMutation } from './groupApi';
 import { useGetWorkspaceByGroupIdQuery } from '@/features/workspace/workspaceApi';
@@ -20,6 +21,7 @@ const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive
 export default function GroupDetailPage() {
   const { id }   = useParams();
   const location = useLocation();
+  const { showCategory, toggleCategory } = useCategoryVisibility();
 
   const { data: group, isLoading, error } = useGetGroupByIdQuery(id);
   const [updateGroup, { isLoading: updating }] = useUpdateGroupMutation();
@@ -140,13 +142,19 @@ export default function GroupDetailPage() {
             {memberCount} member{memberCount !== 1 ? 's' : ''}
           </p>
         </div>
-        {workspace && (
-          <Button variant="outline" size="sm" className="shrink-0 gap-1.5" asChild>
-            <Link to={`/workspaces/${workspace._id}`}>
-              <ExternalLink size={13} /> Open Workspace
-            </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={toggleCategory}>
+            {showCategory ? <EyeOff size={13} /> : <Eye size={13} />}
+            {showCategory ? 'Hide Category' : 'Show Category'}
           </Button>
-        )}
+          {workspace && (
+            <Button variant="outline" size="sm" className="gap-1.5" asChild>
+              <Link to={`/workspaces/${workspace._id}`}>
+                <ExternalLink size={13} /> Open Workspace
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="space-y-5">
@@ -161,7 +169,7 @@ export default function GroupDetailPage() {
                 <TableHead className="w-8" />
                 <TableHead>Name</TableHead>
                 <TableHead>Student ID</TableHead>
-                <TableHead>Category</TableHead>
+                {showCategory && <TableHead>Category</TableHead>}
                 <TableHead className="w-36 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -183,11 +191,13 @@ export default function GroupDetailPage() {
                     <TableCell className="font-mono text-xs text-ink-500">
                       {m.userId?.studentId ?? '—'}
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}>
-                        {m.performanceCategory ?? 'UNGRADED'}
-                      </Badge>
-                    </TableCell>
+                    {showCategory && (
+                      <TableCell>
+                        <Badge variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}>
+                          {m.performanceCategory ?? 'UNGRADED'}
+                        </Badge>
+                      </TableCell>
+                    )}
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
                         {!isLeader && (
@@ -250,7 +260,7 @@ export default function GroupDetailPage() {
                   <TableHead className="w-10" />
                   <TableHead>Name</TableHead>
                   <TableHead>Student ID</TableHead>
-                  <TableHead>Category</TableHead>
+                  {showCategory && <TableHead>Category</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -274,11 +284,13 @@ export default function GroupDetailPage() {
                       <TableCell className="font-mono text-xs text-ink-500">
                         {s.userId?.studentId ?? '—'}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={CATEGORY_VARIANT[s.performanceCategory] ?? 'secondary'}>
-                          {s.performanceCategory ?? 'UNGRADED'}
-                        </Badge>
-                      </TableCell>
+                      {showCategory && (
+                        <TableCell>
+                          <Badge variant={CATEGORY_VARIANT[s.performanceCategory] ?? 'secondary'}>
+                            {s.performanceCategory ?? 'UNGRADED'}
+                          </Badge>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}

@@ -3,8 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown, Eye, EyeOff,
 } from 'lucide-react';
+import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 import { toast } from 'sonner';
 import { selectCurrentToken } from '@/features/auth/authSlice';
 import {
@@ -130,7 +131,7 @@ function BalanceSummary({ groups }) {
   );
 }
 
-function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading }) {
+function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading, showCategory }) {
   const leaderId = String(group.leaderId?._id ?? group.leaderId);
 
   return (
@@ -182,12 +183,14 @@ function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading }) {
                 <span className="font-mono text-[11px] text-ink-400 shrink-0">
                   {m.userId?.studentId ?? '—'}
                 </span>
-                <Badge
-                  variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}
-                  className="shrink-0 text-[10px] px-1.5 py-0 h-4"
-                >
-                  {m.performanceCategory ?? 'UNG'}
-                </Badge>
+                {showCategory && (
+                  <Badge
+                    variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}
+                    className="shrink-0 text-[10px] px-1.5 py-0 h-4"
+                  >
+                    {m.performanceCategory ?? 'UNG'}
+                  </Badge>
+                )}
               </div>
             );
           })}
@@ -202,6 +205,7 @@ function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading }) {
 export default function GroupsPage() {
   const { offeringId } = useParams();
   const navigate       = useNavigate();
+  const { showCategory, toggleCategory } = useCategoryVisibility();
 
   const { data: offering, isLoading: loadingOffering } = useGetCourseOfferingByIdQuery(offeringId);
 
@@ -339,6 +343,15 @@ export default function GroupsPage() {
           {hasGroups && (
             <>
               <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleCategory}
+                title={showCategory ? 'Hide performance category' : 'Show performance category'}
+              >
+                {showCategory ? <EyeOff size={14} /> : <Eye size={14} />}
+                {showCategory ? 'Hide Category' : 'Show Category'}
+              </Button>
+              <Button
                 size="sm"
                 className="bg-just-blue-600 hover:bg-just-blue-700 text-white"
                 onClick={() => downloadExcel(
@@ -408,12 +421,13 @@ export default function GroupsPage() {
 
         /* ── Groups view ──────────────────────────────────────────────────── */
         <>
-          <BalanceSummary groups={groups} />
+          {showCategory && <BalanceSummary groups={groups} />}
           <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {groups.map((group) => (
               <GroupCard
                 key={group._id}
                 group={group}
+                showCategory={showCategory}
                 onAdjust={() => navigate(`/groups/${group._id}`, { state: { courseOfferingId: offeringId } })}
                 onOpenWorkspace={handleOpenWorkspace}
                 workspaceLoading={workspaceLoading}

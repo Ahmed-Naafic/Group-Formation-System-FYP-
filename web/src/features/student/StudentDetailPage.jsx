@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { KeyRound, Trash2, Loader2, Copy, Check, ArrowLeft } from 'lucide-react';
+import { KeyRound, Trash2, Loader2, Copy, Check, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetStudentByIdQuery,
@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 
 const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
 
@@ -39,6 +40,7 @@ export default function StudentDetailPage() {
   const location  = useLocation();
   const cohortId  = location.state?.cohortId;
 
+  const { showCategory, toggleCategory } = useCategoryVisibility();
   const { data: student, isLoading, error } = useGetStudentByIdQuery(id);
   const [updateStudent, { isLoading: saving }]    = useUpdateStudentMutation();
   const [deleteStudent, { isLoading: deleting }]  = useDeleteStudentMutation();
@@ -109,9 +111,20 @@ export default function StudentDetailPage() {
           <h2 className="text-ink-900 mb-0.5">{student.fullName}</h2>
           <p className="font-mono text-sm text-ink-400">{userId?.studentId}</p>
         </div>
-        <Badge variant={CATEGORY_VARIANT[student.performanceCategory] ?? 'secondary'} className="text-sm px-3 py-1">
-          {student.performanceCategory ?? 'UNGRADED'}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleCategory}
+            className="inline-flex items-center gap-1 text-xs text-ink-400 hover:text-ink-700 transition-colors"
+          >
+            {showCategory ? <EyeOff size={12} /> : <Eye size={12} />}
+            {showCategory ? 'Hide' : 'Show'} category
+          </button>
+          {showCategory && (
+            <Badge variant={CATEGORY_VARIANT[student.performanceCategory] ?? 'secondary'} className="text-sm px-3 py-1">
+              {student.performanceCategory ?? 'UNGRADED'}
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="space-y-5">

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, Copy, Check, BarChart2, Users2, UserX } from 'lucide-react';
+import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, EyeOff, Copy, Check, BarChart2, Users2, UserX } from 'lucide-react';
+import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
 import {
@@ -45,6 +46,7 @@ function CopyButton({ text }) {
 }
 
 export default function StudentsPage() {
+  const { showCategory, toggleCategory } = useCategoryVisibility();
   const { cohortId } = useParams();
   const navigate     = useNavigate();
   const isAdmin      = useSelector(selectRole) === 'admin';
@@ -157,6 +159,10 @@ export default function StudentsPage() {
           </p>
         </div>
         <div className="flex gap-2 ml-4 shrink-0">
+          <Button variant="outline" onClick={toggleCategory}>
+            {showCategory ? <EyeOff size={15} /> : <Eye size={15} />}
+            {showCategory ? 'Hide Category' : 'Show Category'}
+          </Button>
           <Button variant="outline" asChild>
             <Link to={`/cohorts/${cohortId}/scores`}>
               <BarChart2 size={15} />
@@ -220,7 +226,7 @@ export default function StudentsPage() {
                 <TableHead>Student ID</TableHead>
                 <TableHead>Full Name</TableHead>
                 <TableHead className="w-28 text-right">Avg Score</TableHead>
-                <TableHead className="w-28">Category</TableHead>
+                {showCategory && <TableHead className="w-28">Category</TableHead>}
                 <TableHead className="w-36" />
               </TableRow>
             </TableHeader>
@@ -232,7 +238,7 @@ export default function StudentsPage() {
                   <TableCell className="text-right text-ink-500">
                     {s.averageScore != null ? s.averageScore.toFixed(1) : <span className="text-ink-300">—</span>}
                   </TableCell>
-                  <TableCell><CategoryBadge category={s.performanceCategory} /></TableCell>
+                  {showCategory && <TableCell><CategoryBadge category={s.performanceCategory} /></TableCell>}
                   <TableCell>
                     <div className="flex items-center justify-end gap-0.5">
                       <Button variant="ghost" size="icon" className="h-8 w-8"
