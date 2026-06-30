@@ -11,15 +11,16 @@ import '../../../data/models/workspace_model.dart';
 class FilesController extends GetxController {
   final _repo = FileRepository();
 
-  final files           = <FileModel>[].obs;
-  final isLoading       = false.obs;
-  final isUploading     = false.obs;
-  final errorMessage    = RxnString();
-  final retryCountdown  = 0.obs;
+  final files        = <FileModel>[].obs;
+  final isLoading    = false.obs;
+  final isUploading  = false.obs;
+  final errorMessage = RxnString();
 
   WorkspaceModel? workspace;
-  Timer? _retryTimer;
-  Timer? _countdownTimer;
+  bool _disposed = false;
+
+  static const _maxAttempts = 4;
+  static const _delays = [800, 1500, 3000]; // ms between retries
 
   @override
   void onInit() {
@@ -30,54 +31,42 @@ class FilesController extends GetxController {
       return;
     }
     workspace = args;
-    _fetchFiles();
+    _fetchWithRetry();
   }
 
-  Future<void> _fetchFiles() async {
+  Future<void> _fetchWithRetry({int attempt = 0}) async {
     final ws = workspace;
-    if (ws == null) return;
-    _cancelRetry();
+    if (ws == null || _disposed) return;
     isLoading.value    = true;
     errorMessage.value = null;
-    retryCountdown.value = 0;
     try {
       files.assignAll(await _repo.getFiles(ws.id));
-    } catch (e) {
-      errorMessage.value = 'Could not load files. The server may be waking up.';
-      _scheduleRetry();
-    } finally {
-      isLoading.value = false;
-    }
-  }
-
-  void _scheduleRetry() {
-    const seconds = 5;
-    retryCountdown.value = seconds;
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (retryCountdown.value > 1) {
-        retryCountdown.value--;
+    } catch (_) {
+      if (_disposed) return;
+      if (attempt < _maxAttempts - 1) {
+        final delay = _delays[attempt.clamp(0, _delays.length - 1)];
+        await Future.delayed(Duration(milliseconds: delay));
+        if (!_disposed) await _fetchWithRetry(attempt: attempt + 1);
       } else {
-        t.cancel();
+        errorMessage.value = 'Could not load files. Please try again.';
+        isLoading.value    = false;
       }
-    });
-    _retryTimer = Timer(const Duration(seconds: seconds), _fetchFiles);
-  }
-
-  void _cancelRetry() {
-    _retryTimer?.cancel();
-    _countdownTimer?.cancel();
-    _retryTimer = _countdownTimer = null;
-    retryCountdown.value = 0;
+      return;
+    }
+    if (!_disposed) isLoading.value = false;
   }
 
   @override
   void onClose() {
-    _cancelRetry();
+    _disposed = true;
     super.onClose();
   }
 
   @override
-  Future<void> refresh() => _fetchFiles();
+  Future<void> refresh() async {
+    _disposed = false;
+    await _fetchWithRetry();
+  }
 
   Future<void> pickAndUpload() async {
     final ws = workspace;

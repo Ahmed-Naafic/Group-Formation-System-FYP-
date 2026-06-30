@@ -63,18 +63,11 @@ class FilesView extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(color: context.textSecondary),
                   ),
-                  const SizedBox(height: 8),
-                  Obx(() => Text(
-                        ctrl.retryCountdown.value > 0
-                            ? 'Retrying in ${ctrl.retryCountdown.value}s…'
-                            : 'Retrying…',
-                        style: TextStyle(fontSize: 12, color: context.textMuted),
-                      )),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
                     onPressed: ctrl.refresh,
                     icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('Retry now'),
+                    label: const Text('Retry'),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1E3A8A),
                         foregroundColor: Colors.white),
