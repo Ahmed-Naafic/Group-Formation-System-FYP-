@@ -10,8 +10,8 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
-// Retry delays for network errors (Render free-tier cold start can take ~30s)
-const NETWORK_RETRY_DELAYS = [3000, 8000, 15000];
+// Retry delays for network errors (Render free-tier cold start can take up to 60s)
+const NETWORK_RETRY_DELAYS = [5000, 8000, 10000, 12000, 15000, 15000];
 
 async function baseQueryWithLogout(args, api, extraOptions) {
   let result = await rawBaseQuery(args, api, extraOptions);

@@ -21,6 +21,14 @@ export default function LoginPage() {
   const isAuth     = useSelector(selectIsAuth);
   const [login, { isLoading }] = useLoginMutation();
   const [wakingUp, setWakingUp] = useState(false);
+  const [elapsed, setElapsed]   = useState(0);
+
+  // Tick a seconds counter while login is in-flight so the user can see progress
+  useEffect(() => {
+    if (!isLoading) { setElapsed(0); return; }
+    const id = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [isLoading]);
 
   const from = location.state?.from?.pathname ?? '/';
 
@@ -97,11 +105,11 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
 
               {/* Cold-start banner */}
-              {isLoading && (
+              {isLoading && elapsed >= 3 && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-2">
                   <Loader2 size={14} className="animate-spin text-amber-600 shrink-0" />
                   <p className="text-sm text-amber-700">
-                    Server is starting up, please wait…
+                    Server is starting up… {elapsed}s
                   </p>
                 </div>
               )}
