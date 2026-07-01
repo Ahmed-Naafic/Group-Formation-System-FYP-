@@ -107,6 +107,30 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+Widget _logoutDialog(AuthController auth) => AlertDialog(
+      title: const Text('Sign Out'),
+      content: const Text('Are you sure you want to sign out?'),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      actions: [
+        TextButton(onPressed: Get.back, child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () {
+            Get.back();
+            auth.logout();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1E3A8A),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ),
+          child: const Text('Sign Out'),
+        ),
+      ],
+    );
+
 // ── Home Tab ──────────────────────────────────────────────────────────────────
 
 class _HomeTab extends StatelessWidget {
@@ -128,6 +152,44 @@ class _HomeTab extends StatelessWidget {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
         ),
         actions: [
+          // Notification bell with unread badge
+          Obx(() {
+            final count = notif.unreadCount.value;
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'Alerts',
+                  icon: const Icon(Icons.notifications_outlined),
+                  onPressed: onAlertsTap,
+                ),
+                if (count > 0)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      constraints:
+                          const BoxConstraints(minWidth: 16, minHeight: 16),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE53E3E),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        count > 99 ? '99+' : '$count',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }),
+          // Dark mode toggle
           Obx(() {
             final tc = Get.find<ThemeController>();
             return IconButton(
@@ -138,6 +200,12 @@ class _HomeTab extends StatelessWidget {
               onPressed: tc.toggle,
             );
           }),
+          // Sign out
+          IconButton(
+            tooltip: 'Sign out',
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () => Get.dialog(_logoutDialog(auth)),
+          ),
         ],
       ),
       body: Obx(() {
@@ -747,31 +815,6 @@ class _ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _logoutDialog(AuthController auth) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        actions: [
-          TextButton(
-            onPressed: Get.back,
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Get.back();
-              auth.logout();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E3A8A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Sign Out'),
-          ),
-        ],
-      );
 }
 
 class _ProfileStat extends StatelessWidget {
