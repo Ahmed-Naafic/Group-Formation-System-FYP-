@@ -4,7 +4,7 @@ import { io } from 'socket.io-client';
 import { selectCurrentToken } from '@/features/auth/authSlice';
 import { workspaceApi } from './workspaceApi';
 
-const SOCKET_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
+const SOCKET_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000').trim();
 
 export function useChatSocket(workspaceId) {
   const token     = useSelector(selectCurrentToken);

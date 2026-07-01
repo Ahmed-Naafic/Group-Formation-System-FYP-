@@ -4,7 +4,7 @@ import { io } from 'socket.io-client';
 import { selectCurrentToken } from '@/features/auth/authSlice';
 import { notificationApi } from './notificationApi';
 
-const SOCKET_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
+const SOCKET_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000').trim();
 
 export function useNotificationSocket() {
   const token    = useSelector(selectCurrentToken);
