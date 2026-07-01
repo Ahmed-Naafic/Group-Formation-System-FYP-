@@ -15,7 +15,7 @@ export function useNotificationSocket() {
 
     const socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
     });
 
     socket.on('notification', ({ notification }) => {

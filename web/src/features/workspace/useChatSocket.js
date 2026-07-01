@@ -15,7 +15,7 @@ export function useChatSocket(workspaceId) {
     if (!token || !workspaceId) return;
 
     // io() returns the cached socket for this URL (shared with useNotificationSocket)
-    const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket'] });
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ['polling', 'websocket'] });
     socketRef.current = socket;
 
     socket.emit('join-workspace', { workspaceId });

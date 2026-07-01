@@ -1,6 +1,6 @@
 const { Server }  = require('socket.io');
 const jwt         = require('jsonwebtoken');
-const { JWT_SECRET, IS_DEVELOPMENT } = require('../config/env');
+const { JWT_SECRET, IS_DEVELOPMENT, ALLOWED_ORIGINS } = require('../config/env');
 const { TOKEN_SCOPES } = require('../modules/auth/services/authService');
 const userService      = require('../modules/user/services/userService');
 const workspaceService = require('../modules/workspace/services/workspaceService');
@@ -97,8 +97,8 @@ function initSocket(httpServer) {
   const io = new Server(httpServer, {
     cors: {
       origin: IS_DEVELOPMENT
-        ? (origin, cb) => cb(null, true)          // any localhost in dev
-        : process.env.ALLOWED_ORIGINS?.split(',') ?? [],
+        ? (origin, cb) => cb(null, true)
+        : (ALLOWED_ORIGINS.includes('*') ? '*' : ALLOWED_ORIGINS),
       credentials: true,
     },
   });
