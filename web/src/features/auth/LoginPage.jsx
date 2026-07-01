@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
 import { useLoginMutation } from './authApi';
 import { setCredentials, selectIsAuth } from './authSlice';
 import { Button }  from '@/components/ui/button';
@@ -18,8 +20,15 @@ export default function LoginPage() {
   const location   = useLocation();
   const isAuth     = useSelector(selectIsAuth);
   const [login, { isLoading }] = useLoginMutation();
+  const [wakingUp, setWakingUp] = useState(false);
 
   const from = location.state?.from?.pathname ?? '/';
+
+  // Silently ping the server on page load to wake Render's free-tier container
+  // before the user even submits the form.
+  useEffect(() => {
+    fetch(`${API_BASE}/health`).catch(() => {});
+  }, []);
 
   // Already authed → send home
   useEffect(() => {
@@ -34,6 +43,7 @@ export default function LoginPage() {
   } = useForm();
 
   async function onSubmit(data) {
+    setWakingUp(false);
     try {
       const result = await login({
         identifier: data.identifier.trim(),
@@ -48,8 +58,13 @@ export default function LoginPage() {
 
       navigate(result.mustChangePassword ? '/change-password' : from, { replace: true });
     } catch (err) {
-      const message = err?.data?.error?.message ?? 'Invalid credentials';
-      setError('root', { message });
+      if (err?.status === 'FETCH_ERROR') {
+        setWakingUp(true);
+        setError('root', { message: 'Server took too long to respond. Please try again.' });
+      } else {
+        setWakingUp(false);
+        setError('root', { message: err?.data?.error?.message ?? 'Invalid credentials' });
+      }
     }
   }
 
@@ -81,10 +96,24 @@ export default function LoginPage() {
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
 
+              {/* Cold-start banner */}
+              {isLoading && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin text-amber-600 shrink-0" />
+                  <p className="text-sm text-amber-700">
+                    Server is starting up, please wait…
+                  </p>
+                </div>
+              )}
+
               {/* Root / API error */}
-              {errors.root && (
+              {!isLoading && errors.root && (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3">
-                  <p className="text-sm text-red-700">{errors.root.message}</p>
+                  <p className="text-sm text-red-700">
+                    {wakingUp
+                      ? 'Server is slow to start (free hosting). Please try again.'
+                      : errors.root.message}
+                  </p>
                 </div>
               )}
 

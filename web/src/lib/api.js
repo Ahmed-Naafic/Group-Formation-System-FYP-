@@ -10,9 +10,20 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
-// Wrap the base query: any 401 clears auth state and sends the user to login.
+// Retry delays for network errors (Render free-tier cold start can take ~30s)
+const NETWORK_RETRY_DELAYS = [3000, 8000, 15000];
+
 async function baseQueryWithLogout(args, api, extraOptions) {
-  const result = await rawBaseQuery(args, api, extraOptions);
+  let result = await rawBaseQuery(args, api, extraOptions);
+
+  // On connection-level failure, retry with backoff before giving up
+  let attempt = 0;
+  while (result.error?.status === 'FETCH_ERROR' && attempt < NETWORK_RETRY_DELAYS.length) {
+    await new Promise((r) => setTimeout(r, NETWORK_RETRY_DELAYS[attempt]));
+    attempt++;
+    result = await rawBaseQuery(args, api, extraOptions);
+  }
+
   if (result.error?.status === 401) {
     api.dispatch(clearCredentials());
   }
