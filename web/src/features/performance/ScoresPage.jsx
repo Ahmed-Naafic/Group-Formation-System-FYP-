@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
-import { Loader2, RefreshCw, Save } from 'lucide-react';
+import { Loader2, RefreshCw, Save, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { selectRole } from '@/features/auth/authSlice';
 import { useGetStudentsQuery } from '@/features/student/studentApi';
@@ -14,6 +14,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 
 const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
 
@@ -21,7 +22,7 @@ const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive
 // cohort refactor. Attendance is now per-offering in the Attendance table.
 // Full page migration to cohortId happens in Step 9.
 
-function ScoreRow({ student, isAdmin }) {
+function ScoreRow({ student, isAdmin, showCategory }) {
   const [updateScores, { isLoading: saving }] = useUpdateScoresMutation();
 
   const { register, handleSubmit, formState: { isDirty } } = useForm({
@@ -57,11 +58,13 @@ function ScoreRow({ student, isAdmin }) {
           </span>
         )}
       </TableCell>
-      <TableCell>
-        <Badge variant={CATEGORY_VARIANT[student.performanceCategory] ?? 'secondary'}>
-          {student.performanceCategory ?? 'UNGRADED'}
-        </Badge>
-      </TableCell>
+      {showCategory && (
+        <TableCell>
+          <Badge variant={CATEGORY_VARIANT[student.performanceCategory] ?? 'secondary'}>
+            {student.performanceCategory ?? 'UNGRADED'}
+          </Badge>
+        </TableCell>
+      )}
       <TableCell className="w-24">
         {isDirty && isAdmin && (
           <Button
@@ -87,6 +90,7 @@ export default function ScoresPage() {
   const [recalculate, { isLoading: recalculating }] = useRecalculateCohortMutation();
 
   const cohortName = cohort?.name ?? (loadingCohort ? '…' : 'Cohort');
+  const { showCategory, toggleCategory } = useCategoryVisibility();
 
   async function handleRecalculate() {
     try {
@@ -113,15 +117,20 @@ export default function ScoresPage() {
             Edit inline and save each row. Saving a score auto-recalculates the performance category.
           </p>
         </div>
-        <Button
-          variant="outline"
-          className="ml-4 shrink-0"
-          onClick={handleRecalculate}
-          disabled={recalculating || students.length === 0}
-        >
-          {recalculating ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-          Recalculate All
-        </Button>
+        <div className="flex items-center gap-2 ml-4 shrink-0">
+          <Button variant="outline" size="sm" onClick={toggleCategory}>
+            {showCategory ? <EyeOff size={13} /> : <Eye size={13} />}
+            {showCategory ? 'Hide Category' : 'Show Category'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleRecalculate}
+            disabled={recalculating || students.length === 0}
+          >
+            {recalculating ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+            Recalculate All
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-lg border border-border bg-white shadow-xs overflow-x-auto">
@@ -147,13 +156,13 @@ export default function ScoresPage() {
                 <TableHead className="w-28">
                   Avg Score{!isAdmin && <span className="ml-1 text-ink-300 font-normal text-[10px]">(read-only)</span>}
                 </TableHead>
-                <TableHead className="w-28">Category</TableHead>
+                {showCategory && <TableHead className="w-28">Category</TableHead>}
                 <TableHead className="w-24" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {students.map((s) => (
-                <ScoreRow key={s._id} student={s} isAdmin={isAdmin} />
+                <ScoreRow key={s._id} student={s} isAdmin={isAdmin} showCategory={showCategory} />
               ))}
             </TableBody>
           </Table>
