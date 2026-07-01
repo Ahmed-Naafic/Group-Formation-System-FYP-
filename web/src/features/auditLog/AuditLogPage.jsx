@@ -153,7 +153,6 @@ export default function AuditLogPage() {
                 <TableHead>Actor</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Entity</TableHead>
-                <TableHead className="hidden lg:table-cell">IP Address</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -187,9 +186,6 @@ export default function AuditLogPage() {
                         {shortId(log.entityId)}
                       </span>
                     )}
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell text-xs text-ink-400 font-mono">
-                    {log.ipAddress ?? '—'}
                   </TableCell>
                 </TableRow>
               ))}
