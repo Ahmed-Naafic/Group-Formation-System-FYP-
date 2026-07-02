@@ -7,6 +7,7 @@ const workspaceService = require('../modules/workspace/services/workspaceService
 const messageService   = require('../modules/chat/services/messageService');
 const { buildRequestContext }  = require('../middleware/requestContext');
 const { initListeners }        = require('../modules/notification/listeners');
+const emitter                  = require('../common/events/emitter');
 const logger                   = require('../common/utils/logger');
 
 // ── Socket auth middleware ─────────────────────────────────────────────────────
@@ -71,6 +72,14 @@ async function handleSendMessage(io, socket, { workspaceId, content }) {
     await message.populate({ path: 'senderId', select: 'fullName role studentId' });
     // Broadcast to everyone in the room (including sender for consistency)
     io.to(roomName(workspaceId)).emit('new-message', { message });
+    // Push FCM to members not currently in this room
+    const trimmed = content.trim();
+    emitter.emit('message.sent', {
+      workspaceId:  String(workspaceId),
+      senderUserId: String(socket.context.userId),
+      senderName:   socket.context.fullName ?? 'Someone',
+      preview:      trimmed.length > 80 ? trimmed.slice(0, 80) + '…' : trimmed,
+    });
   } catch (err) {
     socket.emit('error', { message: err.message });
   }

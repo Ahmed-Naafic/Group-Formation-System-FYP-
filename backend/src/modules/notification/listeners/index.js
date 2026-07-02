@@ -3,6 +3,7 @@ const notificationService = require('../services/notificationService');
 const auditLogService    = require('../../auditLog/services/auditLogService');
 const userRepository     = require('../../user/repositories/userRepository');
 const groupRepository    = require('../../group/repositories/groupRepository');
+const Workspace          = require('../../workspace/models/Workspace');
 const pushService        = require('../../../common/services/push/PushService');
 const logger             = require('../../../common/utils/logger');
 
@@ -162,6 +163,36 @@ function initListeners(io) {
       });
     } catch (err) {
       logger.error('submission.graded listener error', { err: err.message });
+    }
+  });
+
+  // ── message.sent ──────────────────────────────────────────────────────────────
+  // Payload: { workspaceId, senderUserId, senderName, preview }
+  // No DB notification record — just FCM push to group members who are offline/elsewhere.
+  emitter.on('message.sent', async ({ workspaceId, senderUserId, senderName, preview }) => {
+    try {
+      const ws = await Workspace.findById(workspaceId, 'groupId')
+        .populate({
+          path: 'groupId',
+          select: 'memberIds',
+          populate: { path: 'memberIds', select: 'userId' },
+        })
+        .lean();
+
+      if (!ws?.groupId?.memberIds?.length) return;
+
+      const recipientUserIds = ws.groupId.memberIds
+        .map((m) => m.userId?._id ?? m.userId)
+        .filter((uid) => uid && String(uid) !== senderUserId);
+
+      if (!recipientUserIds.length) return;
+
+      await sendFcmBatch(recipientUserIds, senderName, preview, {
+        type: 'NEW_MESSAGE',
+        workspaceId,
+      });
+    } catch (err) {
+      logger.error('message.sent listener error', { err: err.message });
     }
   });
 

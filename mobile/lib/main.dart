@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'app/core/theme/app_theme.dart';
 import 'app/core/theme/theme_controller.dart';
 import 'app/modules/auth/controllers/auth_controller.dart';
+import 'app/modules/dashboard/controllers/dashboard_controller.dart';
 import 'app/modules/notifications/controllers/notification_controller.dart';
 import 'app/routes/app_pages.dart';
 
@@ -14,10 +15,53 @@ Future<void> _onBackgroundMessage(RemoteMessage _) async {
   await Firebase.initializeApp();
 }
 
+void _handleFcmTap(Map<String, dynamic> data) {
+  final type = data['type'] as String?;
+  if (type != 'NEW_MESSAGE') return;
+  final workspaceId = data['workspaceId'] as String?;
+  if (workspaceId == null) return;
+  try {
+    final dash = Get.find<DashboardController>();
+    try {
+      final ws = dash.workspaces.firstWhere((w) => w.id == workspaceId);
+      Get.toNamed(Routes.workspace, arguments: ws);
+    } catch (_) {}
+  } catch (_) {}
+}
+
+Future<void> _initFcmHandlers() async {
+  // Show an in-app snackbar and refresh notification count when a message
+  // arrives while the app is in the foreground.
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    final title = message.notification?.title ?? 'New message';
+    final body  = message.notification?.body ?? '';
+    if (body.isNotEmpty) {
+      Get.snackbar(
+        title, body,
+        duration: const Duration(seconds: 4),
+        snackPosition: SnackPosition.TOP,
+      );
+    }
+    try { Get.find<NotificationController>().refresh(); } catch (_) {}
+  });
+
+  // Navigate to workspace when user taps an FCM notification from background.
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    _handleFcmTap(message.data);
+  });
+
+  // Navigate when app was fully terminated and user taps the notification.
+  final initial = await FirebaseMessaging.instance.getInitialMessage();
+  if (initial != null) {
+    Future.delayed(const Duration(seconds: 2), () => _handleFcmTap(initial.data));
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(_onBackgroundMessage);
+  await _initFcmHandlers();
   runApp(const GroupFormationApp());
 }
 

@@ -8,9 +8,9 @@ const messageService = {
    * `before` is an optional messageId; if provided returns messages older than that message.
    * Access check is delegated to workspaceService.getById so ownership rules live in one place.
    */
-  async list(workspaceId, { limit, before }, context) {
+  async list(workspaceId, { limit, before, after }, context) {
     await workspaceService.getById(workspaceId, context);
-    const messages = await messageRepository.findByWorkspace(workspaceId, { limit, before });
+    const messages = await messageRepository.findByWorkspace(workspaceId, { limit, before, after });
     // Return chronological order (oldest first) for the client to render top-to-bottom
     return messages.reverse();
   },

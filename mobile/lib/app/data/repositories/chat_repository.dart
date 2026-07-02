@@ -8,9 +8,11 @@ class ChatRepository {
     String workspaceId, {
     int limit = 50,
     String? before,
+    String? after,
   }) async {
     final params = <String, dynamic>{'limit': limit};
     if (before != null) params['before'] = before;
+    if (after  != null) params['after']  = after;
 
     final response = await _client.dio.get(
       '/workspaces/$workspaceId/messages',

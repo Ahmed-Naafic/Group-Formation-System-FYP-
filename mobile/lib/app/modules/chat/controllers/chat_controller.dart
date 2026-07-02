@@ -12,8 +12,12 @@ import '../../auth/controllers/auth_controller.dart';
 class ChatController extends GetxController {
   final _repo = ChatRepository();
 
+  // Persists across controller recreation so re-opening chat is instant.
+  static final _cache = <String, List<ChatMessage>>{};
+
   final messages          = <ChatMessage>[].obs;
   final isLoading         = true.obs;
+  final isSyncing         = false.obs;
   final errorMessage      = ''.obs;
   final isConnecting      = true.obs;
   final isSocketConnected = false.obs;
@@ -45,9 +49,21 @@ class ChatController extends GetxController {
     }
     workspace    = args;
     _myStudentId = Get.find<AuthController>().userStudentId.value;
-    _loadHistory();
+
+    final cached = _cache[workspace!.id];
+    if (cached != null && cached.isNotEmpty) {
+      // Instant display — no spinner
+      messages.assignAll(cached);
+      isLoading.value = false;
+      _scrollToBottom(force: true);
+      _syncNew(); // background: fetch anything missed while the screen was closed
+    } else {
+      _loadHistory();
+    }
     _connectSocket();
   }
+
+  // ── Full load ────────────────────────────────────────────────────────────────
 
   Future<void> _loadHistory({int attempt = 0}) async {
     final ws = workspace;
@@ -58,8 +74,9 @@ class ChatController extends GetxController {
       final msgs = await _repo.getHistory(ws.id);
       if (!_disposed) {
         messages.assignAll(msgs);
+        _cache[ws.id] = List<ChatMessage>.from(msgs);
         isLoading.value = false;
-        _scrollToBottom();
+        _scrollToBottom(force: true);
       }
     } catch (_) {
       if (_disposed) return;
@@ -74,10 +91,57 @@ class ChatController extends GetxController {
     }
   }
 
+  // ── Background sync of messages sent while this screen was closed ────────────
+
+  Future<void> _syncNew() async {
+    final ws = workspace;
+    if (ws == null || _disposed || messages.isEmpty) return;
+    isSyncing.value = true;
+    try {
+      final lastId = messages.last.id;
+      final newer  = await _repo.getHistory(ws.id, after: lastId);
+      if (_disposed) return;
+      if (newer.isNotEmpty) {
+        for (final msg in newer) {
+          if (!messages.any((m) => m.id == msg.id)) {
+            messages.add(msg);
+          }
+        }
+        _cache[ws.id] = List<ChatMessage>.from(messages);
+        _scrollToBottom();
+      }
+    } catch (_) {
+      // Stale cache is still useful — silently ignore
+    } finally {
+      if (!_disposed) isSyncing.value = false;
+    }
+  }
+
+  // ── Pull-to-refresh ──────────────────────────────────────────────────────────
+
+  Future<void> pullRefresh() async {
+    final ws = workspace;
+    if (ws == null) return;
+    try {
+      final msgs = await _repo.getHistory(ws.id);
+      if (!_disposed) {
+        messages.assignAll(msgs);
+        _cache[ws.id] = List<ChatMessage>.from(msgs);
+      }
+    } catch (_) {}
+  }
+
+  // ── Error retry (clears cache, shows full spinner) ───────────────────────────
+
   Future<void> retry() async {
     _disposed = false;
+    errorMessage.value = '';
+    _cache.remove(workspace?.id);
+    messages.clear();
     await _loadHistory();
   }
+
+  // ── Socket reconnect ─────────────────────────────────────────────────────────
 
   Future<void> reconnect() async {
     _socket?.dispose();
@@ -87,6 +151,8 @@ class ChatController extends GetxController {
     errorMessage.value      = '';
     await _connectSocket();
   }
+
+  // ── Socket ───────────────────────────────────────────────────────────────────
 
   Future<void> _connectSocket() async {
     final ws    = workspace;
@@ -104,8 +170,8 @@ class ChatController extends GetxController {
           .enableAutoConnect()
           .enableForceNew()
           .enableReconnection()
-          .setReconnectionAttempts(5)
-          .setReconnectionDelay(2000)
+          .setReconnectionAttempts(10)
+          .setReconnectionDelay(3000)
           .build(),
     );
 
@@ -122,24 +188,27 @@ class ChatController extends GetxController {
       _socket!.onConnect((_) => joinWorkspace());
     }
 
+    // Keep showing "connecting…" while auto-reconnect retries are running.
+    // Only flip to disconnected after all attempts are exhausted.
     _socket!.onConnectError((_) {
       isSocketConnected.value = false;
-      isConnecting.value      = false;
+      isConnecting.value      = true; // still retrying
     });
 
     _socket!.onDisconnect((_) {
       isSocketConnected.value = false;
-      isConnecting.value      = true; // reconnecting...
+      isConnecting.value      = true; // reconnecting…
     });
 
     _socket!.onReconnect((_) {
-      // Re-join the workspace room after reconnect
       _socket!.emit('join-workspace', {'workspaceId': ws.id});
       isSocketConnected.value = true;
       isConnecting.value      = false;
+      _syncNew(); // catch up on messages sent while disconnected
     });
 
     _socket!.onReconnectFailed((_) {
+      // All 10 attempts exhausted — show the disconnected banner with reconnect button
       isConnecting.value = false;
     });
 
@@ -162,6 +231,7 @@ class ChatController extends GetxController {
         );
         if (msg.id.isNotEmpty && !messages.any((m) => m.id == msg.id)) {
           messages.add(msg);
+          _cache[workspace!.id] = List<ChatMessage>.from(messages);
           _scrollToBottom();
         }
       } catch (_) {}
@@ -193,6 +263,29 @@ class ChatController extends GetxController {
     });
   }
 
+  // ── Scroll helpers ────────────────────────────────────────────────────────────
+
+  bool _isNearBottom() {
+    if (!scrollCtrl.hasClients) return true;
+    final pos = scrollCtrl.position;
+    return pos.maxScrollExtent - pos.pixels < 200;
+  }
+
+  void _scrollToBottom({bool force = false}) {
+    if (!force && !_isNearBottom()) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (scrollCtrl.hasClients) {
+        scrollCtrl.animateTo(
+          scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  // ── Typing ────────────────────────────────────────────────────────────────────
+
   void onTextChanged(String text) {
     final ws = workspace;
     if (ws == null || _socket == null || !isSocketConnected.value) return;
@@ -214,24 +307,12 @@ class ChatController extends GetxController {
     final ws   = workspace;
     final text = textCtrl.text.trim();
     if (text.isEmpty || ws == null) return;
-    if (!isSocketConnected.value) return; // silently wait — UI shows connecting state
+    if (!isSocketConnected.value) return;
     _stopTyping();
     textCtrl.clear();
     _socket!.emit('send-message', {
       'workspaceId': ws.id,
       'content':     text,
-    });
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (scrollCtrl.hasClients) {
-        scrollCtrl.animateTo(
-          scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-        );
-      }
     });
   }
 
@@ -242,7 +323,7 @@ class ChatController extends GetxController {
     final wsId = workspace?.id;
     if (_socket != null) {
       if (wsId != null) {
-        _socket!.emit('stop-typing',    {'workspaceId': wsId});
+        _socket!.emit('stop-typing',     {'workspaceId': wsId});
         _socket!.emit('leave-workspace', {'workspaceId': wsId});
       }
       _socket!.dispose();

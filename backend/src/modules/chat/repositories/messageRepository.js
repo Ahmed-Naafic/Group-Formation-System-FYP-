@@ -7,12 +7,18 @@ const messageRepository = {
     return Message.create(data);
   },
 
-  // Paginated, oldest-first within the page (cursor-based via `before` message ID)
-  async findByWorkspace(workspaceId, { limit = 50, before = null } = {}) {
+  // Paginated, oldest-first within the page.
+  // `before` (msgId) → messages older than that message (load more / history)
+  // `after`  (msgId) → messages newer than that message (background catch-up sync)
+  async findByWorkspace(workspaceId, { limit = 50, before = null, after = null } = {}) {
     const query = { workspaceId };
     if (before) {
       const ref = await Message.findById(before).lean();
       if (ref) query.createdAt = { $lt: ref.createdAt };
+    }
+    if (after) {
+      const ref = await Message.findById(after).lean();
+      if (ref) query.createdAt = { ...(query.createdAt ?? {}), $gt: ref.createdAt };
     }
     return Message.find(query)
       .sort({ createdAt: -1 })

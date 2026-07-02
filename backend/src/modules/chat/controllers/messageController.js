@@ -6,10 +6,10 @@ const messageController = {
   // GET /api/workspaces/:workspaceId/messages?limit=50&before=<msgId>
   list: asyncHandler(async (req, res) => {
     const { workspaceId } = req.params;
-    const { limit, before } = req.query;
+    const { limit, before, after } = req.query;
     const messages = await messageService.list(
       workspaceId,
-      { limit: limit ? Number(limit) : 50, before: before || null },
+      { limit: limit ? Number(limit) : 50, before: before || null, after: after || null },
       req.context,
     );
     return sendSuccess(res, { data: { messages } });

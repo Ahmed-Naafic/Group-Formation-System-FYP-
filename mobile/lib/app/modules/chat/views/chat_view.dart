@@ -25,10 +25,25 @@ class ChatView extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w600),
                 ),
-                Text(
-                  '${ctrl.messages.length} messages',
-                  style: const TextStyle(
-                      fontSize: 11, color: Color(0xFFB0C4F0)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${ctrl.messages.length} messages',
+                      style: const TextStyle(
+                          fontSize: 11, color: Color(0xFFB0C4F0)),
+                    ),
+                    if (ctrl.isSyncing.value) ...[
+                      const SizedBox(width: 6),
+                      const SizedBox(
+                        width: 10, height: 10,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: Color(0xFFB0C4F0),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             )),
@@ -130,49 +145,66 @@ class ChatView extends StatelessWidget {
                 );
               }
               if (ctrl.messages.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.chat_bubble_outline_rounded,
-                          size: 56, color: context.textPlaceholder),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No messages yet.\nSay hello to your group!',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 15, color: context.textMuted),
+                return LayoutBuilder(
+                  builder: (context, constraints) => RefreshIndicator(
+                    onRefresh: ctrl.pullRefresh,
+                    color: const Color(0xFF1E3A8A),
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: constraints.maxHeight,
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.chat_bubble_outline_rounded,
+                                  size: 56, color: context.textPlaceholder),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No messages yet.\nSay hello to your group!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    fontSize: 15, color: context.textMuted),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ],
+                    ),
                   ),
                 );
               }
-              return ListView.builder(
-                controller: ctrl.scrollCtrl,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 12),
-                itemCount: ctrl.messages.length,
-                itemBuilder: (_, i) {
-                  final msg  = ctrl.messages[i];
-                  final prev = i > 0 ? ctrl.messages[i - 1] : null;
-                  final showSenderName = !ctrl.isMyMessage(msg) &&
-                      (prev == null ||
-                          prev.sender.id != msg.sender.id);
-                  final showDateDivider = prev == null ||
-                      !_sameDay(prev.createdAt, msg.createdAt);
+              return RefreshIndicator(
+                onRefresh: ctrl.pullRefresh,
+                color: const Color(0xFF1E3A8A),
+                child: ListView.builder(
+                  controller: ctrl.scrollCtrl,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                  itemCount: ctrl.messages.length,
+                  itemBuilder: (_, i) {
+                    final msg  = ctrl.messages[i];
+                    final prev = i > 0 ? ctrl.messages[i - 1] : null;
+                    final showSenderName = !ctrl.isMyMessage(msg) &&
+                        (prev == null ||
+                            prev.sender.id != msg.sender.id);
+                    final showDateDivider = prev == null ||
+                        !_sameDay(prev.createdAt, msg.createdAt);
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (showDateDivider) _DateDivider(msg.createdAt),
-                      _MessageBubble(
-                        msg:            msg,
-                        isMe:           ctrl.isMyMessage(msg),
-                        showSenderName: showSenderName,
-                      ),
-                    ],
-                  );
-                },
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (showDateDivider) _DateDivider(msg.createdAt),
+                        _MessageBubble(
+                          msg:            msg,
+                          isMe:           ctrl.isMyMessage(msg),
+                          showSenderName: showSenderName,
+                        ),
+                      ],
+                    );
+                  },
+                ),
               );
             }),
           ),
