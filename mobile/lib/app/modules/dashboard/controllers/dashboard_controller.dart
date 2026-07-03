@@ -28,7 +28,11 @@ class DashboardController extends GetxController {
     errorMessage.value = '';
     try {
       workspaces.value = await _repo.getMyWorkspaces();
-      if (!_disposed) isLoading.value = false;
+      if (!_disposed) {
+        isLoading.value = false;
+        Get.find<NotificationController>()
+            .joinWorkspaceRooms(workspaces.map((w) => w.id).toList());
+      }
     } catch (e) {
       if (_disposed) return;
       if (attempt < _maxAttempts - 1) {

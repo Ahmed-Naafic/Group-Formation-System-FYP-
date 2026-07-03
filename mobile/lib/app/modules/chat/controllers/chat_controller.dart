@@ -8,6 +8,7 @@ import '../../../data/models/workspace_model.dart';
 import '../../../data/providers/api_client.dart';
 import '../../../data/repositories/chat_repository.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../notifications/controllers/notification_controller.dart';
 
 class ChatController extends GetxController {
   final _repo = ChatRepository();
@@ -49,6 +50,9 @@ class ChatController extends GetxController {
     }
     workspace    = args;
     _myStudentId = Get.find<AuthController>().userStudentId.value;
+
+    // Clear the unread badge for this workspace now that the user is here
+    try { Get.find<NotificationController>().clearUnread(workspace!.id); } catch (_) {}
 
     final cached = _cache[workspace!.id];
     if (cached != null && cached.isNotEmpty) {

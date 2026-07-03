@@ -8,9 +8,10 @@ import '../../../data/repositories/notification_repository.dart';
 class NotificationController extends GetxController {
   final _repo = NotificationRepository();
 
-  final notifications = <NotificationModel>[].obs;
-  final unreadCount   = 0.obs;
-  final isLoading     = false.obs;
+  final notifications   = <NotificationModel>[].obs;
+  final unreadCount     = 0.obs;
+  final isLoading       = false.obs;
+  final unreadMessages  = <String, int>{}.obs; // workspaceId → unread count
 
   io.Socket? _socket;
   bool _connected    = false;
@@ -25,6 +26,19 @@ class NotificationController extends GetxController {
     final fetched = await _fetchAllWithRetry();
     await _openSocket();
     if (fetched) _connected = true;
+  }
+
+  // Join workspace rooms so new-message events arrive without opening the chat screen.
+  void joinWorkspaceRooms(List<String> workspaceIds) {
+    for (final id in workspaceIds) {
+      _socket?.emit('join-workspace', {'workspaceId': id});
+    }
+  }
+
+  // Called by ChatController when the user opens a chat — resets the badge.
+  void clearUnread(String workspaceId) {
+    unreadMessages[workspaceId] = 0;
+    unreadMessages.refresh();
   }
 
   // Called when returning to the alerts tab — re-fetch if not yet loaded.
@@ -111,8 +125,23 @@ class NotificationController extends GetxController {
     );
 
     _socket!.onReconnect((_) {
-      // Re-fetch notifications after socket reconnects so nothing is missed.
       _fetchAllWithRetry();
+      // Re-join workspace rooms after reconnect
+      for (final id in unreadMessages.keys) {
+        _socket?.emit('join-workspace', {'workspaceId': id});
+      }
+    });
+
+    _socket!.on('new-message', (data) {
+      try {
+        final map = data is Map ? Map<String, dynamic>.from(data) : data as Map<String, dynamic>;
+        final msg = map['message'] as Map?;
+        final wsId = msg?['workspaceId']?.toString();
+        if (wsId == null) return;
+        final current = unreadMessages[wsId] ?? 0;
+        unreadMessages[wsId] = current + 1;
+        unreadMessages.refresh();
+      } catch (_) {}
     });
 
     _socket!.on('notification', (data) {

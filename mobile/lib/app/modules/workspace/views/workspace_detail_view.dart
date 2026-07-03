@@ -4,6 +4,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/workspace_model.dart';
 import '../../../routes/app_pages.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../notifications/controllers/notification_controller.dart';
 
 class WorkspaceDetailView extends StatelessWidget {
   const WorkspaceDetailView({super.key});
@@ -153,22 +154,30 @@ class WorkspaceDetailView extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () =>
-                      Get.toNamed(Routes.chat, arguments: workspace),
-                  icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                  label: const Text('Chat',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 14)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D7850),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                ),
+                child: Obx(() {
+                  final unread = Get.find<NotificationController>()
+                      .unreadMessages[workspace.id] ?? 0;
+                  return Badge(
+                    isLabelVisible: unread > 0,
+                    label: Text('$unread'),
+                    child: ElevatedButton.icon(
+                      onPressed: () =>
+                          Get.toNamed(Routes.chat, arguments: workspace),
+                      icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                      label: const Text('Chat',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0D7850),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                    ),
+                  );
+                }),
               ),
               const SizedBox(width: 8),
               Expanded(
