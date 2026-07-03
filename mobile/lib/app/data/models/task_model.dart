@@ -7,6 +7,7 @@ class TaskModel {
   final bool hasAttachment;
   final String? attachmentName;
   final String? attachmentMimeType;
+  final String? attachmentUrl;
 
   const TaskModel({
     required this.id,
@@ -17,6 +18,7 @@ class TaskModel {
     required this.hasAttachment,
     this.attachmentName,
     this.attachmentMimeType,
+    this.attachmentUrl,
   });
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
@@ -35,6 +37,7 @@ class TaskModel {
       hasAttachment:      attachments?.isNotEmpty ?? false,
       attachmentName:     first?['originalName'] as String?,
       attachmentMimeType: first?['mimeType']     as String?,
+      attachmentUrl:      first?['url']          as String?,
     );
   }
 

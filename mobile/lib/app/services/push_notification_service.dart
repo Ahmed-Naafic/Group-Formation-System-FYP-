@@ -1,7 +1,5 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:get/get.dart';
 import '../data/providers/api_client.dart';
-import '../routes/app_pages.dart';
 
 class PushNotificationService {
   PushNotificationService._();
@@ -23,13 +21,6 @@ class PushNotificationService {
 
     // Refresh token when FCM rotates it
     _messaging.onTokenRefresh.listen(_sendTokenToServer);
-
-    // App tapped from background notification
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
-
-    // App launched from a terminated-state notification
-    final initial = await _messaging.getInitialMessage();
-    if (initial != null) _handleTap(initial);
   }
 
   Future<void> _registerToken() async {
@@ -52,9 +43,4 @@ class PushNotificationService {
     } catch (_) {}
   }
 
-  static void _handleTap(RemoteMessage _) {
-    if (Get.currentRoute != Routes.notifications) {
-      Get.toNamed(Routes.notifications);
-    }
-  }
 }

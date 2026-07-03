@@ -185,7 +185,7 @@ class TaskController extends GetxController {
       final dir      = await getApplicationDocumentsDirectory();
       final fileName = task.attachmentName ?? 'attachment';
       final savePath = '${dir.path}/$fileName';
-      await _repo.downloadAttachment(task.id, savePath);
+      await _repo.downloadAttachment(task.attachmentUrl ?? '', savePath);
       final mime = task.attachmentMimeType ?? 'application/octet-stream';
       Get.rawSnackbar(
         title: 'Downloaded',

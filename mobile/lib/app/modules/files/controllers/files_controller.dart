@@ -107,7 +107,7 @@ class FilesController extends GetxController {
     try {
       final dir      = await getApplicationDocumentsDirectory();
       final savePath = '${dir.path}/${f.originalName}';
-      await _repo.downloadFile(ws.id, f.id, savePath);
+      await _repo.downloadFile(f.url, savePath);
       Get.rawSnackbar(
         title: 'Downloaded',
         message: 'Tap to open ${f.originalName}',

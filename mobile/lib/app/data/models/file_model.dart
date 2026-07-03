@@ -8,6 +8,7 @@ class FileModel {
   final String uploadedByName;
   final String uploadedById;
   final DateTime uploadedAt;
+  final String url;
 
   const FileModel({
     required this.id,
@@ -17,6 +18,7 @@ class FileModel {
     required this.uploadedByName,
     required this.uploadedById,
     required this.uploadedAt,
+    required this.url,
   });
 
   factory FileModel.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,7 @@ class FileModel {
       uploadedByName: uploaderName,
       uploadedById:   uploaderId,
       uploadedAt:     DateTime.parse(json['uploadedAt'] as String),
+      url:            json['url']          as String? ?? '',
     );
   }
 

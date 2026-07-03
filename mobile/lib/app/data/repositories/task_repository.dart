@@ -43,9 +43,9 @@ class TaskRepository {
     );
   }
 
-  Future<void> downloadAttachment(String taskId, String savePath) async {
+  Future<void> downloadAttachment(String url, String savePath) async {
     await _api.dio.download(
-      '/tasks/$taskId/attachment',
+      url,
       savePath,
       options: Options(responseType: ResponseType.bytes),
     );
