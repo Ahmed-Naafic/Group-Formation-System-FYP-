@@ -69,7 +69,7 @@ class _LoginViewState extends State<LoginView> {
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  'JUST',
+                  'JU',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 26,
@@ -238,7 +238,7 @@ class _LoginViewState extends State<LoginView> {
 
                 const SizedBox(height: 32),
                 const Text(
-                  'Jamhuriya University of Science & Technology',
+                  'Jamhuuriya University of Science & Technology',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Color(0xFF424A5E), fontSize: 11),
                 ),

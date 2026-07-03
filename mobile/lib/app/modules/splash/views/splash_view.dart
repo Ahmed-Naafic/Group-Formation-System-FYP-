@@ -92,7 +92,7 @@ class _SplashViewState extends State<SplashView>
               ),
               const SizedBox(height: 6),
               const Text(
-                'Jordan University of Science & Technology',
+                'Jamhuuriya University of Science & Technology',
                 style: TextStyle(
                   color: Color(0xFF7B93CC),
                   fontSize: 12,
