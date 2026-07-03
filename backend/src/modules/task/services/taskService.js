@@ -153,7 +153,7 @@ const taskService = {
       throw new ForbiddenError('Only the task creator can delete this task');
     }
 
-    // Clean up Cloudinary files before soft-deleting
+    // Delete files from Supabase Storage before soft-deleting
     for (const att of task.attachments ?? []) {
       await StorageService.delete(att.publicId);
     }
