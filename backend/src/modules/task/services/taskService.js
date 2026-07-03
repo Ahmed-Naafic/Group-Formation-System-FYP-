@@ -32,14 +32,15 @@ const taskService = {
     // Save optional attachment via StorageService (same call as workspace file upload)
     let attachments = [];
     if (multerFile) {
-      const storageKey = await StorageService.save(
+      const { url, publicId } = await StorageService.save(
         multerFile.buffer,
         multerFile.originalname,
         `tasks/${data.courseOfferingId}`,
       );
       attachments = [{
         originalName: multerFile.originalname,
-        storageKey,
+        url,
+        publicId,
         mimeType:     multerFile.mimetype,
         sizeBytes:    multerFile.size,
       }];
@@ -151,6 +152,10 @@ const taskService = {
       throw new ForbiddenError('Only the task creator can delete this task');
     }
 
+    // Clean up Cloudinary files before soft-deleting
+    for (const att of task.attachments ?? []) {
+      await StorageService.delete(att.publicId);
+    }
     await taskRepository.softDelete(id, context.userId);
   },
 
@@ -181,7 +186,7 @@ const taskService = {
 
     const att = task.attachments[0];
     return {
-      absolutePath: StorageService.resolve(att.storageKey),
+      url:          att.url,
       originalName: att.originalName,
       mimeType:     att.mimeType,
     };

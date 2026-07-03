@@ -1,48 +1,45 @@
-const path   = require('path');
-const fs     = require('fs/promises');
-const crypto = require('crypto');
+const { v2: cloudinary } = require('cloudinary');
+const { Readable } = require('stream');
 
-// Absolute path to the uploads root — swap this one line to change the base location.
-// All storageKey values stored in the DB are relative to this root so S3 migration
-// only requires replacing this service, not touching any DB records.
-// Resolves to <backend-root>/uploads — one level above src/
-const UPLOADS_ROOT = path.resolve(__dirname, '../../../../uploads');
+// CLOUDINARY_URL is read automatically by the SDK.
+// Set it in Render's Environment Variables:
+//   CLOUDINARY_URL = cloudinary://API_KEY:API_SECRET@CLOUD_NAME
 
 const StorageService = {
   /**
-   * Persists a file buffer to disk under <folder>/<unique-filename>.
-   * Returns the storageKey (path relative to UPLOADS_ROOT) to store in the DB.
+   * Uploads a file buffer to Cloudinary.
+   * Returns { url, publicId } — both are persisted to the DB.
+   * `folder` maps to the Cloudinary folder, e.g. "workspaces/abc123".
    */
   async save(buffer, originalName, folder = '') {
-    const ext      = path.extname(originalName);
-    const baseName = path.basename(originalName, ext).replace(/[^a-zA-Z0-9._-]/g, '_');
-    const unique   = crypto.randomBytes(8).toString('hex');
-    const filename = `${Date.now()}-${unique}-${baseName}${ext}`;
-
-    const dir      = folder ? path.join(UPLOADS_ROOT, folder) : UPLOADS_ROOT;
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(path.join(dir, filename), buffer);
-
-    return folder ? `${folder}/${filename}` : filename;
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder,
+          resource_type: 'raw',  // handles all types: images, PDFs, docs, zips, etc.
+          use_filename:  false,   // let Cloudinary generate the public_id
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve({ url: result.secure_url, publicId: result.public_id });
+        },
+      );
+      Readable.from(buffer).pipe(stream);
+    });
   },
 
   /**
-   * Deletes a file identified by its storageKey.
-   * Silently succeeds if the file no longer exists (idempotent).
+   * Deletes a file from Cloudinary by its publicId.
+   * Silently succeeds if the file no longer exists.
    */
-  async delete(storageKey) {
+  async delete(publicId) {
+    if (!publicId) return;
     try {
-      await fs.unlink(path.join(UPLOADS_ROOT, storageKey));
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
     } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
+      const code = err?.http_code ?? err?.error?.http_code;
+      if (code !== 404) throw err;
     }
-  },
-
-  /**
-   * Resolves a storageKey to an absolute path for streaming / res.sendFile.
-   */
-  resolve(storageKey) {
-    return path.join(UPLOADS_ROOT, storageKey);
   },
 };
 

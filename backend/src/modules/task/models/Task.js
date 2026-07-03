@@ -4,7 +4,8 @@ const softDelete = require('../../../common/plugins/softDelete');
 const attachmentSchema = new mongoose.Schema(
   {
     originalName: { type: String, required: true },
-    storageKey:   { type: String, required: true },
+    url:          { type: String, required: true },   // Cloudinary CDN URL
+    publicId:     { type: String, required: true },   // Cloudinary public_id (for deletion)
     mimeType:     { type: String, required: true },
     sizeBytes:    { type: Number, required: true },
   },

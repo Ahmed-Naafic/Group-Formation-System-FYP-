@@ -11,11 +11,8 @@ const taskController = {
 
   // GET /api/tasks/:id/attachment
   downloadAttachment: asyncHandler(async (req, res) => {
-    const { absolutePath, originalName, mimeType } =
-      await taskService.getAttachment(req.params.id, req.context);
-    res.set('Content-Disposition', `attachment; filename="${originalName}"`);
-    res.set('Content-Type', mimeType);
-    res.sendFile(absolutePath);
+    const { url } = await taskService.getAttachment(req.params.id, req.context);
+    return res.redirect(url);
   }),
 
   // GET /api/tasks?courseOfferingId=

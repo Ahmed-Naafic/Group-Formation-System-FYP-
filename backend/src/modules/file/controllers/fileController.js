@@ -1,4 +1,3 @@
-const path         = require('path');
 const asyncHandler = require('../../../common/utils/asyncHandler');
 const { sendSuccess } = require('../../../common/responses/apiResponse');
 const fileService  = require('../services/fileService');
@@ -20,15 +19,12 @@ const fileController = {
 
   // GET /api/workspaces/:workspaceId/files/:fileId/download
   download: asyncHandler(async (req, res) => {
-    const { absolutePath, originalName, mimeType } = await fileService.getForDownload(
+    const { url } = await fileService.getForDownload(
       req.params.workspaceId,
       req.params.fileId,
       req.context,
     );
-    const safeName = path.basename(originalName);
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
-    return res.sendFile(absolutePath);
+    return res.redirect(url);
   }),
 
   // DELETE /api/workspaces/:workspaceId/files/:fileId

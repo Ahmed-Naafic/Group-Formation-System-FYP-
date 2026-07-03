@@ -20,8 +20,8 @@ const fileService = {
   async upload(workspaceId, multerFile, context) {
     await workspaceService.getById(workspaceId, context);
 
-    const folder     = `workspaces/${workspaceId}`;
-    const storageKey = await StorageService.save(
+    const folder          = `workspaces/${workspaceId}`;
+    const { url, publicId } = await StorageService.save(
       multerFile.buffer,
       multerFile.originalname,
       folder,
@@ -31,7 +31,8 @@ const fileService = {
       workspaceId,
       uploadedBy:   context.userId,
       originalName: multerFile.originalname,
-      storageKey,
+      url,
+      publicId,
       mimeType:     multerFile.mimetype,
       sizeBytes:    multerFile.size,
     });
@@ -49,7 +50,7 @@ const fileService = {
       throw new ForbiddenError('File does not belong to this workspace');
     }
     return {
-      absolutePath: StorageService.resolve(file.storageKey),
+      url:          file.url,
       originalName: file.originalName,
       mimeType:     file.mimeType,
     };
@@ -69,6 +70,7 @@ const fileService = {
     if (context.role !== 'admin' && String(file.uploadedBy._id ?? file.uploadedBy) !== String(context.userId)) {
       throw new ForbiddenError('You can only delete your own files');
     }
+    await StorageService.delete(file.publicId);
     await fileRepository.softDelete(fileId, context.userId);
   },
 };
