@@ -36,6 +36,7 @@ const taskService = {
         multerFile.buffer,
         multerFile.originalname,
         `tasks/${data.courseOfferingId}`,
+        multerFile.mimetype,
       );
       attachments = [{
         originalName: multerFile.originalname,

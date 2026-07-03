@@ -25,6 +25,7 @@ const fileService = {
       multerFile.buffer,
       multerFile.originalname,
       folder,
+      multerFile.mimetype,
     );
 
     return fileRepository.create({

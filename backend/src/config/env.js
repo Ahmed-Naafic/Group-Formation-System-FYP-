@@ -14,7 +14,6 @@ const schema = Joi.object({
   ADMIN_PASSWORD: Joi.string().min(8).required(),
   ADMIN_FULL_NAME: Joi.string().min(2).required(),
 
-  CLOUDINARY_URL: Joi.string().uri().required(),
 });
 
 const { error, value } = schema.validate(process.env, { abortEarly: false, allowUnknown: true });

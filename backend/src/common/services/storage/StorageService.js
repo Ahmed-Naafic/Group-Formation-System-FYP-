@@ -1,44 +1,46 @@
-const { v2: cloudinary } = require('cloudinary');
-const { Readable } = require('stream');
-
-// CLOUDINARY_URL is read automatically by the SDK.
-// Set it in Render's Environment Variables:
-//   CLOUDINARY_URL = cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+const path   = require('path');
+const crypto = require('crypto');
+const { getStorageBucket } = require('../../../config/firebase');
 
 const StorageService = {
   /**
-   * Uploads a file buffer to Cloudinary.
+   * Uploads a file buffer to Firebase Storage.
    * Returns { url, publicId } — both are persisted to the DB.
-   * `folder` maps to the Cloudinary folder, e.g. "workspaces/abc123".
+   *   url      — permanent public HTTPS URL served via Google's CDN
+   *   publicId — file path inside the bucket (used to delete the file later)
    */
-  async save(buffer, originalName, folder = '') {
-    return new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder,
-          resource_type: 'raw',  // handles all types: images, PDFs, docs, zips, etc.
-          use_filename:  false,   // let Cloudinary generate the public_id
-        },
-        (error, result) => {
-          if (error) return reject(error);
-          resolve({ url: result.secure_url, publicId: result.public_id });
-        },
-      );
-      Readable.from(buffer).pipe(stream);
-    });
+  async save(buffer, originalName, folder = '', mimeType = 'application/octet-stream') {
+    const bucket = getStorageBucket();
+    if (!bucket) throw new Error('Firebase Storage is not initialised');
+
+    const ext      = path.extname(originalName);
+    const base     = path.basename(originalName, ext).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const unique   = crypto.randomBytes(8).toString('hex');
+    const filename = `${Date.now()}-${unique}-${base}${ext}`;
+    const filePath = folder ? `${folder}/${filename}` : filename;
+
+    const file = bucket.file(filePath);
+    await file.save(buffer, { metadata: { contentType: mimeType } });
+
+    // Make the file publicly readable so clients can fetch it directly.
+    await file.makePublic();
+
+    const url = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    return { url, publicId: filePath };
   },
 
   /**
-   * Deletes a file from Cloudinary by its publicId.
+   * Deletes a file from Firebase Storage by its publicId (bucket path).
    * Silently succeeds if the file no longer exists.
    */
   async delete(publicId) {
     if (!publicId) return;
+    const bucket = getStorageBucket();
+    if (!bucket) return;
     try {
-      await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+      await bucket.file(publicId).delete();
     } catch (err) {
-      const code = err?.http_code ?? err?.error?.http_code;
-      if (code !== 404) throw err;
+      if (err?.code !== 404) throw err;
     }
   },
 };
