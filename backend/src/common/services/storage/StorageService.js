@@ -1,47 +1,43 @@
 const path   = require('path');
 const crypto = require('crypto');
-const { getStorageBucket } = require('../../../config/firebase');
+const { createClient } = require('@supabase/supabase-js');
+
+let _client = null;
+const BUCKET = 'gf-system-files';
+
+function getClient() {
+  if (!_client) {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_KEY;
+    if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_KEY env vars are required');
+    _client = createClient(url, key, { auth: { persistSession: false } });
+  }
+  return _client;
+}
 
 const StorageService = {
-  /**
-   * Uploads a file buffer to Firebase Storage.
-   * Returns { url, publicId } — both are persisted to the DB.
-   *   url      — permanent public HTTPS URL served via Google's CDN
-   *   publicId — file path inside the bucket (used to delete the file later)
-   */
   async save(buffer, originalName, folder = '', mimeType = 'application/octet-stream') {
-    const bucket = getStorageBucket();
-    if (!bucket) throw new Error('Firebase Storage is not initialised');
-
     const ext      = path.extname(originalName);
     const base     = path.basename(originalName, ext).replace(/[^a-zA-Z0-9._-]/g, '_');
     const unique   = crypto.randomBytes(8).toString('hex');
     const filename = `${Date.now()}-${unique}-${base}${ext}`;
     const filePath = folder ? `${folder}/${filename}` : filename;
 
-    const file = bucket.file(filePath);
-    await file.save(buffer, { metadata: { contentType: mimeType } });
+    const { error } = await getClient()
+      .storage
+      .from(BUCKET)
+      .upload(filePath, buffer, { contentType: mimeType, upsert: false });
 
-    // Make the file publicly readable so clients can fetch it directly.
-    await file.makePublic();
+    if (error) throw new Error(`Supabase upload failed: ${error.message}`);
 
-    const url = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
-    return { url, publicId: filePath };
+    const { data } = getClient().storage.from(BUCKET).getPublicUrl(filePath);
+    return { url: data.publicUrl, publicId: filePath };
   },
 
-  /**
-   * Deletes a file from Firebase Storage by its publicId (bucket path).
-   * Silently succeeds if the file no longer exists.
-   */
   async delete(publicId) {
     if (!publicId) return;
-    const bucket = getStorageBucket();
-    if (!bucket) return;
-    try {
-      await bucket.file(publicId).delete();
-    } catch (err) {
-      if (err?.code !== 404) throw err;
-    }
+    const { error } = await getClient().storage.from(BUCKET).remove([publicId]);
+    if (error && !error.message.includes('Not Found')) throw new Error(`Supabase delete failed: ${error.message}`);
   },
 };
 
