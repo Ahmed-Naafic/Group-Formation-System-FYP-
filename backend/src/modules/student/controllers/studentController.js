@@ -33,6 +33,12 @@ const studentController = {
     return sendSuccess(res, { message: 'Student updated', data: { student } });
   }),
 
+  // GET /api/students/me  (student-facing — returns own records across cohorts)
+  getMe: asyncHandler(async (req, res) => {
+    const records = await studentService.getMyRecords(req.context);
+    return sendSuccess(res, { data: { records } });
+  }),
+
   // DELETE /api/students/:id
   remove: asyncHandler(async (req, res) => {
     await studentService.softDelete(req.params.id, req.context.userId, req.context);

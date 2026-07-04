@@ -12,4 +12,6 @@ abstract class Routes {
   static const chat           = '/chat';
   static const notifications  = '/notifications';
   static const files          = '/files';
+  static const performance    = '/performance';
+  static const feedback       = '/feedback';
 }

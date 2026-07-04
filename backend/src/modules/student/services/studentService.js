@@ -21,6 +21,11 @@ async function assertCohortAccess(cohortId, context) {
 }
 
 const studentService = {
+  // Student-facing: returns all the caller's own records across cohorts.
+  async getMyRecords(context) {
+    return studentRepository.findAllByUserId(context.userId);
+  },
+
   // ── Called by enrollmentService to check duplicates before creating ──────────
   async existsByStudentIdAndCohort(studentId, cohortId) {
     const user = await userService.findByStudentId(studentId);

@@ -200,6 +200,41 @@ class WorkspaceDetailView extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Get.toNamed(Routes.performance),
+                  icon: const Icon(Icons.school_outlined, size: 17),
+                  label: const Text('My Grades',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Get.toNamed(
+                    Routes.feedback,
+                    arguments: workspace.groupId,
+                  ),
+                  icon: const Icon(Icons.star_border_rounded, size: 17),
+                  label: const Text('Feedback',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

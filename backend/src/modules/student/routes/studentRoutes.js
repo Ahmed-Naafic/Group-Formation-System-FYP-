@@ -26,6 +26,9 @@ const upload = multer({
   },
 });
 
+// Student-facing — must come BEFORE the admin/instructor guard below
+router.get('/me', authenticate, requireRole('student'), studentController.getMe);
+
 router.use(authenticate, requireRole('admin', 'instructor'));
 
 router.post(

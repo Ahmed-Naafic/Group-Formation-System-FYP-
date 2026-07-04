@@ -58,10 +58,10 @@ export const taskApi = baseApi.injectEndpoints({
 
     // Student: save draft
     saveDraft: build.mutation({
-      query: ({ taskId, notes }) => ({
+      query: ({ taskId, notes, fileIds = [] }) => ({
         url: `/api/tasks/${taskId}/draft`,
         method: 'POST',
-        body: { notes: notes || undefined },
+        body: { notes: notes || undefined, fileIds },
       }),
       transformResponse: (res) => res.data.submission,
       invalidatesTags: (result, error, { taskId }) => [{ type: 'Submission', id: `my-${taskId}` }],
@@ -69,10 +69,10 @@ export const taskApi = baseApi.injectEndpoints({
 
     // Student: submit
     submitTask: build.mutation({
-      query: ({ taskId, notes }) => ({
+      query: ({ taskId, notes, fileIds = [] }) => ({
         url: `/api/tasks/${taskId}/submit`,
         method: 'POST',
-        body: { notes: notes || undefined },
+        body: { notes: notes || undefined, fileIds },
       }),
       transformResponse: (res) => res.data.submission,
       invalidatesTags: (result, error, { taskId }) => [{ type: 'Submission', id: `my-${taskId}` }],

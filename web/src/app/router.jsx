@@ -26,6 +26,7 @@ import TaskSubmissionsPage     from '@/features/task/TaskSubmissionsPage';
 import NotificationsPage       from '@/features/notification/NotificationsPage';
 import AuditLogPage            from '@/features/auditLog/AuditLogPage';
 import ReportsPage             from '@/features/report/ReportsPage';
+import AttendancePage          from '@/features/attendance/AttendancePage';
 
 export const router = createBrowserRouter([
   // ── Public ─────────────────────────────────────────────────────────────
@@ -96,6 +97,13 @@ export const router = createBrowserRouter([
         path: '/students/:id',
         element: <ProtectedRoute roles={['admin', 'instructor']}><StudentDetailPage /></ProtectedRoute>,
         handle: { title: 'Student' },
+      },
+
+      // ── Attendance (offering-scoped) ───────────────────────────────────
+      {
+        path: '/course-offerings/:offeringId/attendance',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><AttendancePage /></ProtectedRoute>,
+        handle: { title: 'Attendance' },
       },
 
       // ── Groups (offering-scoped) ────────────────────────────────────────

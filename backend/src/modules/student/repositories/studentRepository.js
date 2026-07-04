@@ -52,6 +52,13 @@ const studentRepository = {
   findActiveByUserId(userId, excludeCohortId) {
     return Student.findOne({ userId, cohortId: { $ne: excludeCohortId } });
   },
+
+  // Returns all active (non-deleted) student records for a user across all cohorts.
+  findAllByUserId(userId) {
+    return Student.find({ userId, deletedAt: null })
+      .populate('cohortId', 'name')
+      .sort({ createdAt: -1 });
+  },
 };
 
 module.exports = studentRepository;
