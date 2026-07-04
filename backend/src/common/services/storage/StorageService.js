@@ -1,5 +1,6 @@
-const path   = require('path');
-const crypto = require('crypto');
+const nodeHttps = require('https');
+const path      = require('path');
+const crypto    = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
 let _client = null;
@@ -38,6 +39,41 @@ const StorageService = {
     if (!publicId) return;
     const { error } = await getClient().storage.from(BUCKET).remove([publicId]);
     if (error && !error.message.includes('Not Found')) throw new Error(`Supabase delete failed: ${error.message}`);
+  },
+
+  // Stream a stored file directly to an Express response without buffering.
+  // Uses the authenticated Supabase endpoint so it works for private buckets.
+  streamFile(publicId, originalName, mimeType, res) {
+    const base = process.env.SUPABASE_URL.replace(/\/$/, '');
+    const storageUrl = `${base}/storage/v1/object/${BUCKET}/${publicId}`;
+    const parsed = new URL(storageUrl);
+
+    return new Promise((resolve, reject) => {
+      nodeHttps.get(
+        {
+          hostname: parsed.hostname,
+          path:     parsed.pathname + parsed.search,
+          headers: {
+            apikey:        process.env.SUPABASE_SERVICE_KEY,
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+          },
+        },
+        (upstream) => {
+          if (upstream.statusCode >= 400) {
+            upstream.resume();
+            return reject(new Error(`Supabase storage returned ${upstream.statusCode} for ${publicId}`));
+          }
+          res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(originalName)}`);
+          res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+          if (upstream.headers['content-length']) {
+            res.setHeader('Content-Length', upstream.headers['content-length']);
+          }
+          upstream.pipe(res);
+          upstream.on('end',   resolve);
+          upstream.on('error', reject);
+        },
+      ).on('error', reject);
+    });
   },
 };
 

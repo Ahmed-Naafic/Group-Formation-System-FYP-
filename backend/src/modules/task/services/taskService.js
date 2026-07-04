@@ -187,7 +187,7 @@ const taskService = {
 
     const att = task.attachments[0];
     return {
-      url:          att.url,
+      publicId:     att.publicId,
       originalName: att.originalName,
       mimeType:     att.mimeType,
     };

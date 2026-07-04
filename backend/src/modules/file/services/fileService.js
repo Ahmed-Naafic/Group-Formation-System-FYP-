@@ -51,7 +51,7 @@ const fileService = {
       throw new ForbiddenError('File does not belong to this workspace');
     }
     return {
-      url:          file.url,
+      publicId:     file.publicId,
       originalName: file.originalName,
       mimeType:     file.mimeType,
     };
