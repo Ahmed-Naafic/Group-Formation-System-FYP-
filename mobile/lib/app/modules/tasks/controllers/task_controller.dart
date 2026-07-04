@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:open_filex/open_filex.dart';
 import '../../../data/models/file_model.dart';
 import '../../../data/models/task_model.dart';
 import '../../../data/models/workspace_model.dart';
@@ -240,7 +240,7 @@ class TaskController extends GetxController {
         message: 'Tap to open $fileName',
         snackPosition: SnackPosition.BOTTOM,
         duration: const Duration(seconds: 4),
-        onTap: (_) => Share.shareXFiles([XFile(savePath, mimeType: mime)]),
+        onTap: (_) => OpenFilex.open(savePath, type: mime),
       );
     } on DioException catch (e) {
       Get.snackbar(

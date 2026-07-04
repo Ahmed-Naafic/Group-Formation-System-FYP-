@@ -3,7 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:open_filex/open_filex.dart';
 import '../../../data/models/file_model.dart';
 import '../../../data/repositories/file_repository.dart';
 import '../../../data/models/workspace_model.dart';
@@ -150,12 +150,9 @@ class FilesController extends GetxController {
   }
 
   Future<void> _openFile(String path, String mime) async {
-    try {
-      await Share.shareXFiles(
-        [XFile(path, mimeType: mime)],
-      );
-    } catch (e) {
-      Get.snackbar('Cannot open file', e.toString(),
+    final result = await OpenFilex.open(path, type: mime);
+    if (result.type != ResultType.done) {
+      Get.snackbar('Cannot open file', result.message,
           snackPosition: SnackPosition.BOTTOM);
     }
   }

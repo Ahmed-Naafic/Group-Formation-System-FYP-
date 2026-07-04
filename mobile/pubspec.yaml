@@ -32,8 +32,11 @@ dependencies:
   # Device path for saving downloaded files
   path_provider: ^2.1.4
 
-  # Open downloaded files via system share/open sheet
+  # Share files
   share_plus: ^10.1.4
+
+  # Open downloaded files with device's default app (PDF viewer, image viewer, etc.)
+  open_filex: ^4.7.0
 
 
   # Firebase push notifications
