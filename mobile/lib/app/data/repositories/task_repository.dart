@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
 import '../models/task_model.dart';
 import '../providers/api_client.dart';
@@ -45,13 +44,10 @@ class TaskRepository {
   }
 
   Future<void> downloadAttachment(String taskId, String savePath) async {
-    final response = await _api.dio.get(
+    await _api.dio.download(
       '/tasks/$taskId/attachment',
-      options: Options(
-        responseType: ResponseType.bytes,
-        receiveTimeout: const Duration(minutes: 2),
-      ),
+      savePath,
+      options: Options(receiveTimeout: const Duration(minutes: 5)),
     );
-    await File(savePath).writeAsBytes(response.data as List<int>);
   }
 }
