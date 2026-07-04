@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Loader2, Crown, Trash2, ArrowLeft, UserPlus, ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Crown, Trash2, ArrowLeft, UserPlus, ExternalLink, Eye, EyeOff, Search } from 'lucide-react';
 import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 import { toast } from 'sonner';
 import { useGetGroupByIdQuery, useGetGroupsQuery, useUpdateGroupMutation } from './groupApi';
@@ -8,6 +8,7 @@ import { useGetWorkspaceByGroupIdQuery } from '@/features/workspace/workspaceApi
 import { useGetStudentsQuery } from '@/features/student/studentApi';
 import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,6 +43,16 @@ export default function GroupDetailPage() {
 
   const [removeTarget,  setRemoveTarget]  = useState(null);
   const [selectedToAdd, setSelectedToAdd] = useState([]);
+  const [availableQuery, setAvailableQuery] = useState('');
+
+  const filteredAvailable = (() => {
+    const q = availableQuery.trim().toLowerCase();
+    if (!q) return available;
+    return available.filter((s) =>
+      s.fullName.toLowerCase().includes(q) ||
+      (s.userId?.studentId ?? '').toLowerCase().includes(q),
+    );
+  })();
 
   // ── Derived data ────────────────────────────────────────────────────────────
 
@@ -254,6 +265,16 @@ export default function GroupDetailPage() {
               All students in this cohort are already assigned to a group.
             </p>
           ) : (
+            <>
+              <div className="px-4 py-2 border-b border-border relative">
+                <Search size={13} className="absolute left-7 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+                <Input
+                  placeholder="Search by name or student ID…"
+                  value={availableQuery}
+                  onChange={(e) => setAvailableQuery(e.target.value)}
+                  className="pl-7 h-8 text-sm"
+                />
+              </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -264,7 +285,9 @@ export default function GroupDetailPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {available.map((s) => {
+                {filteredAvailable.length === 0 ? (
+                  <TableRow><TableCell colSpan={showCategory ? 4 : 3} className="text-center py-6 text-sm text-ink-400">No students match "{availableQuery}"</TableCell></TableRow>
+                ) : filteredAvailable.map((s) => {
                   const checked = selectedToAdd.includes(s._id);
                   return (
                     <TableRow
@@ -296,6 +319,7 @@ export default function GroupDetailPage() {
                 })}
               </TableBody>
             </Table>
+            </>
           )}
         </div>
       </div>

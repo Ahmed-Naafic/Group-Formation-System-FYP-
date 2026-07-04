@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2, Users2, ClipboardList } from 'lucide-react';
+import { Pencil, Trash2, Plus, Loader2, Users2, ClipboardList, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
 import {
@@ -44,6 +44,7 @@ export default function CourseOfferingsPage() {
   const [updateCourseOffering, { isLoading: updating }] = useUpdateCourseOfferingMutation();
   const [deleteCourseOffering, { isLoading: deleting }] = useDeleteCourseOfferingMutation();
 
+  const [query,          setQuery]          = useState('');
   const [cohortFilter,   setCohortFilter]   = useState(ALL);
   const [semesterFilter, setSemesterFilter] = useState(ALL);
   const [dialogOpen,     setDialogOpen]     = useState(false);
@@ -63,6 +64,11 @@ export default function CourseOfferingsPage() {
     const sid = String(o.semesterId?._id ?? o.semesterId ?? '');
     if (cohortFilter   !== ALL && cid !== cohortFilter)   return false;
     if (semesterFilter !== ALL && sid !== semesterFilter) return false;
+    const q = query.trim().toLowerCase();
+    if (q) {
+      const courseName = courseMap[String(o.courseId?._id ?? o.courseId ?? '')] ?? '';
+      if (!courseName.toLowerCase().includes(q)) return false;
+    }
     return true;
   });
 
@@ -153,6 +159,16 @@ export default function CourseOfferingsPage() {
             <Plus size={16} /> New Offering
           </Button>
         )}
+      </div>
+
+      <div className="mb-3 relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+        <Input
+          placeholder="Search by course name…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="pl-8"
+        />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">

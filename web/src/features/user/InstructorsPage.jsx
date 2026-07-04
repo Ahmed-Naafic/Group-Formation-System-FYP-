@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Loader2, UserCheck, UserPlus, Pencil, ShieldOff, ShieldCheck } from 'lucide-react';
+import { Loader2, UserCheck, UserPlus, Pencil, ShieldOff, ShieldCheck, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetUsersQuery,
@@ -29,7 +29,17 @@ export default function InstructorsPage() {
   const [activateUser,     { isLoading: activating }]   = useActivateInstructorMutation();
   const [deactivateUser,   { isLoading: deactivating }] = useDeactivateInstructorMutation();
 
+  const [query,            setQuery]           = useState('');
   const [registerOpen,     setRegisterOpen]    = useState(false);
+
+  const filtered = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return instructors;
+    return instructors.filter((u) =>
+      u.fullName.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q),
+    );
+  })();
   const [editTarget,       setEditTarget]      = useState(null);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
 
@@ -119,6 +129,16 @@ export default function InstructorsPage() {
               </Button>
             </div>
           ) : (
+            <>
+              <div className="px-4 py-3 border-b border-border relative">
+                <Search size={14} className="absolute left-7 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+                <Input
+                  placeholder="Search by name or email…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="pl-7 h-8 text-sm"
+                />
+              </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -129,7 +149,9 @@ export default function InstructorsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {instructors.map((u) => {
+                {filtered.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-sm text-ink-400">No instructors match "{query}"</TableCell></TableRow>
+                ) : filtered.map((u) => {
                   const isActive = u.isActive !== false;
                   const busy     = activating || deactivating;
                   return (
@@ -183,6 +205,7 @@ export default function InstructorsPage() {
                 })}
               </TableBody>
             </Table>
+            </>
           )}
         </CardContent>
       </Card>

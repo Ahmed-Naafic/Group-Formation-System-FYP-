@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown, Eye, EyeOff,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown, Eye, EyeOff, Search,
 } from 'lucide-react';
 import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 import { toast } from 'sonner';
@@ -223,7 +223,14 @@ export default function GroupsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [genWarning, setGenWarning] = useState(null);
 
+  const [query, setQuery] = useState('');
+
   const hasGroups  = groups.length > 0;
+  const filteredGroups = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) => g.name.toLowerCase().includes(q));
+  })();
   const lastOpts   = groups[0]?.generationOptions;
 
   const courseName   = offering?.courseId?.name ?? (loadingOffering ? '…' : 'Offering');
@@ -422,8 +429,19 @@ export default function GroupsPage() {
         /* ── Groups view ──────────────────────────────────────────────────── */
         <>
           {showCategory && <BalanceSummary groups={groups} />}
-          <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {groups.map((group) => (
+          <div className="mt-5 mb-4 relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+            <Input
+              placeholder="Search groups…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredGroups.length === 0 ? (
+              <p className="col-span-3 text-center py-8 text-sm text-ink-400">No groups match "{query}"</p>
+            ) : filteredGroups.map((group) => (
               <GroupCard
                 key={group._id}
                 group={group}

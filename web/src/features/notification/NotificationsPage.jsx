@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Bell, Users2, ClipboardList, CheckCircle2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -85,8 +86,13 @@ export default function NotificationsPage() {
   const notifications = data?.notifications ?? [];
   const unreadCount   = data?.unreadCount   ?? 0;
 
+  const [filter,     setFilter]              = useState('all');
   const [markRead,   { isLoading: marking }]    = useMarkReadMutation();
   const [markAllRead, { isLoading: markingAll }] = useMarkAllReadMutation();
+
+  const visibleNotifications = filter === 'unread'
+    ? notifications.filter((n) => !n.isRead)
+    : notifications;
 
   async function handleMarkRead(id) {
     try {
@@ -108,7 +114,7 @@ export default function NotificationsPage() {
   return (
     <div className="max-w-2xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-ink-900 leading-none">Notifications</h2>
           {unreadCount > 0 && (
@@ -130,6 +136,25 @@ export default function NotificationsPage() {
         )}
       </div>
 
+      {/* Filter pills */}
+      {!isLoading && notifications.length > 0 && (
+        <div className="mb-4 flex items-center gap-2">
+          {['all', 'unread'].map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
+                filter === f
+                  ? 'bg-just-blue-600 text-white'
+                  : 'bg-white border border-border text-ink-500 hover:border-just-blue-300 hover:text-just-blue-600'
+              }`}
+            >
+              {f === 'all' ? 'All' : `Unread${unreadCount ? ` (${unreadCount})` : ''}`}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* List */}
       {isLoading ? (
         <div className="flex justify-center py-20">
@@ -140,9 +165,14 @@ export default function NotificationsPage() {
           <Bell size={32} className="text-ink-200" />
           <p className="text-sm text-ink-400">No notifications yet.</p>
         </div>
+      ) : visibleNotifications.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border bg-white py-16 flex flex-col items-center gap-3">
+          <Bell size={32} className="text-ink-200" />
+          <p className="text-sm text-ink-400">No unread notifications.</p>
+        </div>
       ) : (
         <div className="rounded-lg border border-border bg-white shadow-xs overflow-hidden divide-y divide-border">
-          {notifications.map((n) => (
+          {visibleNotifications.map((n) => (
             <NotificationItem
               key={n._id}
               notification={n}

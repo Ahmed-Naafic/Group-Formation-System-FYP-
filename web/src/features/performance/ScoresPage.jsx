@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
-import { Loader2, RefreshCw, Save, Eye, EyeOff } from 'lucide-react';
+import { Loader2, RefreshCw, Save, Eye, EyeOff, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { selectRole } from '@/features/auth/authSlice';
 import { useGetStudentsQuery } from '@/features/student/studentApi';
@@ -91,6 +92,16 @@ export default function ScoresPage() {
 
   const cohortName = cohort?.name ?? (loadingCohort ? '…' : 'Cohort');
   const { showCategory, toggleCategory } = useCategoryVisibility();
+  const [query, setQuery] = useState('');
+
+  const filtered = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter((s) =>
+      s.fullName.toLowerCase().includes(q) ||
+      (s.userId?.studentId ?? '').toLowerCase().includes(q),
+    );
+  })();
 
   async function handleRecalculate() {
     try {
@@ -133,6 +144,18 @@ export default function ScoresPage() {
         </div>
       </div>
 
+      {!isLoading && !error && students.length > 0 && (
+        <div className="mb-4 relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+          <Input
+            placeholder="Search by name or student ID…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+      )}
+
       <div className="rounded-lg border border-border bg-white shadow-xs overflow-x-auto">
         {error ? (
           <p className="p-6 text-sm text-danger">{error?.data?.error?.message ?? 'Failed to load students.'}</p>
@@ -161,7 +184,9 @@ export default function ScoresPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {students.map((s) => (
+              {filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={showCategory ? 5 : 4} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
+              ) : filtered.map((s) => (
                 <ScoreRow key={s._id} student={s} isAdmin={isAdmin} showCategory={showCategory} />
               ))}
             </TableBody>

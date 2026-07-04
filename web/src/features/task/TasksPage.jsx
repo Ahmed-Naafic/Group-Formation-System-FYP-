@@ -98,6 +98,7 @@ export default function TasksPage() {
   const [updateTask, { isLoading: updating }]        = useUpdateTaskMutation();
   const [deleteTask, { isLoading: deleting }]        = useDeleteTaskMutation();
 
+  const [statusFilter,   setStatusFilter]   = useState('all');
   const [newOpen,        setNewOpen]        = useState(false);
   const [deleteTarget,   setDeleteTarget]   = useState(null);
   const [editTarget,     setEditTarget]     = useState(null);
@@ -211,6 +212,25 @@ export default function TasksPage() {
         </Button>
       </div>
 
+      {/* Status filter */}
+      {!isLoading && !error && tasks.length > 0 && (
+        <div className="mb-4 flex items-center gap-2">
+          {['all', 'open', 'closed'].map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
+                statusFilter === s
+                  ? 'bg-just-blue-600 text-white'
+                  : 'bg-white border border-border text-ink-500 hover:border-just-blue-300 hover:text-just-blue-600'
+              }`}
+            >
+              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Task list */}
       {isLoading ? (
         <div className="flex justify-center py-20">
@@ -228,7 +248,11 @@ export default function TasksPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {tasks.map((task) => (
+          {(() => {
+            const filteredTasks = statusFilter === 'all' ? tasks : tasks.filter((t) => t.status === statusFilter);
+            return filteredTasks.length === 0 ? (
+              <p className="text-sm text-ink-400 text-center py-8">No {statusFilter} tasks.</p>
+            ) : filteredTasks.map((task) => (
             <div
               key={task._id}
               className="rounded-lg border border-border bg-white shadow-xs px-5 py-4 flex items-start gap-4"
@@ -275,7 +299,8 @@ export default function TasksPage() {
                 </Button>
               </div>
             </div>
-          ))}
+          ));
+          })()}
         </div>
       )}
 

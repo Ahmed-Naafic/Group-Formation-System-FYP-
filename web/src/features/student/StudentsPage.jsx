@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, EyeOff, Copy, Check, BarChart2, Users2, UserX } from 'lucide-react';
+import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, EyeOff, Copy, Check, BarChart2, Users2, UserX, Search } from 'lucide-react';
 import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
@@ -59,6 +59,17 @@ export default function StudentsPage() {
   const [resetPassword, { isLoading: resetting }]  = useResetStudentPasswordMutation();
   const [clearRoster,   { isLoading: clearing }]   = useClearRosterMutation();
   const [updateScores]                             = useUpdateScoresMutation();
+
+  const [query, setQuery] = useState('');
+
+  const filtered = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter((s) =>
+      s.fullName.toLowerCase().includes(q) ||
+      (s.userId?.studentId ?? '').toLowerCase().includes(q),
+    );
+  })();
 
   const [createOpen, setCreateOpen]       = useState(false);
   const [editing, setEditing]             = useState(null);
@@ -202,6 +213,18 @@ export default function StudentsPage() {
         </div>
       </div>
 
+      {!isLoading && !error && students.length > 0 && (
+        <div className="mb-4 relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+          <Input
+            placeholder="Search by name or student ID…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+      )}
+
       <div className="rounded-lg border border-border bg-white shadow-xs">
         {error ? (
           <p className="p-6 text-sm text-danger">{error?.data?.error?.message ?? 'Failed to load students.'}</p>
@@ -231,7 +254,9 @@ export default function StudentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {students.map((s) => (
+              {filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={showCategory ? 5 : 4} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
+              ) : filtered.map((s) => (
                 <TableRow key={s._id}>
                   <TableCell className="font-mono text-xs text-ink-500">{s.userId?.studentId ?? '—'}</TableCell>
                   <TableCell className="font-medium text-ink-800">{s.fullName}</TableCell>
