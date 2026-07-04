@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import '../models/task_model.dart';
 import '../providers/api_client.dart';
@@ -43,11 +44,14 @@ class TaskRepository {
     );
   }
 
-  Future<void> downloadAttachment(String url, String savePath) async {
-    await _api.dio.download(
-      url,
-      savePath,
-      options: Options(responseType: ResponseType.bytes),
+  Future<void> downloadAttachment(String taskId, String savePath) async {
+    final response = await _api.dio.get(
+      '/tasks/$taskId/attachment',
+      options: Options(
+        responseType: ResponseType.bytes,
+        receiveTimeout: const Duration(minutes: 2),
+      ),
     );
+    await File(savePath).writeAsBytes(response.data as List<int>);
   }
 }

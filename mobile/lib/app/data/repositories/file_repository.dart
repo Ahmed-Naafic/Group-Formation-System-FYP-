@@ -49,9 +49,9 @@ class FileRepository {
     await _client.dio.delete('/workspaces/$workspaceId/files/$fileId');
   }
 
-  Future<String> downloadFile(String url, String savePath) async {
+  Future<String> downloadFile(String workspaceId, String fileId, String savePath) async {
     final response = await _client.dio.get(
-      url,
+      '/workspaces/$workspaceId/files/$fileId/download',
       options: Options(
         responseType: ResponseType.bytes,
         receiveTimeout: const Duration(minutes: 2),
