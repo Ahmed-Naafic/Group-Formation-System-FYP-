@@ -4,37 +4,32 @@ const taskService     = require('../services/taskService');
 const StorageService  = require('../../../common/services/storage/StorageService');
 
 const taskController = {
-  // POST /api/tasks
   create: asyncHandler(async (req, res) => {
     const task = await taskService.create(req.body, req.context, req.file ?? null);
     return sendSuccess(res, { status: 201, data: { task } });
   }),
 
-  // GET /api/tasks/:id/attachment
   downloadAttachment: asyncHandler(async (req, res) => {
-    const { publicId, originalName, mimeType } = await taskService.getAttachment(req.params.id, req.context);
-    await StorageService.streamFile(publicId, originalName, mimeType, res);
+    const { publicId } = await taskService.getAttachment(req.params.id, req.context);
+    const signedUrl = await StorageService.createSignedUrl(publicId);
+    return res.redirect(signedUrl);
   }),
 
-  // GET /api/tasks?courseOfferingId=
   list: asyncHandler(async (req, res) => {
     const tasks = await taskService.list(req.query.courseOfferingId, req.context);
     return sendSuccess(res, { data: { tasks } });
   }),
 
-  // GET /api/tasks/:id
   getById: asyncHandler(async (req, res) => {
     const task = await taskService.getById(req.params.id, req.context);
     return sendSuccess(res, { data: { task } });
   }),
 
-  // PATCH /api/tasks/:id
   update: asyncHandler(async (req, res) => {
     const task = await taskService.update(req.params.id, req.body, req.context);
     return sendSuccess(res, { data: { task } });
   }),
 
-  // DELETE /api/tasks/:id
   remove: asyncHandler(async (req, res) => {
     await taskService.remove(req.params.id, req.context);
     return sendSuccess(res, { message: 'Task deleted' });
