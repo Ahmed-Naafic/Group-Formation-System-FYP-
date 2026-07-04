@@ -6,8 +6,8 @@ const fileSchema = new mongoose.Schema(
     workspaceId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Workspace', required: true, index: true },
     uploadedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User',      required: true },
     originalName: { type: String, required: true, trim: true },
-    url:          { type: String, required: true },   // Cloudinary CDN URL
-    publicId:     { type: String, required: true },   // Cloudinary public_id (for deletion)
+    url:          { type: String, required: true },
+    publicId:     { type: String },
     mimeType:     { type: String, required: true },
     sizeBytes:    { type: Number, required: true },
     uploadedAt:   { type: Date,   default: Date.now },
