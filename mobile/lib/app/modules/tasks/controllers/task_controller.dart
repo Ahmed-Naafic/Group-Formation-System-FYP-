@@ -20,6 +20,10 @@ class TaskController extends GetxController {
   static const _delays = [800, 1500, 3000];
   bool _disposed = false;
 
+  // Shared across instances so re-opening the screen is instant
+  static final _taskCache   = <String, List<TaskModel>>{};
+  static final _wsFileCache = <String, List<FileModel>>{};
+
   // ── List state ───────────────────────────────────────────────────────────────
   final isLoading    = true.obs;
   final errorMessage = ''.obs;
@@ -61,19 +65,32 @@ class TaskController extends GetxController {
     super.onClose();
   }
 
-  Future<void> fetchTasks({int attempt = 0}) async {
+  Future<void> fetchTasks({int attempt = 0, bool forceRefresh = false}) async {
     if (_disposed) return;
-    isLoading.value    = true;
     errorMessage.value = '';
+
+    if (attempt == 0 && !forceRefresh) {
+      final cached = _taskCache[workspace.courseOfferingId];
+      if (cached != null) {
+        tasks.value = cached;
+        isLoading.value = false;
+        _syncTasksBackground();
+        return;
+      }
+    }
+
+    isLoading.value = true;
     try {
-      tasks.value = await _repo.getTasksForOffering(workspace.courseOfferingId);
+      final result = await _repo.getTasksForOffering(workspace.courseOfferingId);
+      _taskCache[workspace.courseOfferingId] = List<TaskModel>.from(result);
+      tasks.value = result;
       if (!_disposed) isLoading.value = false;
     } catch (e) {
       if (_disposed) return;
       if (attempt < _maxAttempts - 1) {
         final delay = _delays[attempt.clamp(0, _delays.length - 1)];
         await Future.delayed(Duration(milliseconds: delay));
-        if (!_disposed) await fetchTasks(attempt: attempt + 1);
+        if (!_disposed) await fetchTasks(attempt: attempt + 1, forceRefresh: forceRefresh);
       } else {
         final msg = e is DioException
             ? (e.response?.data?['error']?['message'] as String?) ?? 'Could not load tasks.'
@@ -84,11 +101,33 @@ class TaskController extends GetxController {
     }
   }
 
+  Future<void> _syncTasksBackground() async {
+    if (_disposed) return;
+    try {
+      final result = await _repo.getTasksForOffering(workspace.courseOfferingId);
+      _taskCache[workspace.courseOfferingId] = List<TaskModel>.from(result);
+      if (!_disposed) tasks.value = result;
+    } catch (_) {}
+  }
+
   Future<void> _loadWorkspaceFiles({int attempt = 0}) async {
     if (_disposed) return;
+
+    if (attempt == 0) {
+      final cached = _wsFileCache[workspace.id];
+      if (cached != null) {
+        workspaceFiles.assignAll(cached);
+        isLoadingFiles.value = false;
+        _syncFilesBackground();
+        return;
+      }
+    }
+
     isLoadingFiles.value = true;
     try {
-      workspaceFiles.assignAll(await _fileRepo.getFiles(workspace.id));
+      final result = await _fileRepo.getFiles(workspace.id);
+      _wsFileCache[workspace.id] = List<FileModel>.from(result);
+      workspaceFiles.assignAll(result);
       if (!_disposed) isLoadingFiles.value = false;
     } catch (_) {
       if (_disposed) return;
@@ -100,6 +139,15 @@ class TaskController extends GetxController {
         if (!_disposed) isLoadingFiles.value = false;
       }
     }
+  }
+
+  Future<void> _syncFilesBackground() async {
+    if (_disposed) return;
+    try {
+      final result = await _fileRepo.getFiles(workspace.id);
+      _wsFileCache[workspace.id] = List<FileModel>.from(result);
+      if (!_disposed) workspaceFiles.assignAll(result);
+    } catch (_) {}
   }
 
   Future<void> pickFileForSubmission() async {
@@ -222,6 +270,7 @@ class TaskController extends GetxController {
           filePath: path,
         );
         workspaceFiles.insert(0, uploaded);
+        _wsFileCache[workspace.id] = List<FileModel>.from(workspaceFiles);
         ids.add(uploaded.id);
         clearPickedFile();
       } finally {
@@ -244,7 +293,7 @@ class TaskController extends GetxController {
       final sub = await _repo.submit(task.id, notesCtrl.text.trim(), ids);
       currentSubmission.value = sub;
       submitSuccess.value     = true;
-      fetchTasks();
+      fetchTasks(forceRefresh: true);
     } on DioException catch (e) {
       submitError.value =
           (e.response?.data?['error']?['message'] as String?) ??

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../data/providers/api_client.dart';
 import '../../auth/controllers/auth_controller.dart';
 
 class SplashView extends StatefulWidget {
@@ -27,6 +28,10 @@ class _SplashViewState extends State<SplashView>
       CurvedAnimation(parent: _ac, curve: Curves.easeOut),
     );
     _ac.forward();
+
+    // Wake the server immediately — fire-and-forget so cold starts happen
+    // during the splash animation rather than when the user opens a screen.
+    ApiClient().dio.get('/health').catchError((_) {});
 
     // Navigate after animation + a short hold
     Future.delayed(const Duration(milliseconds: 1600), () {

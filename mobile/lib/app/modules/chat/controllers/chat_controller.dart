@@ -28,6 +28,7 @@ class ChatController extends GetxController {
 
   WorkspaceModel? workspace;
   String _myStudentId = '';
+  String _myFullName  = '';
   io.Socket? _socket;
   Timer? _typingTimer;
   bool _disposed = false;
@@ -50,6 +51,7 @@ class ChatController extends GetxController {
     }
     workspace    = args;
     _myStudentId = Get.find<AuthController>().userStudentId.value;
+    _myFullName  = Get.find<AuthController>().userName.value;
 
     // Clear the unread badge for this workspace now that the user is here
     try { Get.find<NotificationController>().clearUnread(workspace!.id); } catch (_) {}
@@ -100,9 +102,12 @@ class ChatController extends GetxController {
   Future<void> _syncNew() async {
     final ws = workspace;
     if (ws == null || _disposed || messages.isEmpty) return;
+    // Use the last confirmed (non-pending) message as the sync anchor
+    final confirmed = messages.where((m) => !m.isPending).toList();
+    if (confirmed.isEmpty) return;
     isSyncing.value = true;
     try {
-      final lastId = messages.last.id;
+      final lastId = confirmed.last.id;
       final newer  = await _repo.getHistory(ws.id, after: lastId);
       if (_disposed) return;
       if (newer.isNotEmpty) {
@@ -233,6 +238,17 @@ class ChatController extends GetxController {
               ? msgJson
               : Map<String, dynamic>.from(msgJson),
         );
+        // My own message returning from server: upgrade pending → confirmed (2 ticks)
+        if (_myStudentId.isNotEmpty && msg.sender.studentId == _myStudentId) {
+          final pendingIdx = messages.indexWhere(
+            (m) => m.isPending && m.content == msg.content,
+          );
+          if (pendingIdx != -1) {
+            messages[pendingIdx] = msg;
+            _cache[workspace!.id] = List<ChatMessage>.from(messages);
+            return;
+          }
+        }
         if (msg.id.isNotEmpty && !messages.any((m) => m.id == msg.id)) {
           messages.add(msg);
           _cache[workspace!.id] = List<ChatMessage>.from(messages);
@@ -311,13 +327,28 @@ class ChatController extends GetxController {
     final ws   = workspace;
     final text = textCtrl.text.trim();
     if (text.isEmpty || ws == null) return;
-    if (!isSocketConnected.value) return;
     _stopTyping();
     textCtrl.clear();
-    _socket!.emit('send-message', {
-      'workspaceId': ws.id,
-      'content':     text,
-    });
+
+    // Optimistic message — shows immediately with 1 tick
+    final pending = ChatMessage(
+      id:          'pending_${DateTime.now().millisecondsSinceEpoch}',
+      workspaceId: ws.id,
+      sender:      ChatSender(id: '', fullName: _myFullName, studentId: _myStudentId),
+      content:     text,
+      createdAt:   DateTime.now(),
+      isPending:   true,
+    );
+    messages.add(pending);
+    _cache[ws.id] = List<ChatMessage>.from(messages);
+    _scrollToBottom(force: true);
+
+    if (isSocketConnected.value) {
+      _socket!.emit('send-message', {
+        'workspaceId': ws.id,
+        'content':     text,
+      });
+    }
   }
 
   @override

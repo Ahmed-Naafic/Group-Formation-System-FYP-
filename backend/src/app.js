@@ -61,6 +61,9 @@ app.get('/health', (_req, res) => {
   });
 });
 
+// Alias under /api/ so mobile clients (whose baseUrl is /api) can reach it
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
 // ── Module routes ────────────────────────────────────────────────────────────
 app.use('/api/auth',        require('./modules/auth/routes/authRoutes'));
 app.use('/api/faculty',     require('./modules/faculty/routes/facultyRoutes'));

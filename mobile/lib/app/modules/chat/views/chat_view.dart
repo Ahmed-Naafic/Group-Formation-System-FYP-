@@ -50,28 +50,8 @@ class ChatView extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // ── Connection status banner ───────────────────────────────────────
+          // ── No-internet banner (shown only after all reconnect attempts fail) ──
           Obx(() {
-            if (ctrl.isConnecting.value) {
-              return Container(
-                width: double.infinity,
-                color: const Color(0xFF1E3A8A).withAlpha(20),
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 12, height: 12,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Color(0xFF1E3A8A)),
-                    ),
-                    SizedBox(width: 8),
-                    Text('Connecting to chat…',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF1E3A8A))),
-                  ],
-                ),
-              );
-            }
             if (!ctrl.isSocketConnected.value && !ctrl.isConnecting.value && ctrl.workspace != null) {
               return Container(
                 width: double.infinity,
@@ -80,12 +60,14 @@ class ChatView extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Chat disconnected',
+                    const Icon(Icons.wifi_off_rounded, size: 13, color: Color(0xFFE53E3E)),
+                    const SizedBox(width: 6),
+                    const Text('No internet · Messages may not send',
                         style: TextStyle(fontSize: 12, color: Color(0xFFE53E3E))),
                     const SizedBox(width: 8),
                     GestureDetector(
                       onTap: ctrl.reconnect,
-                      child: const Text('Reconnect',
+                      child: const Text('Retry',
                           style: TextStyle(
                               fontSize: 12,
                               color: Color(0xFF1E3A8A),
@@ -338,15 +320,27 @@ class _MessageBubble extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    DateFormat('h:mm a')
-                        .format(msg.createdAt.toLocal()),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isMe
-                          ? Colors.white.withAlpha(160)
-                          : context.textMuted,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat('h:mm a').format(msg.createdAt.toLocal()),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isMe
+                              ? Colors.white.withAlpha(160)
+                              : context.textMuted,
+                        ),
+                      ),
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          msg.isPending ? Icons.check : Icons.done_all,
+                          size: 13,
+                          color: Colors.white.withAlpha(160),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),

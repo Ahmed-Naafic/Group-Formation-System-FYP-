@@ -22,6 +22,9 @@ class FilesController extends GetxController {
   static const _maxAttempts = 4;
   static const _delays = [800, 1500, 3000]; // ms between retries
 
+  // Shared across instances so re-opening the screen is instant
+  static final _cache = <String, List<FileModel>>{};
+
   @override
   void onInit() {
     super.onInit();
@@ -37,10 +40,23 @@ class FilesController extends GetxController {
   Future<void> _fetchWithRetry({int attempt = 0}) async {
     final ws = workspace;
     if (ws == null || _disposed) return;
+
+    if (attempt == 0) {
+      final cached = _cache[ws.id];
+      if (cached != null) {
+        files.assignAll(cached);
+        isLoading.value = false;
+        _syncBackground(ws);
+        return;
+      }
+    }
+
     isLoading.value    = true;
     errorMessage.value = null;
     try {
-      files.assignAll(await _repo.getFiles(ws.id));
+      final result = await _repo.getFiles(ws.id);
+      _cache[ws.id] = List<FileModel>.from(result);
+      files.assignAll(result);
     } catch (_) {
       if (_disposed) return;
       if (attempt < _maxAttempts - 1) {
@@ -56,6 +72,15 @@ class FilesController extends GetxController {
     if (!_disposed) isLoading.value = false;
   }
 
+  Future<void> _syncBackground(WorkspaceModel ws) async {
+    if (_disposed) return;
+    try {
+      final result = await _repo.getFiles(ws.id);
+      _cache[ws.id] = List<FileModel>.from(result);
+      if (!_disposed) files.assignAll(result);
+    } catch (_) {}
+  }
+
   @override
   void onClose() {
     _disposed = true;
@@ -65,6 +90,8 @@ class FilesController extends GetxController {
   @override
   Future<void> refresh() async {
     _disposed = false;
+    final ws = workspace;
+    if (ws != null) _cache.remove(ws.id); // force a fresh fetch on explicit pull-to-refresh
     await _fetchWithRetry();
   }
 
@@ -93,6 +120,7 @@ class FilesController extends GetxController {
         bytes:    kIsWeb ? pf.bytes : null,
       );
       files.insert(0, uploaded);
+      _cache[ws.id] = List<FileModel>.from(files);
     } catch (e) {
       Get.snackbar('Upload failed', e.toString(),
           snackPosition: SnackPosition.BOTTOM);
@@ -138,6 +166,7 @@ class FilesController extends GetxController {
     try {
       await _repo.deleteFile(ws.id, f.id);
       files.removeWhere((x) => x.id == f.id);
+      _cache[ws.id] = List<FileModel>.from(files);
     } catch (e) {
       Get.snackbar('Delete failed', e.toString(),
           snackPosition: SnackPosition.BOTTOM);

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import '../../../data/models/workspace_model.dart';
+import '../../../data/providers/api_client.dart';
 import '../../../data/repositories/workspace_repository.dart';
 import '../../notifications/controllers/notification_controller.dart';
 
@@ -14,12 +16,18 @@ class DashboardController extends GetxController {
   static const _maxAttempts = 4;
   static const _delays = [800, 1500, 3000];
   bool _disposed = false;
+  Timer? _keepAliveTimer;
 
   @override
   void onInit() {
     super.onInit();
     fetchWorkspaces();
     Get.find<NotificationController>().connect();
+    // Ping every 14 min to prevent Render free tier from sleeping
+    _keepAliveTimer = Timer.periodic(
+      const Duration(minutes: 14),
+      (_) => ApiClient().dio.get('/health').catchError((_) {}),
+    );
   }
 
   Future<void> fetchWorkspaces({int attempt = 0}) async {
@@ -52,6 +60,7 @@ class DashboardController extends GetxController {
   @override
   void onClose() {
     _disposed = true;
+    _keepAliveTimer?.cancel();
     super.onClose();
   }
 }

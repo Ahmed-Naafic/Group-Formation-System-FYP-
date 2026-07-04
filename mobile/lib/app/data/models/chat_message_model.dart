@@ -22,6 +22,7 @@ class ChatMessage {
   final ChatSender sender;
   final String content;
   final DateTime createdAt;
+  final bool isPending;
 
   const ChatMessage({
     required this.id,
@@ -29,6 +30,7 @@ class ChatMessage {
     required this.sender,
     required this.content,
     required this.createdAt,
+    this.isPending = false,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
