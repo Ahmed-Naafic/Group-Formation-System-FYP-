@@ -158,7 +158,6 @@ class AuthController extends GetxController {
       final resp = await _api.dio.patch(
         '/auth/avatar',
         data: formData,
-        options: Options(contentType: 'multipart/form-data'),
       );
       final user = resp.data['data']['user'] as Map<String, dynamic>;
       avatarUrl.value = user['avatarUrl'] as String?;
