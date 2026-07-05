@@ -45,6 +45,17 @@ export default function GroupDetailPage() {
   const [selectedToAdd, setSelectedToAdd] = useState([]);
   const [availableQuery, setAvailableQuery] = useState('');
 
+  // ── Derived data ────────────────────────────────────────────────────────────
+  // `available` must be declared before `filteredAvailable` — the IIFE
+  // references it directly, and accessing a `const` before its declaration
+  // throws a TDZ ReferenceError in production bundles.
+
+  const leaderId = group ? String(group.leaderId?._id ?? group.leaderId) : null;
+
+  const takenIds = new Set();
+  allGroups.forEach((g) => g.memberIds?.forEach((m) => takenIds.add(String(m._id))));
+  const available = allStudents.filter((s) => !takenIds.has(String(s._id)));
+
   const filteredAvailable = (() => {
     const q = availableQuery.trim().toLowerCase();
     if (!q) return available;
@@ -53,14 +64,6 @@ export default function GroupDetailPage() {
       (s.userId?.studentId ?? '').toLowerCase().includes(q),
     );
   })();
-
-  // ── Derived data ────────────────────────────────────────────────────────────
-
-  const leaderId = group ? String(group.leaderId?._id ?? group.leaderId) : null;
-
-  const takenIds = new Set();
-  allGroups.forEach((g) => g.memberIds?.forEach((m) => takenIds.add(String(m._id))));
-  const available = allStudents.filter((s) => !takenIds.has(String(s._id)));
 
   const backOfferingId = location.state?.courseOfferingId ?? courseOfferingId;
   const backTo = backOfferingId
