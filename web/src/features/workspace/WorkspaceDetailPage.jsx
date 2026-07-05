@@ -179,8 +179,11 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
               <div key={msg._id} className={cn('flex gap-2', isMine ? 'flex-row-reverse' : 'flex-row')}>
                 {/* Avatar */}
                 {!isMine && (
-                  <div className="shrink-0 h-7 w-7 rounded-full bg-just-blue-100 flex items-center justify-center text-[10px] font-bold text-just-blue-700 mt-0.5">
-                    {(msg.senderId?.fullName ?? '?').charAt(0).toUpperCase()}
+                  <div className="shrink-0 h-7 w-7 rounded-full bg-just-blue-100 overflow-hidden flex items-center justify-center text-[10px] font-bold text-just-blue-700 mt-0.5">
+                    {msg.senderId?.avatarUrl
+                      ? <img src={msg.senderId.avatarUrl} alt={msg.senderId.fullName} className="h-full w-full object-cover" />
+                      : (msg.senderId?.fullName ?? '?').charAt(0).toUpperCase()
+                    }
                   </div>
                 )}
                 <div className={cn('max-w-[72%]', isMine ? 'items-end' : 'items-start', 'flex flex-col gap-0.5')}>

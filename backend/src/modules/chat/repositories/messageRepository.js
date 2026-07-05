@@ -1,6 +1,6 @@
 const Message = require('../models/Message');
 
-const SENDER_POPULATE = { path: 'senderId', select: 'fullName role studentId' };
+const SENDER_POPULATE = { path: 'senderId', select: 'fullName role studentId avatarUrl' };
 
 const messageRepository = {
   create(data) {

@@ -5,11 +5,13 @@ class MemberModel {
   final String id;
   final String fullName;
   final String studentId;
+  final String? avatarUrl;
 
   MemberModel._({
     required this.id,
     required this.fullName,
     required this.studentId,
+    this.avatarUrl,
   });
 
   factory MemberModel.fromJson(Map<String, dynamic> json) {
@@ -18,6 +20,7 @@ class MemberModel {
       id:        json['_id']      as String? ?? '',
       fullName:  json['fullName'] as String? ?? '',
       studentId: userMap['studentId'] as String? ?? '',
+      avatarUrl: userMap['avatarUrl'] as String?,
       // performanceCategory is deliberately not read
     );
   }

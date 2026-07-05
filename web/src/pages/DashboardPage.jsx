@@ -591,17 +591,21 @@ function StudentDashboard({ user }) {
                     <div className="flex -space-x-2">
                       {shown.map((m) => {
                         const isLeader = String(m._id) === leaderId;
+                        const url = m.userId?.avatarUrl;
                         return (
                           <div
                             key={m._id}
                             title={`${m.fullName}${isLeader ? ' (leader)' : ''}`}
                             className={cn(
-                              'flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold border-2 border-white',
-                              avatarColor(m.fullName),
+                              'flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold border-2 border-white overflow-hidden',
+                              !url && avatarColor(m.fullName),
                               isLeader && 'ring-2 ring-offset-1 ring-amber-300',
                             )}
                           >
-                            {initials(m.fullName)}
+                            {url
+                              ? <img src={url} alt={m.fullName} className="h-full w-full object-cover" />
+                              : initials(m.fullName)
+                            }
                           </div>
                         );
                       })}

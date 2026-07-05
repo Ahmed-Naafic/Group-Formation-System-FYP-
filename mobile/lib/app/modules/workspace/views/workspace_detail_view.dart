@@ -309,19 +309,44 @@ class _MemberRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: isMe
-                ? const Color(0xFF1E3A8A)
-                : const Color(0xFF1E3A8A).withAlpha(20),
-            child: Text(
-              initial,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: isMe ? Colors.white : const Color(0xFF1E3A8A),
-              ),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isMe
+                  ? const Color(0xFF1E3A8A)
+                  : const Color(0xFF1E3A8A).withAlpha(20),
             ),
+            child: member.avatarUrl != null
+                ? ClipOval(
+                    child: Image.network(
+                      member.avatarUrl!,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, a, b) => Center(
+                        child: Text(
+                          initial,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: isMe ? Colors.white : const Color(0xFF1E3A8A),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Text(
+                      initial,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isMe ? Colors.white : const Color(0xFF1E3A8A),
+                      ),
+                    ),
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(

@@ -14,12 +14,12 @@ const GROUP_POPULATE = {
     {
       path: 'leaderId',
       select: 'fullName performanceCategory userId',
-      populate: { path: 'userId', select: 'studentId' },
+      populate: { path: 'userId', select: 'studentId avatarUrl' },
     },
     {
       path: 'memberIds',
       select: 'fullName performanceCategory userId',
-      populate: { path: 'userId', select: 'studentId' },
+      populate: { path: 'userId', select: 'studentId avatarUrl' },
     },
   ],
 };

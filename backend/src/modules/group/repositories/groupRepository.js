@@ -2,7 +2,7 @@ const Group = require('../models/Group');
 
 // attendance removed from Student in Step 5 — no longer populated
 const STUDENT_SELECT = 'fullName averageScore performanceCategory hasBeenLeader leaderCount userId';
-const USER_SELECT    = 'studentId email';
+const USER_SELECT    = 'studentId email avatarUrl';
 
 function withMembers(query) {
   return query
