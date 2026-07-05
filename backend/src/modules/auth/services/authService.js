@@ -90,15 +90,19 @@ const authService = {
       await StorageService.delete(user.avatarPublicId).catch(() => {});
     }
 
-    const { url, publicId } = await StorageService.save(
+    const { publicId } = await StorageService.save(
       multerFile.buffer,
       multerFile.originalname,
       `avatars/${userId}`,
       multerFile.mimetype,
     );
 
+    // Use a signed URL — the bucket is private, so public URLs return 403.
+    // 10-year expiry is effectively permanent for a profile picture.
+    const signedUrl = await StorageService.createSignedUrl(publicId, 10 * 365 * 24 * 3600);
+
     const updated = await userRepository.updateById(userId, {
-      avatarUrl:      url,
+      avatarUrl:      signedUrl,
       avatarPublicId: publicId,
     });
     return authService._sanitizeUser(updated);
