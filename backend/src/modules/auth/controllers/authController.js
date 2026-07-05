@@ -64,6 +64,19 @@ const authController = {
     return sendSuccess(res, { message: 'Logged out successfully', data: null });
   }),
 
+  uploadAvatar: asyncHandler(async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: { message: 'No image file provided' } });
+    }
+    const user = await authService.uploadAvatar(req.context.userId, req.file);
+    return sendSuccess(res, { data: { user } });
+  }),
+
+  removeAvatar: asyncHandler(async (req, res) => {
+    const user = await authService.removeAvatar(req.context.userId);
+    return sendSuccess(res, { data: { user } });
+  }),
+
   registerFcmToken: asyncHandler(async (req, res) => {
     const { token } = req.body;
     if (!token || typeof token !== 'string') {

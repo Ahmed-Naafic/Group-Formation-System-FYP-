@@ -30,18 +30,9 @@ void _handleFcmTap(Map<String, dynamic> data) {
 }
 
 Future<void> _initFcmHandlers() async {
-  // Show an in-app snackbar and refresh notification count when a message
-  // arrives while the app is in the foreground.
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    final title = message.notification?.title ?? 'New message';
-    final body  = message.notification?.body ?? '';
-    if (body.isNotEmpty) {
-      Get.snackbar(
-        title, body,
-        duration: const Duration(seconds: 4),
-        snackPosition: SnackPosition.TOP,
-      );
-    }
+  // Refresh notification count when a message arrives in the foreground.
+  // No snackbar — push notifications only appear when the app is backgrounded or closed.
+  FirebaseMessaging.onMessage.listen((RemoteMessage _) {
     try { Get.find<NotificationController>().refresh(); } catch (_) {}
   });
 

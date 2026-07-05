@@ -22,6 +22,7 @@ const taskSchema = new mongoose.Schema(
     attachments:      [attachmentSchema],
     deadline:         { type: Date },
     status:           { type: String, enum: ['open', 'closed'], default: 'open' },
+    submissionType:   { type: String, enum: ['group', 'individual'], default: 'group' },
     reminderSentAt:   { type: Date, default: null },
   },
   { timestamps: true },

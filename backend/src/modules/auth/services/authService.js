@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET, JWT_EXPIRES_IN, JWT_LIMITED_EXPIRES_IN } = require('../../../config/env');
-const userService = require('../../user/services/userService');
+const userService    = require('../../user/services/userService');
+const userRepository = require('../../user/repositories/userRepository');
+const StorageService = require('../../../common/services/storage/StorageService');
 const { UnauthorizedError, ForbiddenError } = require('../../../common/errors');
 
 const TOKEN_SCOPES = {
@@ -77,6 +79,44 @@ const authService = {
       JWT_SECRET,
       { expiresIn: JWT_LIMITED_EXPIRES_IN }
     );
+  },
+
+  async uploadAvatar(userId, multerFile) {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new UnauthorizedError('User not found');
+
+    // Delete previous avatar from Supabase if one exists
+    if (user.avatarPublicId) {
+      await StorageService.delete(user.avatarPublicId).catch(() => {});
+    }
+
+    const { url, publicId } = await StorageService.save(
+      multerFile.buffer,
+      multerFile.originalname,
+      `avatars/${userId}`,
+      multerFile.mimetype,
+    );
+
+    const updated = await userRepository.updateById(userId, {
+      avatarUrl:      url,
+      avatarPublicId: publicId,
+    });
+    return authService._sanitizeUser(updated);
+  },
+
+  async removeAvatar(userId) {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new UnauthorizedError('User not found');
+
+    if (user.avatarPublicId) {
+      await StorageService.delete(user.avatarPublicId).catch(() => {});
+    }
+
+    const updated = await userRepository.updateById(userId, {
+      avatarUrl:      null,
+      avatarPublicId: null,
+    });
+    return authService._sanitizeUser(updated);
   },
 
   _sanitizeUser(user) {

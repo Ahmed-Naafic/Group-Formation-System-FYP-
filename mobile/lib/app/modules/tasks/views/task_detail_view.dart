@@ -70,6 +70,8 @@ class _TaskDetailViewState extends State<TaskDetailView> {
                       _taskStatusChip(task),
                     ],
                   ),
+                  const SizedBox(height: 6),
+                  _submissionTypeChip(task),
 
                   // Deadline
                   if (task.deadline != null) ...[
@@ -167,7 +169,7 @@ class _TaskDetailViewState extends State<TaskDetailView> {
                 }
 
                 if (sub != null && sub.isSubmitted) {
-                  return _SubmittedCard(sub: sub);
+                  return _SubmittedCard(sub: sub, isGroupTask: !task.isIndividual);
                 }
 
                 if (task.isClosed && sub == null) {
@@ -219,6 +221,28 @@ class _TaskDetailViewState extends State<TaskDetailView> {
       child: Text(label,
           style: TextStyle(
               fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
+
+  Widget _submissionTypeChip(TaskModel task) {
+    final isIndividual = task.isIndividual;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isIndividual ? const Color(0xFFEFF3FB) : const Color(0xFFF4F5F7),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isIndividual ? const Color(0xFFBFCFEE) : const Color(0xFFD1D5DB),
+        ),
+      ),
+      child: Text(
+        isIndividual ? 'Individual submission' : 'Group submission',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: isIndividual ? const Color(0xFF1E3A8A) : const Color(0xFF6B7280),
+        ),
+      ),
     );
   }
 }
@@ -353,7 +377,8 @@ class _GradedCard extends StatelessWidget {
 
 class _SubmittedCard extends StatelessWidget {
   final SubmissionModel sub;
-  const _SubmittedCard({required this.sub});
+  final bool isGroupTask;
+  const _SubmittedCard({required this.sub, this.isGroupTask = false});
 
   @override
   Widget build(BuildContext context) {
@@ -393,6 +418,13 @@ class _SubmittedCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               'Submitted ${DateFormat('MMM d, yyyy · HH:mm').format(sub.submittedAt!.toLocal())}',
+              style: TextStyle(fontSize: 12, color: context.textMuted),
+            ),
+          ],
+          if (isGroupTask && sub.submittedByName != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Submitted by ${sub.submittedByName}',
               style: TextStyle(fontSize: 12, color: context.textMuted),
             ),
           ],

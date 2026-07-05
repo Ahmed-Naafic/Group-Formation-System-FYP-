@@ -1,7 +1,8 @@
-const asyncHandler    = require('../../../common/utils/asyncHandler');
-const { sendSuccess } = require('../../../common/responses/apiResponse');
-const taskService     = require('../services/taskService');
-const StorageService  = require('../../../common/services/storage/StorageService');
+const asyncHandler      = require('../../../common/utils/asyncHandler');
+const { sendSuccess }   = require('../../../common/responses/apiResponse');
+const { NotFoundError } = require('../../../common/errors');
+const taskService       = require('../services/taskService');
+const StorageService    = require('../../../common/services/storage/StorageService');
 
 const taskController = {
   create: asyncHandler(async (req, res) => {
@@ -10,7 +11,10 @@ const taskController = {
   }),
 
   downloadAttachment: asyncHandler(async (req, res) => {
-    const { publicId } = await taskService.getAttachment(req.params.id, req.context);
+    const { publicId, originalName } = await taskService.getAttachment(req.params.id, req.context);
+    if (!publicId) {
+      throw new NotFoundError(`Attachment file not found (no storage path for "${originalName}")`);
+    }
     const signedUrl = await StorageService.createSignedUrl(publicId);
     return res.redirect(signedUrl);
   }),

@@ -71,7 +71,9 @@ function GradeDialog({ submission, onClose }) {
         <DialogHeader>
           <DialogTitle>Grade Submission</DialogTitle>
           <DialogDescription>
-            {submission?.groupId?.name} — enter a score from 0 to 100.
+            {submission?.submittedBy?.fullName
+              ? `${submission.submittedBy.fullName} (${submission?.groupId?.name ?? 'group'})`
+              : submission?.groupId?.name} — enter a score from 0 to 100.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-1" noValidate>
@@ -240,26 +242,27 @@ export default function TaskSubmissionsPage() {
     );
   }
 
+  const isIndividual = task.submissionType === 'individual';
+
+  // Group mode: build rows keyed by group (with "Not submitted" placeholders)
   const submissionByGroup = {};
   for (const s of submissions) {
     submissionByGroup[String(s.groupId?._id ?? s.groupId)] = s;
   }
-
   const baseGroups = isAllGroups ? offeringGroups : (task.assignedGroups ?? []);
-  const rows = baseGroups.map((g) => ({
+  const groupRows = baseGroups.map((g) => ({
     group:      g,
     submission: submissionByGroup[String(g._id)] ?? null,
   }));
-
   const baseIds = new Set(baseGroups.map((g) => String(g._id)));
   for (const s of submissions) {
     const gid = String(s.groupId?._id ?? s.groupId);
-    if (!baseIds.has(gid)) rows.push({ group: s.groupId, submission: s });
+    if (!baseIds.has(gid)) groupRows.push({ group: s.groupId, submission: s });
   }
 
   const submitted   = submissions.filter((s) => ['submitted', 'late', 'reviewed'].includes(s.status)).length;
   const graded      = submissions.filter((s) => s.status === 'reviewed').length;
-  const totalGroups = rows.length;
+  const totalCount  = isIndividual ? submissions.length : groupRows.length;
 
   return (
     <div>
@@ -278,6 +281,9 @@ export default function TaskSubmissionsPage() {
             <h2 className="text-ink-900 leading-none">{task.title}</h2>
             <Badge variant={task.status === 'open' ? 'success' : 'secondary'}>
               {task.status === 'open' ? 'Open' : 'Closed'}
+            </Badge>
+            <Badge variant={isIndividual ? 'outline' : 'secondary'}>
+              {isIndividual ? 'Individual' : 'Group'}
             </Badge>
           </div>
           {task.description && (
@@ -308,11 +314,13 @@ export default function TaskSubmissionsPage() {
 
       {/* Summary pills */}
       <div className="flex items-center gap-3 mb-5 text-sm">
-        <span className="text-ink-500">{totalGroups} group{totalGroups !== 1 ? 's' : ''}</span>
+        {isIndividual
+          ? <span className="text-ink-500">{totalCount} individual submission{totalCount !== 1 ? 's' : ''}</span>
+          : <span className="text-ink-500">{totalCount} group{totalCount !== 1 ? 's' : ''}</span>}
         <span className="text-ink-300">·</span>
         <span className="text-ink-500">{submitted} submitted</span>
         <span className="text-ink-300">·</span>
-        <span className={cn('font-medium', graded === totalGroups && totalGroups > 0 ? 'text-success' : 'text-ink-500')}>
+        <span className={cn('font-medium', graded === totalCount && totalCount > 0 ? 'text-success' : 'text-ink-500')}>
           {graded} graded
         </span>
       </div>
@@ -322,11 +330,77 @@ export default function TaskSubmissionsPage() {
         <div className="flex justify-center py-12">
           <Loader2 size={20} className="animate-spin text-ink-300" />
         </div>
-      ) : rows.length === 0 ? (
+      ) : isIndividual ? (
+        /* ── Individual submission table ── */
+        submissions.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border bg-white py-12 text-center">
+            <p className="text-sm text-ink-400">No individual submissions yet.</p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border bg-white shadow-xs overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student</TableHead>
+                  <TableHead>Group</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead>Submission</TableHead>
+                  <TableHead className="text-right">Grade</TableHead>
+                  <TableHead className="w-28" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {submissions.map((s) => (
+                  <TableRow key={s._id} className="align-top">
+                    <TableCell className="font-medium text-ink-800 pt-3.5">
+                      {s.submittedBy?.fullName ?? '—'}
+                      {s.submittedBy?.userId?.studentId && (
+                        <span className="block text-xs text-ink-400 font-normal">
+                          {s.submittedBy.userId.studentId}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-ink-600 pt-3.5">
+                      {s.groupId?.name ?? '—'}
+                    </TableCell>
+                    <TableCell className="pt-3.5">
+                      <SubmissionBadge status={s.status} />
+                    </TableCell>
+                    <TableCell className="text-xs text-ink-500 pt-3.5">
+                      {formatDate(s.submittedAt)}
+                    </TableCell>
+                    <TableCell className="pt-3">
+                      <SubmissionContent submission={s} onDownload={downloadFile} />
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm text-ink-700 pt-3.5">
+                      {s.grade != null ? `${s.grade}/100` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right pt-2.5">
+                      {['submitted', 'late', 'reviewed'].includes(s.status) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-just-blue-600 hover:text-just-blue-700"
+                          onClick={() => setGradeTarget(s)}
+                        >
+                          {s.status === 'reviewed' ? 'Re-grade' : 'Grade'}
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )
+      ) : groupRows.length === 0 ? (
+        /* ── Group submission table — empty ── */
         <div className="rounded-lg border border-dashed border-border bg-white py-12 text-center">
           <p className="text-sm text-ink-400">No groups assigned to this task yet.</p>
         </div>
       ) : (
+        /* ── Group submission table ── */
         <div className="rounded-lg border border-border bg-white shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
@@ -341,7 +415,7 @@ export default function TaskSubmissionsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map(({ group, submission }) => (
+              {groupRows.map(({ group, submission }) => (
                 <TableRow key={String(group?._id ?? group)} className="align-top">
                   <TableCell className="font-medium text-ink-800 pt-3.5">
                     {group?.name ?? '—'}

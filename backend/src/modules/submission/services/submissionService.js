@@ -43,14 +43,28 @@ const submissionService = {
 
     const { group, studentRecord } = await resolveStudentGroup(task, context);
 
-    const existing = await submissionRepository.findOne({ taskId, groupId: group._id });
-    if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
-      throw new ConflictError('This task has already been submitted and cannot be changed');
-    }
-
     const isLate = task.deadline && new Date() > new Date(task.deadline);
     const status = isLate ? 'late' : 'submitted';
 
+    if (task.submissionType === 'individual') {
+      const existing = await submissionRepository.findOne({ taskId, submittedBy: studentRecord._id });
+      if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
+        throw new ConflictError('You have already submitted this task');
+      }
+      return submissionRepository.upsertByStudent(taskId, studentRecord._id, {
+        groupId: group._id,
+        files:   fileIds,
+        notes,
+        status,
+        submittedAt: new Date(),
+      });
+    }
+
+    // Group mode: one submission per group
+    const existing = await submissionRepository.findOne({ taskId, groupId: group._id });
+    if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
+      throw new ConflictError('This task has already been submitted by your group');
+    }
     return submissionRepository.upsert(taskId, group._id, {
       submittedBy: studentRecord._id,
       files:       fileIds,
@@ -69,11 +83,24 @@ const submissionService = {
 
     const { group, studentRecord } = await resolveStudentGroup(task, context);
 
-    const existing = await submissionRepository.findOne({ taskId, groupId: group._id });
-    if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
-      throw new ConflictError('This task has already been submitted and cannot be changed');
+    if (task.submissionType === 'individual') {
+      const existing = await submissionRepository.findOne({ taskId, submittedBy: studentRecord._id });
+      if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
+        throw new ConflictError('You have already submitted this task');
+      }
+      return submissionRepository.upsertByStudent(taskId, studentRecord._id, {
+        groupId: group._id,
+        files:   fileIds,
+        notes,
+        status:  'draft',
+      });
     }
 
+    // Group mode
+    const existing = await submissionRepository.findOne({ taskId, groupId: group._id });
+    if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
+      throw new ConflictError('This task has already been submitted by your group');
+    }
     return submissionRepository.upsert(taskId, group._id, {
       submittedBy: studentRecord._id,
       files:       fileIds,
@@ -94,10 +121,17 @@ const submissionService = {
     if (!submission) throw new NotFoundError('Submission not found');
 
     if (context.role === 'student') {
-      const task      = await taskRepository.findById(submission.taskId);
-      const { group } = await resolveStudentGroup(task, context);
-      if (String(submission.groupId?._id ?? submission.groupId) !== String(group._id)) {
-        throw new ForbiddenError('Access denied');
+      const task = await taskRepository.findById(submission.taskId);
+      if (task.submissionType === 'individual') {
+        const { studentRecord } = await resolveStudentGroup(task, context);
+        if (String(submission.submittedBy?._id ?? submission.submittedBy) !== String(studentRecord._id)) {
+          throw new ForbiddenError('Access denied');
+        }
+      } else {
+        const { group } = await resolveStudentGroup(task, context);
+        if (String(submission.groupId?._id ?? submission.groupId) !== String(group._id)) {
+          throw new ForbiddenError('Access denied');
+        }
       }
     } else {
       const task = await taskRepository.findById(submission.taskId);
@@ -110,7 +144,12 @@ const submissionService = {
   async getMySubmission(taskId, context) {
     const task = await taskRepository.findById(taskId);
     if (!task) throw new NotFoundError('Task not found');
-    const { group } = await resolveStudentGroup(task, context);
+    const { group, studentRecord } = await resolveStudentGroup(task, context);
+    if (task.submissionType === 'individual') {
+      const submission = await submissionRepository.findOne({ taskId, submittedBy: studentRecord._id });
+      return submission ?? null;
+    }
+    // Group mode: return the group's shared submission
     const submission = await submissionRepository.findOne({ taskId, groupId: group._id });
     return submission ?? null;
   },

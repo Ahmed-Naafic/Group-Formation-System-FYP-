@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
-import 'package:get/get.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:get/get.dart' hide FormData, MultipartFile;
 import '../../../data/providers/api_client.dart';
 import '../../../routes/app_pages.dart';
 import '../../../services/push_notification_service.dart';
@@ -18,6 +19,9 @@ class AuthController extends GetxController {
   final userRole      = ''.obs;
   final userStudentId = ''.obs;
   final userEmail     = ''.obs;
+  final avatarUrl     = RxnString();
+
+  final isUploadingAvatar = false.obs;
 
   // ── Auto-login ───────────────────────────────────────────────────────────────
 
@@ -31,6 +35,7 @@ class AuthController extends GetxController {
         userRole.value      = (saved['role']       ?? '') as String;
         userStudentId.value = (saved['studentId']  ?? '') as String;
         userEmail.value     = (saved['email']      ?? '') as String;
+        avatarUrl.value     = saved['avatarUrl']   as String?;
       }
       await PushNotificationService.instance.init();
       Get.offAllNamed(Routes.main);
@@ -129,7 +134,67 @@ class AuthController extends GetxController {
     userRole.value      = '';
     userStudentId.value = '';
     userEmail.value     = '';
+    avatarUrl.value     = null;
     Get.offAllNamed(Routes.login);
+  }
+
+  // ── Avatar ───────────────────────────────────────────────────────────────────
+
+  Future<void> uploadAvatar() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: false,
+    );
+    if (result == null || result.files.single.path == null) return;
+
+    isUploadingAvatar.value = true;
+    try {
+      final path = result.files.single.path!;
+      final name = result.files.single.name;
+      final formData = FormData.fromMap({
+        'avatar': await MultipartFile.fromFile(path, filename: name),
+      });
+      final resp = await _api.dio.patch(
+        '/auth/avatar',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      final user = resp.data['data']['user'] as Map<String, dynamic>;
+      avatarUrl.value = user['avatarUrl'] as String?;
+      await _updateStoredAvatar(user['avatarUrl'] as String?);
+    } on DioException catch (e) {
+      final msg = e.response?.data?['error']?['message'] as String?
+          ?? 'Could not upload photo';
+      Get.snackbar('Upload failed', msg, snackPosition: SnackPosition.BOTTOM);
+    } catch (_) {
+      Get.snackbar('Upload failed', 'Something went wrong', snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      isUploadingAvatar.value = false;
+    }
+  }
+
+  Future<void> removeAvatar() async {
+    isUploadingAvatar.value = true;
+    try {
+      await _api.dio.delete('/auth/avatar');
+      avatarUrl.value = null;
+      await _updateStoredAvatar(null);
+    } on DioException catch (e) {
+      final msg = e.response?.data?['error']?['message'] as String?
+          ?? 'Could not remove photo';
+      Get.snackbar('Error', msg, snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      isUploadingAvatar.value = false;
+    }
+  }
+
+  Future<void> _updateStoredAvatar(String? url) async {
+    final saved = await _api.getUserData();
+    if (saved != null) {
+      saved['avatarUrl'] = url;
+      await _api.saveUserData(saved);
+    }
   }
 
   // ── Error helpers ────────────────────────────────────────────────────────────
@@ -187,18 +252,20 @@ class AuthController extends GetxController {
 
     final user = data['user'] as Map<String, dynamic>;
     final userData = {
-      'userId':    user['_id']       ?? '',
-      'fullName':  user['fullName']  ?? '',
-      'role':      user['role']      ?? '',
-      'studentId': user['studentId'] ?? '',
-      'email':     user['email']     ?? '',
+      'userId':    user['_id']        ?? '',
+      'fullName':  user['fullName']   ?? '',
+      'role':      user['role']       ?? '',
+      'studentId': user['studentId']  ?? '',
+      'email':     user['email']      ?? '',
+      'avatarUrl': user['avatarUrl'],
     };
     await _api.saveUserData(userData);
 
-    userId.value        = userData['userId']!;
-    userName.value      = userData['fullName']!;
-    userRole.value      = userData['role']!;
-    userStudentId.value = userData['studentId']!;
-    userEmail.value     = userData['email']!;
+    userId.value        = userData['userId']!    as String;
+    userName.value      = userData['fullName']!  as String;
+    userRole.value      = userData['role']!      as String;
+    userStudentId.value = userData['studentId']! as String;
+    userEmail.value     = userData['email']!     as String;
+    avatarUrl.value     = userData['avatarUrl']  as String?;
   }
 }

@@ -21,8 +21,10 @@ const submissionSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// One submission per group per task
-submissionSchema.index({ taskId: 1, groupId: 1 }, { unique: true });
+// Non-unique index kept for group-submission queries (unique constraint removed to support individual mode)
+submissionSchema.index({ taskId: 1, groupId: 1 });
+// Individual submission lookups
+submissionSchema.index({ taskId: 1, submittedBy: 1 });
 
 submissionSchema.plugin(softDelete);
 

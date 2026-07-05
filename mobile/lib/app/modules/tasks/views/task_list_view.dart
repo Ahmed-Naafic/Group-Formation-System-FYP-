@@ -115,11 +115,19 @@ class _TaskCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // Footer: deadline + attachment
+            // Footer: deadline + individual badge + attachment
             Row(
               children: [
                 _deadlineWidget(context, task),
                 const Spacer(),
+                if (task.isIndividual) ...[
+                  _Chip(
+                    label: 'Individual',
+                    color: const Color(0xFF1E3A8A),
+                    bg: const Color(0xFFEFF3FB),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 if (task.hasAttachment)
                   Row(
                     mainAxisSize: MainAxisSize.min,

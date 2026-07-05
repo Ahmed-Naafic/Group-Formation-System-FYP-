@@ -249,15 +249,19 @@ function InstructorTasksTab({ courseOfferingId, groupId }) {
       const res = await fetch(`${API_BASE}/api/tasks/${task._id}/attachment`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        let msg = 'Could not download attachment';
+        try { msg = (await res.json())?.error?.message ?? msg; } catch { /* */ }
+        throw new Error(msg);
+      }
       const blob = await res.blob();
       const link = document.createElement('a');
       link.href  = URL.createObjectURL(blob);
       link.download = task.attachments[0].originalName;
       link.click();
       URL.revokeObjectURL(link.href);
-    } catch {
-      toast.error('Could not download attachment');
+    } catch (err) {
+      toast.error(err.message ?? 'Could not download attachment');
     }
   }
 
@@ -377,15 +381,19 @@ function StudentTaskCard({ task, workspaceId }) {
       const res = await fetch(`${API_BASE}/api/tasks/${task._id}/attachment`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Download failed');
+      if (!res.ok) {
+        let msg = 'Could not download attachment';
+        try { msg = (await res.json())?.error?.message ?? msg; } catch { /* */ }
+        throw new Error(msg);
+      }
       const blob = await res.blob();
       const link = document.createElement('a');
       link.href  = URL.createObjectURL(blob);
       link.download = task.attachments[0].originalName;
       link.click();
       URL.revokeObjectURL(link.href);
-    } catch {
-      toast.error('Could not download attachment');
+    } catch (err) {
+      toast.error(err.message ?? 'Could not download attachment');
     }
   }
 
@@ -431,6 +439,9 @@ function StudentTaskCard({ task, workspaceId }) {
             <span className="font-semibold text-ink-800 text-sm">{task.title}</span>
             <Badge variant={task.status === 'open' ? 'success' : 'secondary'} className="text-[10px]">
               {task.status === 'open' ? 'Open' : 'Closed'}
+            </Badge>
+            <Badge variant={task.submissionType === 'individual' ? 'outline' : 'secondary'} className="text-[10px]">
+              {task.submissionType === 'individual' ? 'Individual' : 'Group'}
             </Badge>
             {/* Submission status */}
             {loadingSub ? (
@@ -527,6 +538,13 @@ function StudentTaskCard({ task, workspaceId }) {
               Submit
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* For group tasks: show who submitted on behalf of the group */}
+      {isLocked && task.submissionType !== 'individual' && submission?.submittedBy?.fullName && (
+        <div className="mt-3 rounded-md bg-ink-50 px-3 py-2 text-xs text-ink-500">
+          Submitted by <span className="font-semibold text-ink-700">{submission.submittedBy.fullName}</span>
         </div>
       )}
 

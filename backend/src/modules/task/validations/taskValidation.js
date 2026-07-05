@@ -23,6 +23,7 @@ const taskValidation = {
       'any.required':  'Deadline is required',
     }),
     assignedGroupIds:  Joi.array().items(objectId).default([]),
+    submissionType:    Joi.string().valid('group', 'individual').default('group'),
   }),
 
   // On update, deadline can be freely adjusted (extend, retract, or null-out).
@@ -32,6 +33,7 @@ const taskValidation = {
     deadline:       Joi.date().iso().allow(null),
     status:         Joi.string().valid('open', 'closed'),
     assignedGroups: Joi.array().items(objectId),
+    submissionType: Joi.string().valid('group', 'individual'),
   }).min(1),
 
   listTasks: Joi.object({

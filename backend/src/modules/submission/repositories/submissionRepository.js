@@ -8,10 +8,19 @@ const BASE_POPULATE = [
 ];
 
 const submissionRepository = {
-  // Upsert — one submission per (taskId, groupId)
+  // Group mode: one submission per (taskId, groupId)
   upsert(taskId, groupId, updates) {
     return Submission.findOneAndUpdate(
       { taskId, groupId },
+      { $set: updates },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    ).populate(BASE_POPULATE);
+  },
+
+  // Individual mode: one submission per (taskId, submittedBy)
+  upsertByStudent(taskId, studentId, updates) {
+    return Submission.findOneAndUpdate(
+      { taskId, submittedBy: studentId },
       { $set: updates },
       { new: true, upsert: true, setDefaultsOnInsert: true },
     ).populate(BASE_POPULATE);

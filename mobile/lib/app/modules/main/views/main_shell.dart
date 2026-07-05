@@ -644,24 +644,83 @@ class _ProfileTab extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(30),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Center(
-                      child: Text(
-                        initials.isNotEmpty ? initials : '?',
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
+                  Obx(() {
+                    final url       = auth.avatarUrl.value;
+                    final uploading = auth.isUploadingAvatar.value;
+                    return GestureDetector(
+                      onTap: uploading ? null : auth.uploadAvatar,
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withAlpha(30),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: uploading
+                                ? const Center(
+                                    child: SizedBox(
+                                      width: 28, height: 28,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2.5,
+                                      ),
+                                    ),
+                                  )
+                                : url != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: Image.network(
+                                          url,
+                                          width: 80,
+                                          height: 80,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, a, b) => Center(
+                                            child: Text(
+                                              initials.isNotEmpty ? initials : '?',
+                                              style: const TextStyle(
+                                                fontSize: 28,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : Center(
+                                        child: Text(
+                                          initials.isNotEmpty ? initials : '?',
+                                          style: const TextStyle(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                          ),
+                          if (!uploading)
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt_rounded,
+                                  size: 14,
+                                  color: Color(0xFF1E3A8A),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
-                  ),
+                    );
+                  }),
                   const SizedBox(height: 14),
                   Text(
                     name.isNotEmpty ? name : 'Student',
@@ -796,6 +855,22 @@ class _ProfileTab extends StatelessWidget {
                         ),
                       )),
                   Divider(height: 1, color: context.borderColor),
+                  Obx(() {
+                    if (auth.avatarUrl.value == null) return const SizedBox.shrink();
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.delete_outline_rounded,
+                              color: Color(0xFFB45309)),
+                          title: Text('Remove Photo',
+                              style: TextStyle(color: context.textPrimary)),
+                          onTap: auth.isUploadingAvatar.value ? null : auth.removeAvatar,
+                        ),
+                        Divider(height: 1, color: context.borderColor),
+                      ],
+                    );
+                  }),
                   ListTile(
                     shape: const RoundedRectangleBorder(
                         borderRadius: BorderRadius.vertical(

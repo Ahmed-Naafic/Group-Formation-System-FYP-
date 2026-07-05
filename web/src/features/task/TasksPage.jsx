@@ -98,14 +98,16 @@ export default function TasksPage() {
   const [updateTask, { isLoading: updating }]        = useUpdateTaskMutation();
   const [deleteTask, { isLoading: deleting }]        = useDeleteTaskMutation();
 
-  const [statusFilter,   setStatusFilter]   = useState('all');
-  const [newOpen,        setNewOpen]        = useState(false);
-  const [deleteTarget,   setDeleteTarget]   = useState(null);
-  const [editTarget,     setEditTarget]     = useState(null);
-  const [editDeadline,   setEditDeadline]   = useState('');
-  const [editStatus,     setEditStatus]     = useState('open');
-  const [pickedGroups,   setPickedGroups]   = useState([]);
-  const [attachmentFile, setAttachmentFile] = useState(null);
+  const [statusFilter,       setStatusFilter]       = useState('all');
+  const [newOpen,            setNewOpen]            = useState(false);
+  const [deleteTarget,       setDeleteTarget]       = useState(null);
+  const [editTarget,         setEditTarget]         = useState(null);
+  const [editDeadline,       setEditDeadline]       = useState('');
+  const [editStatus,         setEditStatus]         = useState('open');
+  const [editSubmissionType, setEditSubmissionType] = useState('group');
+  const [pickedGroups,       setPickedGroups]       = useState([]);
+  const [submissionType,     setSubmissionType]     = useState('group');
+  const [attachmentFile,     setAttachmentFile]     = useState(null);
   const fileInputRef = useRef(null);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
@@ -120,6 +122,7 @@ export default function TasksPage() {
     setNewOpen(false);
     reset();
     setPickedGroups([]);
+    setSubmissionType('group');
     setAttachmentFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
@@ -128,20 +131,23 @@ export default function TasksPage() {
     setEditTarget(task);
     setEditDeadline(task.deadline ? new Date(task.deadline).toISOString().slice(0, 10) : '');
     setEditStatus(task.status);
+    setEditSubmissionType(task.submissionType ?? 'group');
   }
 
   function closeEdit() {
     setEditTarget(null);
     setEditDeadline('');
     setEditStatus('open');
+    setEditSubmissionType('group');
   }
 
   async function confirmEdit() {
     try {
       await updateTask({
-        id:       editTarget._id,
-        status:   editStatus,
-        deadline: editDeadline ? `${editDeadline}T23:59` : undefined,
+        id:             editTarget._id,
+        status:         editStatus,
+        deadline:       editDeadline ? `${editDeadline}T23:59` : undefined,
+        submissionType: editSubmissionType,
       }).unwrap();
       toast.success('Task updated');
       closeEdit();
@@ -165,6 +171,7 @@ export default function TasksPage() {
         if (data.description?.trim()) form.append('description', data.description.trim());
         if (deadline)                 form.append('deadline',    deadline);
         form.append('assignedGroupIds', JSON.stringify(pickedGroups));
+        form.append('submissionType',   submissionType);
         form.append('file', attachmentFile);
         body = form;
       } else {
@@ -174,6 +181,7 @@ export default function TasksPage() {
           description:      data.description?.trim() || undefined,
           deadline,
           assignedGroupIds: pickedGroups,
+          submissionType,
         };
       }
       await createTask(body).unwrap();
@@ -258,9 +266,12 @@ export default function TasksPage() {
               className="rounded-lg border border-border bg-white shadow-xs px-5 py-4 flex items-start gap-4"
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="font-semibold text-ink-800 text-sm">{task.title}</span>
                   {statusBadge(task.status)}
+                  <Badge variant={task.submissionType === 'individual' ? 'outline' : 'secondary'} className="text-[10px]">
+                    {task.submissionType === 'individual' ? 'Individual' : 'Group'}
+                  </Badge>
                 </div>
                 {task.description && (
                   <p className="text-sm text-ink-500 line-clamp-1 mb-1">{task.description}</p>
@@ -341,8 +352,10 @@ export default function TasksPage() {
                   min={new Date().toISOString().split('T')[0]}
                   onClick={(e) => e.currentTarget.showPicker?.()}
                   className="pr-9 [&::-webkit-calendar-picker-indicator]:opacity-0"
-                  {...register('deadline')}
+                  aria-invalid={!!errors.deadline}
+                  {...register('deadline', { required: 'Deadline is required' })}
                 />
+                {errors.deadline && <p className="text-xs text-danger">{errors.deadline.message}</p>}
                 <Calendar size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
               </div>
             </div>
@@ -353,6 +366,31 @@ export default function TasksPage() {
                 {pickedGroups.length === 0
                   ? 'No groups selected — task will be visible to all groups.'
                   : `${pickedGroups.length} group${pickedGroups.length !== 1 ? 's' : ''} selected.`}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Submission type</Label>
+              <div className="flex rounded-md border border-border overflow-hidden text-sm">
+                {['group', 'individual'].map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setSubmissionType(t)}
+                    className={cn(
+                      'flex-1 py-1.5 text-center capitalize transition-colors',
+                      submissionType === t
+                        ? 'bg-just-blue-600 text-white font-medium'
+                        : 'bg-white text-ink-500 hover:bg-ink-50',
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-ink-400">
+                {submissionType === 'group'
+                  ? 'One submission per group — any member can submit on behalf of the group.'
+                  : 'Each student submits individually — every member must submit their own work.'}
               </p>
             </div>
             <div className="space-y-1.5">
@@ -450,6 +488,26 @@ export default function TasksPage() {
                   Reopening requires a deadline in the future.
                 </p>
               )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Submission type</Label>
+              <div className="flex rounded-md border border-border overflow-hidden text-sm">
+                {['group', 'individual'].map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setEditSubmissionType(t)}
+                    className={cn(
+                      'flex-1 py-1.5 text-center capitalize transition-colors',
+                      editSubmissionType === t
+                        ? 'bg-just-blue-600 text-white font-medium'
+                        : 'bg-white text-ink-500 hover:bg-ink-50',
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>

@@ -56,6 +56,7 @@ const taskService = {
       attachments,
       deadline:         data.deadline,
       status:           'open',
+      submissionType:   data.submissionType ?? 'group',
     });
 
     await task.populate({
