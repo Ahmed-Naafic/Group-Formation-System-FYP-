@@ -29,6 +29,12 @@ const userController = {
     return sendSuccess(res, { message: 'Instructor updated', data: { user } });
   }),
 
+  // DELETE /api/users/:id
+  remove: asyncHandler(async (req, res) => {
+    await userService.deleteInstructor(req.params.id, req.context.userId);
+    return sendSuccess(res, { message: 'Instructor deleted' });
+  }),
+
   // PATCH /api/users/:id/activate
   activate: asyncHandler(async (req, res) => {
     const user = await userService.setActive(req.params.id, true, req.context.userId);

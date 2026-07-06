@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Loader2, UserCheck, UserPlus, Pencil, ShieldOff, ShieldCheck, Search } from 'lucide-react';
+import { Loader2, UserCheck, UserPlus, Pencil, ShieldOff, ShieldCheck, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetUsersQuery,
@@ -8,6 +8,7 @@ import {
   useUpdateInstructorMutation,
   useActivateInstructorMutation,
   useDeactivateInstructorMutation,
+  useDeleteInstructorMutation,
 } from './userApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -28,6 +29,7 @@ export default function InstructorsPage() {
   const [updateInstructor, { isLoading: updating }]     = useUpdateInstructorMutation();
   const [activateUser,     { isLoading: activating }]   = useActivateInstructorMutation();
   const [deactivateUser,   { isLoading: deactivating }] = useDeactivateInstructorMutation();
+  const [deleteInstructor, { isLoading: deleting }]     = useDeleteInstructorMutation();
 
   const [query,            setQuery]           = useState('');
   const [registerOpen,     setRegisterOpen]    = useState(false);
@@ -42,6 +44,7 @@ export default function InstructorsPage() {
   })();
   const [editTarget,       setEditTarget]      = useState(null);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [deleteTarget,     setDeleteTarget]     = useState(null);
 
   const { register: regReg,  handleSubmit: submitReg,  reset: resetReg,  formState: { errors: errReg  } } = useForm();
   const { register: regEdit, handleSubmit: submitEdit, reset: resetEdit, formState: { errors: errEdit } } = useForm();
@@ -80,6 +83,18 @@ export default function InstructorsPage() {
       toast.success(`${instructor.fullName} reactivated`);
     } catch (err) {
       toast.error(err?.data?.error?.message ?? 'Failed to activate');
+    }
+  }
+
+  async function onDeleteConfirmed() {
+    if (!deleteTarget) return;
+    try {
+      await deleteInstructor(deleteTarget._id).unwrap();
+      toast.success(`${deleteTarget.fullName} deleted`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to delete instructor');
+    } finally {
+      setDeleteTarget(null);
     }
   }
 
@@ -177,6 +192,14 @@ export default function InstructorsPage() {
                             title="Edit instructor"
                           >
                             <Pencil size={13} />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-7 w-7 hover:text-danger"
+                            onClick={() => setDeleteTarget(u)}
+                            title="Delete instructor"
+                          >
+                            <Trash2 size={13} />
                           </Button>
                           {isActive ? (
                             <Button
@@ -294,6 +317,30 @@ export default function InstructorsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirm */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Instructor</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete <span className="font-semibold text-ink-800">{deleteTarget?.fullName}</span>?
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger hover:bg-danger/90 text-white"
+              onClick={onDeleteConfirmed}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 size={14} className="animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Deactivate confirm */}
       <AlertDialog open={!!deactivateTarget} onOpenChange={(v) => !v && setDeactivateTarget(null)}>

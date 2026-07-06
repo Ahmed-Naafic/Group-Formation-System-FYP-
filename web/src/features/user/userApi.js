@@ -27,6 +27,10 @@ export const userApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data.user,
       invalidatesTags: ['User'],
     }),
+    deleteInstructor: build.mutation({
+      query: (id) => ({ url: `/api/users/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['User'],
+    }),
   }),
   overrideExisting: false,
 });
@@ -37,4 +41,5 @@ export const {
   useUpdateInstructorMutation,
   useActivateInstructorMutation,
   useDeactivateInstructorMutation,
+  useDeleteInstructorMutation,
 } = userApi;

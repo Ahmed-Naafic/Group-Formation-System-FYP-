@@ -18,6 +18,9 @@ router.post('/', validate(createInstructorSchema), userController.create);
 // PATCH /api/users/:id  — update name / email / password
 router.patch('/:id', validate(idParamSchema, 'params'), validate(updateInstructorSchema), userController.update);
 
+// DELETE /api/users/:id
+router.delete('/:id', validate(idParamSchema, 'params'), userController.remove);
+
 // PATCH /api/users/:id/activate|deactivate
 router.patch('/:id/activate',   validate(idParamSchema, 'params'), userController.activate);
 router.patch('/:id/deactivate', validate(idParamSchema, 'params'), userController.deactivate);

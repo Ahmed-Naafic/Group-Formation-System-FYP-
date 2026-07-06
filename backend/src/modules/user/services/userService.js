@@ -94,6 +94,18 @@ const userService = {
     return userRepository.updateById(id, updates);
   },
 
+  async deleteInstructor(id, requestingUserId) {
+    if (String(id) === String(requestingUserId)) {
+      throw new ForbiddenError('You cannot delete your own account');
+    }
+    const user = await userRepository.findById(id);
+    if (!user) throw new NotFoundError('User not found');
+    if (user.role !== 'instructor') {
+      throw new ForbiddenError('Only instructor accounts can be deleted');
+    }
+    return userRepository.deleteById(id);
+  },
+
   async setActive(id, isActive, requestingUserId) {
     if (String(id) === String(requestingUserId)) {
       throw new ForbiddenError('You cannot change your own active status');
