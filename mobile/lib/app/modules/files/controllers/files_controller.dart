@@ -170,6 +170,15 @@ class FilesController extends GetxController {
     }
   }
 
+  // Called by DashboardController on app open to warm the cache.
+  static Future<void> prefetch(String workspaceId) async {
+    if (_cache.containsKey(workspaceId)) return;
+    try {
+      final result = await FileRepository().getFiles(workspaceId);
+      _cache[workspaceId] = result;
+    } catch (_) {}
+  }
+
   static String _guessMime(String name) {
     final ext = name.split('.').last.toLowerCase();
     const map = {

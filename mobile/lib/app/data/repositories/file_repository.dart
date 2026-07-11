@@ -40,6 +40,10 @@ class FileRepository {
     final response = await _client.dio.post(
       '/workspaces/$workspaceId/files',
       data: form,
+      options: Options(
+        sendTimeout:    const Duration(minutes: 3),
+        receiveTimeout: const Duration(minutes: 2),
+      ),
     );
     return FileModel.fromJson(response.data['data']['file'] as Map<String, dynamic>);
   }

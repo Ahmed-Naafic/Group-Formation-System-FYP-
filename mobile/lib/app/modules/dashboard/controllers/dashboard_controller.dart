@@ -5,6 +5,9 @@ import '../../../data/models/workspace_model.dart';
 import '../../../data/providers/api_client.dart';
 import '../../../data/repositories/workspace_repository.dart';
 import '../../notifications/controllers/notification_controller.dart';
+import '../../chat/controllers/chat_controller.dart';
+import '../../files/controllers/files_controller.dart';
+import '../../tasks/controllers/task_controller.dart';
 
 class DashboardController extends GetxController {
   final _repo = WorkspaceRepository();
@@ -40,6 +43,7 @@ class DashboardController extends GetxController {
         isLoading.value = false;
         Get.find<NotificationController>()
             .joinWorkspaceRooms(workspaces.map((w) => w.id).toList());
+        _prefetchAll(workspaces);
       }
     } catch (e) {
       if (_disposed) return;
@@ -54,6 +58,14 @@ class DashboardController extends GetxController {
         errorMessage.value = msg;
         if (!_disposed) isLoading.value = false;
       }
+    }
+  }
+
+  void _prefetchAll(List<WorkspaceModel> workspaces) {
+    for (final ws in workspaces) {
+      ChatController.prefetch(ws.id);
+      FilesController.prefetch(ws.id);
+      TaskController.prefetch(ws.courseOfferingId, ws.id);
     }
   }
 

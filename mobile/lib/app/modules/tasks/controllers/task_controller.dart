@@ -50,6 +50,22 @@ class TaskController extends GetxController {
   String? _pickedFilePath;
   String? _pickedFileMime;
 
+  // Called by DashboardController on app open to warm both caches.
+  static Future<void> prefetch(String courseOfferingId, String workspaceId) async {
+    if (!_taskCache.containsKey(courseOfferingId)) {
+      try {
+        final tasks = await TaskRepository().getTasksForOffering(courseOfferingId);
+        _taskCache[courseOfferingId] = tasks;
+      } catch (_) {}
+    }
+    if (!_wsFileCache.containsKey(workspaceId)) {
+      try {
+        final files = await FileRepository().getFiles(workspaceId);
+        _wsFileCache[workspaceId] = files;
+      } catch (_) {}
+    }
+  }
+
   @override
   void onInit() {
     super.onInit();

@@ -39,6 +39,16 @@ class ChatController extends GetxController {
   bool isMyMessage(ChatMessage msg) =>
       _myStudentId.isNotEmpty && msg.sender.studentId == _myStudentId;
 
+  // Called by DashboardController on app open to warm the cache before the
+  // user taps into a workspace, so the chat screen opens without a spinner.
+  static Future<void> prefetch(String workspaceId) async {
+    if (_cache.containsKey(workspaceId)) return;
+    try {
+      final msgs = await ChatRepository().getHistory(workspaceId);
+      _cache[workspaceId] = msgs;
+    } catch (_) {}
+  }
+
   @override
   void onInit() {
     super.onInit();
