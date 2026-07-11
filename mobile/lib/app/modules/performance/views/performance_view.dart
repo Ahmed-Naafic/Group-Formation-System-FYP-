@@ -81,18 +81,8 @@ class _RecordCard extends StatelessWidget {
   final PerformanceRecord record;
   const _RecordCard({required this.record});
 
-  Color _categoryColor(String? cat) {
-    switch (cat) {
-      case 'HIGH':   return const Color(0xFF16A34A);
-      case 'MEDIUM': return const Color(0xFF2563EB);
-      case 'LOW':    return const Color(0xFFDC2626);
-      default:       return const Color(0xFF6B7280);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final cat   = record.performanceCategory;
     final score = record.averageScore;
 
     return Container(
@@ -132,35 +122,6 @@ class _RecordCard extends StatelessWidget {
               ],
             ),
           ),
-          if (cat != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: _categoryColor(cat).withAlpha(20),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _categoryColor(cat).withAlpha(80)),
-              ),
-              child: Text(
-                cat,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: _categoryColor(cat),
-                ),
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6B7280).withAlpha(20),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'UNGRADED',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)),
-              ),
-            ),
         ],
       ),
     );
