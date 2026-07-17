@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
-import { Loader2, ArrowLeft, Calendar, CheckCircle2, Clock, AlertTriangle, Paperclip } from 'lucide-react';
+import { Loader2, ArrowLeft, Calendar, CheckCircle2, Clock, AlertTriangle, Paperclip, FileSpreadsheet, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetTaskByIdQuery,
@@ -185,7 +185,32 @@ export default function TaskSubmissionsPage() {
   );
 
   const [gradeTarget, setGradeTarget] = useState(null);
+  const [downloadingGrades, setDownloadingGrades] = useState(null);
   const token = useSelector(selectCurrentToken);
+
+  async function downloadGrades(format) {
+    setDownloadingGrades(format);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/reports/tasks/${taskId}/grades?format=${format}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.error?.message ?? 'Download failed');
+      }
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `grades.${format}`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (err) {
+      toast.error(err.message ?? 'Could not download grades');
+    } finally {
+      setDownloadingGrades(null);
+    }
+  }
 
   async function downloadFile(file) {
     if (!file.workspaceId) {
@@ -296,20 +321,46 @@ export default function TaskSubmissionsPage() {
             </p>
           )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleStatus}
-          disabled={toggling}
-          className={cn(
-            task.status === 'open'
-              ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
-              : 'border-just-blue-200 text-just-blue-700 hover:bg-just-blue-50',
-          )}
-        >
-          {toggling && <Loader2 size={13} className="animate-spin" />}
-          {task.status === 'open' ? 'Close task' : 'Reopen task'}
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={!!downloadingGrades}
+            onClick={() => downloadGrades('xlsx')}
+          >
+            {downloadingGrades === 'xlsx'
+              ? <Loader2 size={13} className="animate-spin" />
+              : <FileSpreadsheet size={13} />}
+            Grades (Excel)
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={!!downloadingGrades}
+            onClick={() => downloadGrades('csv')}
+          >
+            {downloadingGrades === 'csv'
+              ? <Loader2 size={13} className="animate-spin" />
+              : <FileDown size={13} />}
+            CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleStatus}
+            disabled={toggling}
+            className={cn(
+              task.status === 'open'
+                ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                : 'border-just-blue-200 text-just-blue-700 hover:bg-just-blue-50',
+            )}
+          >
+            {toggling && <Loader2 size={13} className="animate-spin" />}
+            {task.status === 'open' ? 'Close task' : 'Reopen task'}
+          </Button>
+        </div>
       </div>
 
       {/* Summary pills */}

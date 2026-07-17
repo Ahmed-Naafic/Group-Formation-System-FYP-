@@ -18,4 +18,10 @@ router.get(
   reportController.groupReport,
 );
 
+router.get(
+  '/tasks/:taskId/grades',
+  authenticate, requireRole('admin', 'instructor'),
+  reportController.taskGrades,
+);
+
 module.exports = router;

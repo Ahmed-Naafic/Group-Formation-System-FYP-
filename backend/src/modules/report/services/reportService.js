@@ -2,7 +2,75 @@ const ExcelJS                  = require('exceljs');
 const groupRepository          = require('../../group/repositories/groupRepository');
 const attendanceRepository     = require('../../attendance/repositories/attendanceRepository');
 const courseOfferingService    = require('../../courseOffering/services/courseOfferingService');
-const { BadRequestError } = require('../../../common/errors');
+const taskRepository           = require('../../task/repositories/taskRepository');
+const submissionRepository     = require('../../submission/repositories/submissionRepository');
+const { BadRequestError, NotFoundError } = require('../../../common/errors');
+
+const STATUS_LABELS = {
+  draft:     'Draft',
+  submitted: 'Submitted',
+  late:      'Late',
+  reviewed:  'Reviewed',
+};
+
+// Builds the roster of grade rows for a task: every group (or every student,
+// for individual-submission tasks) assigned to the task, joined against
+// whatever Submission docs actually exist — students/groups who never
+// submitted still get a row, with status "Not submitted" and no grade.
+async function buildTaskGradesRoster(taskId, context) {
+  const task = await taskRepository.findById(taskId);
+  if (!task) throw new NotFoundError('Task not found');
+
+  const courseOfferingId = String(task.courseOfferingId?._id ?? task.courseOfferingId);
+  const offering = await courseOfferingService.getById(courseOfferingId, context);
+
+  const allGroups = await groupRepository.findByCourseOffering(courseOfferingId);
+  const assignedIds = (task.assignedGroups ?? []).map((g) => String(g._id ?? g));
+  const groups = assignedIds.length
+    ? allGroups.filter((g) => assignedIds.includes(String(g._id)))
+    : allGroups;
+
+  const submissions = await submissionRepository.findByTask(taskId);
+
+  const rows = [];
+
+  if (task.submissionType === 'individual') {
+    const byStudentId = new Map(
+      submissions.map((s) => [String(s.submittedBy?._id ?? s.submittedBy), s]),
+    );
+    for (const g of groups) {
+      for (const m of g.memberIds ?? []) {
+        const submission = byStudentId.get(String(m._id));
+        rows.push({
+          studentId:   m.userId?.studentId ?? '',
+          fullName:    m.fullName,
+          groupName:   g.name,
+          status:      submission ? (STATUS_LABELS[submission.status] ?? submission.status) : 'Not submitted',
+          grade:       submission?.grade ?? '',
+          submittedAt: submission?.submittedAt ? submission.submittedAt.toISOString().slice(0, 10) : '',
+        });
+      }
+    }
+  } else {
+    const byGroupId = new Map(
+      submissions.map((s) => [String(s.groupId?._id ?? s.groupId), s]),
+    );
+    for (const g of groups) {
+      const submission = byGroupId.get(String(g._id));
+      const memberNames = (g.memberIds ?? []).map((m) => m.fullName).join(', ');
+      rows.push({
+        groupName:    g.name,
+        members:      memberNames,
+        submittedBy:  submission?.submittedBy?.fullName ?? '',
+        status:       submission ? (STATUS_LABELS[submission.status] ?? submission.status) : 'Not submitted',
+        grade:        submission?.grade ?? '',
+        submittedAt:  submission?.submittedAt ? submission.submittedAt.toISOString().slice(0, 10) : '',
+      });
+    }
+  }
+
+  return { task, offering, rows };
+}
 
 const reportService = {
   /**
@@ -197,6 +265,90 @@ const reportService = {
       }
     }
 
+    return rows;
+  },
+
+  /**
+   * Grades export for a single task: one row per group (or per student, for
+   * individual-submission tasks), including anyone who hasn't submitted yet.
+   */
+  async buildTaskGradesExcel(taskId, context) {
+    const { task, offering, rows } = await buildTaskGradesRoster(taskId, context);
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'JUST Group Formation System';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Grades');
+
+    const isIndividual = task.submissionType === 'individual';
+    const columns = isIndividual
+      ? [
+          { header: 'Student ID',   key: 'studentId',   width: 16 },
+          { header: 'Full Name',    key: 'fullName',    width: 26 },
+          { header: 'Group',        key: 'groupName',   width: 24 },
+          { header: 'Status',       key: 'status',      width: 14 },
+          { header: 'Grade',        key: 'grade',       width: 10 },
+          { header: 'Submitted At', key: 'submittedAt', width: 14 },
+        ]
+      : [
+          { header: 'Group',        key: 'groupName',   width: 24 },
+          { header: 'Members',      key: 'members',     width: 40 },
+          { header: 'Submitted By', key: 'submittedBy', width: 22 },
+          { header: 'Status',       key: 'status',      width: 14 },
+          { header: 'Grade',        key: 'grade',       width: 10 },
+          { header: 'Submitted At', key: 'submittedAt', width: 14 },
+        ];
+    const colCount   = columns.length;
+    const lastColLtr = String.fromCharCode(64 + colCount);
+    columns.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
+
+    const C_GREEN    = 'FF1D6F42';
+    const C_WHITE    = 'FFFFFFFF';
+    const C_LT_GREEN = 'FFC6EFCE';
+    const C_DK_GREEN = 'FF276221';
+
+    function applyFill(cell, argb) {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+    }
+    function applyFont(cell, { bold = false, color = 'FF000000' } = {}) {
+      cell.font = { name: 'Arial', size: 11, bold, color: { argb: color } };
+    }
+
+    const courseName  = offering.courseId?.name ?? '—';
+    const cohortName   = offering.cohortId?.name ?? '—';
+    const deadlineStr = task.deadline
+      ? new Date(task.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '—';
+
+    const r1 = ws.addRow([`Grades — ${task.title}`]);
+    for (let c = 1; c <= colCount; c++) applyFill(r1.getCell(c), C_GREEN);
+    applyFont(r1.getCell(1), { bold: true, color: C_WHITE, size: 12 });
+    ws.mergeCells(`A${r1.number}:${lastColLtr}${r1.number}`);
+
+    const r2 = ws.addRow([`Course: ${courseName} — ${cohortName}    Deadline: ${deadlineStr}    Total: ${rows.length}`]);
+    applyFont(r2.getCell(1));
+    ws.mergeCells(`A${r2.number}:${lastColLtr}${r2.number}`);
+
+    ws.addRow([]); // spacer
+
+    const headerRow = ws.addRow(columns.map((c) => c.header));
+    for (let c = 1; c <= colCount; c++) {
+      applyFill(headerRow.getCell(c), C_LT_GREEN);
+      applyFont(headerRow.getCell(c), { bold: true, color: C_DK_GREEN });
+    }
+
+    for (const row of rows) {
+      ws.addRow(columns.map((c) => row[c.key]));
+    }
+
+    return wb;
+  },
+
+  /**
+   * Returns an array of plain row objects (CSV-friendly).
+   */
+  async buildTaskGradesCsv(taskId, context) {
+    const { rows } = await buildTaskGradesRoster(taskId, context);
     return rows;
   },
 };

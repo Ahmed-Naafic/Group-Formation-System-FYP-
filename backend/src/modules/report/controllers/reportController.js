@@ -44,6 +44,25 @@ const reportController = {
     await wb.xlsx.write(res);
     res.end();
   }),
+
+  // GET /api/reports/tasks/:taskId/grades?format=xlsx|csv
+  taskGrades: asyncHandler(async (req, res) => {
+    const { taskId } = req.params;
+    const { format = 'xlsx' } = req.query;
+
+    if (format === 'csv') {
+      const rows = await reportService.buildTaskGradesCsv(taskId, req.context);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="grades.csv"');
+      return res.send(toCsv(rows));
+    }
+
+    const wb = await reportService.buildTaskGradesExcel(taskId, req.context);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="grades.xlsx"');
+    await wb.xlsx.write(res);
+    res.end();
+  }),
 };
 
 module.exports = reportController;
