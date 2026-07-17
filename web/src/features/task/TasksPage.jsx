@@ -63,26 +63,38 @@ function GroupPicker({ groups, selected, onChange }) {
   if (!groups.length) {
     return <p className="text-sm text-ink-400">No active groups in this offering yet.</p>;
   }
+  const allSelected = selected.length === groups.length;
   return (
-    <div className="max-h-44 overflow-y-auto rounded-md border border-border divide-y divide-border">
-      {groups.map((g) => (
-        <label
-          key={g._id}
-          className={cn(
-            'flex items-center gap-3 px-3 py-2 cursor-pointer text-sm hover:bg-ink-50 transition-colors',
-            selected.includes(g._id) && 'bg-just-blue-50/60',
-          )}
-        >
-          <input
-            type="checkbox"
-            checked={selected.includes(g._id)}
-            onChange={() => toggle(g._id)}
-            className="h-4 w-4 accent-just-blue-600"
-          />
-          <span className="font-medium text-ink-800 flex-1">{g.name}</span>
-          <span className="text-ink-400 text-xs">{g.memberIds?.length ?? 0} members</span>
-        </label>
-      ))}
+    <div className="rounded-md border border-border overflow-hidden">
+      <label className="flex items-center gap-3 px-3 py-2 cursor-pointer text-sm bg-ink-50 hover:bg-ink-100 transition-colors border-b border-border">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={() => onChange(allSelected ? [] : groups.map((g) => g._id))}
+          className="h-4 w-4 accent-just-blue-600"
+        />
+        <span className="font-medium text-ink-800">Select all groups</span>
+      </label>
+      <div className="max-h-44 overflow-y-auto divide-y divide-border">
+        {groups.map((g) => (
+          <label
+            key={g._id}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2 cursor-pointer text-sm hover:bg-ink-50 transition-colors',
+              selected.includes(g._id) && 'bg-just-blue-50/60',
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={selected.includes(g._id)}
+              onChange={() => toggle(g._id)}
+              className="h-4 w-4 accent-just-blue-600"
+            />
+            <span className="font-medium text-ink-800 flex-1">{g.name}</span>
+            <span className="text-ink-400 text-xs">{g.memberIds?.length ?? 0} members</span>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
