@@ -57,7 +57,7 @@ async function buildTaskGradesRoster(taskId, context) {
     );
     for (const g of groups) {
       const submission = byGroupId.get(String(g._id));
-      const memberNames = (g.memberIds ?? []).map((m) => m.fullName).join(', ');
+      const memberNames = (g.memberIds ?? []).map((m) => m.fullName).join('\n');
       rows.push({
         groupName:    g.name,
         members:      memberNames,
@@ -337,8 +337,16 @@ const reportService = {
       applyFont(headerRow.getCell(c), { bold: true, color: C_DK_GREEN });
     }
 
+    const membersColIndex = columns.findIndex((c) => c.key === 'members') + 1; // 0 if no such column
+
     for (const row of rows) {
-      ws.addRow(columns.map((c) => row[c.key]));
+      const excelRow = ws.addRow(columns.map((c) => row[c.key]));
+      if (membersColIndex) {
+        const cell = excelRow.getCell(membersColIndex);
+        cell.alignment = { wrapText: true, vertical: 'top' };
+        const lineCount = String(row.members ?? '').split('\n').length;
+        excelRow.height = Math.max(15, lineCount * 15);
+      }
     }
 
     return wb;
