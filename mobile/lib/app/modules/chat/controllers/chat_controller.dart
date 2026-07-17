@@ -538,14 +538,21 @@ class ChatController extends GetxController {
 
   Future<void> togglePlayback(ChatMessage msg) async {
     if (currentlyPlayingMessageId.value == msg.id) {
+      // Same message already loaded — just toggle, no need to reload it.
       if (_audioPlayer.playing) {
         await _audioPlayer.pause();
       } else {
-        await _audioPlayer.play();
+        _fireAndForgetPlay(msg.id);
       }
       return;
     }
 
+    // Set this bubble as "current" up front, before the (possibly slow)
+    // network fetch — the loading spinner is keyed off currentlyPlayingMessageId,
+    // so setting it only after the fetch succeeded meant it never showed
+    // during the fetch itself (the tap looked unresponsive for a few seconds).
+    currentlyPlayingMessageId.value = msg.id;
+    playbackPosition.value = Duration.zero;
     isPlaybackLoading.value = true;
     try {
       if (msg.localAudioPath != null) {
@@ -554,14 +561,32 @@ class ChatController extends GetxController {
         final url = await _repo.getVoiceMessageUrl(msg.workspaceId, msg.id);
         await _audioPlayer.setUrl(url);
       }
-      currentlyPlayingMessageId.value = msg.id;
-      playbackPosition.value = Duration.zero;
-      await _audioPlayer.play();
-    } catch (_) {
-      Get.snackbar('Playback failed', 'Could not play this voice message.');
-    } finally {
       isPlaybackLoading.value = false;
+      _fireAndForgetPlay(msg.id);
+    } catch (_) {
+      isPlaybackLoading.value = false;
+      if (currentlyPlayingMessageId.value == msg.id) currentlyPlayingMessageId.value = null;
+      Get.snackbar('Playback failed', 'Could not play this voice message.');
     }
+  }
+
+  /// just_audio's play() future only completes when playback finishes, is
+  /// paused, or is stopped — it does NOT complete when playback starts. It
+  /// must never be awaited inside togglePlayback: doing so left a play()
+  /// call dangling in the background for as long as that message kept
+  /// playing, and switching to a different voice message (which reuses the
+  /// same player and stops the old source) made that stale, unrelated call
+  /// reject — surfacing as a spurious "Playback failed" for audio that had
+  /// actually played back just fine.
+  void _fireAndForgetPlay(String messageId) {
+    unawaited(_audioPlayer.play().catchError((_) {
+      // A rejection here just means playback was interrupted (e.g. the user
+      // switched to another message) — expected, not a real failure, so it's
+      // only worth reacting to if this message is still the "current" one.
+      if (currentlyPlayingMessageId.value == messageId) {
+        currentlyPlayingMessageId.value = null;
+      }
+    }));
   }
 
   @override
