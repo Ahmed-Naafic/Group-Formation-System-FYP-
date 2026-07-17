@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { Loader2, Plus, Trash2, ClipboardList, ArrowRight, Calendar, Paperclip, X, Pencil } from 'lucide-react';
+import { Loader2, Plus, Trash2, ClipboardList, ArrowRight, Calendar, Paperclip, X, Pencil, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetTasksQuery,
@@ -9,6 +9,7 @@ import {
   useUpdateTaskMutation,
   useDeleteTaskMutation,
 } from './taskApi';
+import { useGenerateTaskMutation } from '@/features/ai/aiApi';
 import { useGetGroupsQuery } from '@/features/group/groupApi';
 import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Button } from '@/components/ui/button';
@@ -97,6 +98,7 @@ export default function TasksPage() {
   const [createTask, { isLoading: creating }]        = useCreateTaskMutation();
   const [updateTask, { isLoading: updating }]        = useUpdateTaskMutation();
   const [deleteTask, { isLoading: deleting }]        = useDeleteTaskMutation();
+  const [generateTask, { isLoading: generating }]    = useGenerateTaskMutation();
 
   const [statusFilter,       setStatusFilter]       = useState('all');
   const [newOpen,            setNewOpen]            = useState(false);
@@ -108,9 +110,11 @@ export default function TasksPage() {
   const [pickedGroups,       setPickedGroups]       = useState([]);
   const [submissionType,     setSubmissionType]     = useState('group');
   const [attachmentFile,     setAttachmentFile]     = useState(null);
+  const [aiPrompt,           setAiPrompt]           = useState('');
+  const [aiError,            setAiError]            = useState(null);
   const fileInputRef = useRef(null);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     defaultValues: { title: '', description: '', deadline: '' },
   });
 
@@ -124,7 +128,21 @@ export default function TasksPage() {
     setPickedGroups([]);
     setSubmissionType('group');
     setAttachmentFile(null);
+    setAiPrompt('');
+    setAiError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  async function handleGenerateWithAI() {
+    setAiError(null);
+    try {
+      const { title, description } = await generateTask(aiPrompt.trim()).unwrap();
+      setValue('title', title, { shouldValidate: true });
+      setValue('description', description, { shouldValidate: true });
+    } catch (err) {
+      const e = err?.data?.error;
+      setAiError(e?.details?.length ? e.details.join(' · ') : (e?.message ?? 'AI generation failed. Please try again.'));
+    }
   }
 
   function openEdit(task) {
@@ -323,6 +341,34 @@ export default function TasksPage() {
             <DialogDescription>Assign a task to one or more groups in {offeringLabel}.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(onCreateTask)} className="space-y-4 py-1" noValidate>
+            <div className="rounded-lg border border-just-blue-100 bg-just-blue-50/40 p-3 space-y-2">
+              <Label htmlFor="t-ai-prompt" className="flex items-center gap-1.5 text-just-blue-700">
+                <Sparkles size={13} /> Generate with AI
+              </Label>
+              <textarea
+                id="t-ai-prompt"
+                rows={2}
+                placeholder={"Describe the task you want to create...\ne.g. 'Create a database normalization task for groups of 5, focusing on 3NF'"}
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                className="w-full rounded-md border border-input bg-white px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-ink-400">AI fills the form — you review and edit before saving.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 shrink-0"
+                  disabled={aiPrompt.trim().length < 10 || generating}
+                  onClick={handleGenerateWithAI}
+                >
+                  {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                  {generating ? 'Generating...' : 'Generate with AI'}
+                </Button>
+              </div>
+              {aiError && <p className="text-xs text-danger">{aiError}</p>}
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="t-title">Title <span className="text-danger">*</span></Label>
               <Input

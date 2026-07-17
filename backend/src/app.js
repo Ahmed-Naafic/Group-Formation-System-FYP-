@@ -88,6 +88,7 @@ app.use('/api/notifications',       require('./modules/notification/routes/notif
 app.use('/api/audit-logs',          require('./modules/auditLog/routes/auditLogRoutes'));
 app.use('/api/reports',             require('./modules/report/routes/reportRoutes'));
 app.use('/api/dashboard',           require('./modules/dashboard/routes/dashboardRoutes'));
+app.use('/api/ai',                  require('./modules/ai/routes/aiRoutes'));
 
 // ── 404 & error handling ─────────────────────────────────────────────────────
 app.use(notFound);

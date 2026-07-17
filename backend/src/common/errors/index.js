@@ -43,6 +43,18 @@ class InternalError extends AppError {
   }
 }
 
+class ServiceUnavailableError extends AppError {
+  constructor(message = 'Service unavailable') {
+    super(message, 503, E.SERVICE_UNAVAILABLE);
+  }
+}
+
+class BadGatewayError extends AppError {
+  constructor(message = 'Upstream service error') {
+    super(message, 502, E.BAD_GATEWAY);
+  }
+}
+
 // Thrown when a bulk upload would silently move students between classes.
 // Carries responseData so the error handler can include a top-level `data`
 // field in the 409 response with the list of would-be transfers.
@@ -66,5 +78,7 @@ module.exports = {
   NotFoundError,
   ConflictError,
   InternalError,
+  ServiceUnavailableError,
+  BadGatewayError,
   TransferConfirmationError,
 };
