@@ -38,6 +38,10 @@ dependencies:
   # Open downloaded files with device's default app (PDF viewer, image viewer, etc.)
   open_filex: ^4.7.0
 
+  # Voice message recording (has its own permission-request helpers, no
+  # separate permission_handler dependency needed) and playback
+  record: ^5.2.1
+  just_audio: ^0.9.42
 
   # Firebase push notifications
   firebase_core: ^3.13.1

@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Voice messages in workspace chat -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
         android:label="CollabGroup"
         android:name="${applicationName}"

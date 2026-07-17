@@ -1,6 +1,7 @@
 const asyncHandler    = require('../../../common/utils/asyncHandler');
 const { sendSuccess } = require('../../../common/responses/apiResponse');
 const messageService  = require('../services/messageService');
+const { BadRequestError } = require('../../../common/errors');
 
 const messageController = {
   // GET /api/workspaces/:workspaceId/messages?limit=50&before=<msgId>
@@ -25,6 +26,29 @@ const messageController = {
     // Populate sender for the HTTP response (socket path populates inline)
     await message.populate({ path: 'senderId', select: 'fullName role studentId' });
     return sendSuccess(res, { status: 201, data: { message } });
+  }),
+
+  // POST /api/workspaces/:workspaceId/messages/voice
+  sendVoice: asyncHandler(async (req, res) => {
+    if (!req.file) throw new BadRequestError('No audio file provided');
+    const message = await messageService.sendVoice(
+      req.params.workspaceId,
+      req.file,
+      req.body.duration,
+      req.context,
+    );
+    return sendSuccess(res, { status: 201, data: { message } });
+  }),
+
+  // GET /api/workspaces/:workspaceId/messages/:messageId/audio
+  // Returns the signed URL as JSON (rather than redirecting, the convention
+  // used by file downloads) so a native audio player can load it directly
+  // without needing to follow an authenticated redirect mid-playback.
+  audio: asyncHandler(async (req, res) => {
+    const url = await messageService.getAudioPlaybackUrl(
+      req.params.workspaceId, req.params.messageId, req.context,
+    );
+    return sendSuccess(res, { data: { url } });
   }),
 
   // PATCH /api/workspaces/:workspaceId/messages/:messageId/read

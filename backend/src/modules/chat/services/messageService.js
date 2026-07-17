@@ -1,5 +1,7 @@
 const messageRepository   = require('../repositories/messageRepository');
 const workspaceService    = require('../../workspace/services/workspaceService');
+const StorageService      = require('../../../common/services/storage/StorageService');
+const emitter             = require('../../../common/events/emitter');
 const { NotFoundError, ForbiddenError } = require('../../../common/errors');
 
 const messageService = {
@@ -29,6 +31,68 @@ const messageService = {
       senderId: context.userId,
       content,
     });
+  },
+
+  /**
+   * Uploads the recorded audio, persists a voice message, and notifies:
+   *  - 'chat.voiceMessage' — a socket listener (sockets/index.js) broadcasts it
+   *    live to everyone in the workspace room (mirrors the text-message path,
+   *    which broadcasts inline from the socket handler instead — REST has no
+   *    socket in scope, so it goes through the shared emitter).
+   *  - 'message.sent' — reuses the existing FCM-push listener unchanged.
+   * `multerFile` is multer's memoryStorage object: { originalname, mimetype, size, buffer }.
+   */
+  async sendVoice(workspaceId, multerFile, durationSeconds, context) {
+    if (context.role === 'admin') {
+      throw new ForbiddenError('Admins cannot send chat messages');
+    }
+    await workspaceService.getById(workspaceId, context);
+
+    const { publicId } = await StorageService.save(
+      multerFile.buffer,
+      multerFile.originalname,
+      `workspaces/${workspaceId}/audio`,
+      multerFile.mimetype,
+    );
+
+    const message = await messageRepository.create({
+      workspaceId,
+      senderId:       context.userId,
+      content:        '',
+      audioPublicId:  publicId,
+      audioDuration:  durationSeconds,
+      audioSizeBytes: multerFile.size,
+    });
+    await message.populate({ path: 'senderId', select: 'fullName role studentId' });
+
+    emitter.emit('chat.voiceMessage', { workspaceId: String(workspaceId), message });
+    emitter.emit('message.sent', {
+      workspaceId:  String(workspaceId),
+      senderUserId: String(context.userId),
+      // Pulled from the populated sender, not context.fullName — REST's req.context
+      // (built by middleware/auth.js) doesn't carry fullName the way the socket
+      // auth middleware's manually-bolted-on context does.
+      senderName:   message.senderId?.fullName ?? 'Someone',
+      preview:      '🎤 Voice message',
+    });
+
+    return message;
+  },
+
+  /**
+   * Resolves a fresh signed URL for playing back a voice message's audio.
+   * Mirrors fileService.getForDownload — the bucket is private, so URLs are
+   * resolved per-request rather than cached at send-time.
+   */
+  async getAudioPlaybackUrl(workspaceId, messageId, context) {
+    await workspaceService.getById(workspaceId, context);
+    const message = await messageRepository.findById(messageId);
+    if (!message) throw new NotFoundError('Message not found');
+    if (String(message.workspaceId) !== String(workspaceId)) {
+      throw new ForbiddenError('Message does not belong to this workspace');
+    }
+    if (!message.audioPublicId) throw new NotFoundError('This message has no audio');
+    return StorageService.createSignedUrl(message.audioPublicId);
   },
 
   /**

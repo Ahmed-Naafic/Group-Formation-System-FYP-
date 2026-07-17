@@ -182,6 +182,7 @@ class ChatView extends StatelessWidget {
                           msg:            msg,
                           isMe:           ctrl.isMyMessage(msg),
                           showSenderName: showSenderName,
+                          ctrl:           ctrl,
                         ),
                       ],
                     );
@@ -252,12 +253,81 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage msg;
   final bool isMe;
   final bool showSenderName;
+  final ChatController ctrl;
 
   const _MessageBubble({
     required this.msg,
     required this.isMe,
     required this.showSenderName,
+    required this.ctrl,
   });
+
+  static String _fmtDuration(int seconds) {
+    final d = Duration(seconds: seconds < 0 ? 0 : seconds);
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildAudioRow(BuildContext context) {
+    final iconColor = isMe ? Colors.white : context.textPrimary;
+    return Obx(() {
+      final isThisMsg = ctrl.currentlyPlayingMessageId.value == msg.id;
+      final loading   = isThisMsg && ctrl.isPlaybackLoading.value;
+      final playing   = isThisMsg && ctrl.isPlaybackPlaying.value;
+      final position  = isThisMsg ? ctrl.playbackPosition.value : Duration.zero;
+      final total     = isThisMsg && ctrl.playbackDurationTotal.value > Duration.zero
+          ? ctrl.playbackDurationTotal.value
+          : Duration(seconds: msg.audioDuration ?? 0);
+      final progress  = total.inMilliseconds > 0
+          ? (position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
+          : 0.0;
+      final remaining = isThisMsg && total > position ? total - position : total;
+
+      return SizedBox(
+        width: 190,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => ctrl.togglePlayback(msg),
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: loading
+                    ? SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: iconColor),
+                      )
+                    : Icon(
+                        playing ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                        size: 30,
+                        color: iconColor,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 3,
+                  backgroundColor: iconColor.withAlpha(60),
+                  valueColor: AlwaysStoppedAnimation<Color>(iconColor),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              _fmtDuration(remaining.inSeconds),
+              style: TextStyle(fontSize: 11, color: iconColor.withAlpha(200)),
+            ),
+          ],
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -312,13 +382,15 @@ class _MessageBubble extends StatelessWidget {
                     ? CrossAxisAlignment.end
                     : CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    msg.content,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isMe ? Colors.white : context.textPrimary,
-                    ),
-                  ),
+                  msg.hasAudio
+                      ? _buildAudioRow(context)
+                      : Text(
+                          msg.content,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isMe ? Colors.white : context.textPrimary,
+                          ),
+                        ),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -497,6 +569,12 @@ class _InputBar extends StatelessWidget {
   final ChatController ctrl;
   const _InputBar({required this.ctrl});
 
+  static String _fmtElapsed(Duration d) {
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -516,42 +594,113 @@ class _InputBar extends StatelessWidget {
         top: false,
         child: Row(
           children: [
+            // Text field while idle, recording indicator while recording — this
+            // is a sibling of the mic button below, never its ancestor, so
+            // swapping it never interrupts an in-progress press-and-hold.
             Expanded(
-              child: TextField(
-                controller: ctrl.textCtrl,
-                maxLines: null,
-                textInputAction: TextInputAction.send,
-                onChanged: ctrl.onTextChanged,
-                onSubmitted: (_) => ctrl.sendMessage(),
-                style: TextStyle(color: context.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Message your group…',
-                  hintStyle: TextStyle(
-                      color: context.textMuted, fontSize: 14),
-                  filled: true,
-                  fillColor: context.inputFill,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+              child: Obx(() {
+                if (ctrl.isRecording.value) {
+                  final cancelPreview = ctrl.recordingCancelPreview.value;
+                  return Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: context.inputFill,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.fiber_manual_record,
+                            size: 12,
+                            color: cancelPreview ? context.textMuted : Colors.redAccent),
+                        const SizedBox(width: 8),
+                        Text(
+                          _fmtElapsed(ctrl.recordingDuration.value),
+                          style: TextStyle(fontSize: 13, color: context.textPrimary),
+                        ),
+                        const Spacer(),
+                        Text(
+                          cancelPreview ? 'Release to cancel' : '◀ Slide to cancel',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cancelPreview ? Colors.redAccent : context.textMuted,
+                            fontWeight: cancelPreview ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return TextField(
+                  controller: ctrl.textCtrl,
+                  maxLines: null,
+                  textInputAction: TextInputAction.send,
+                  onChanged: ctrl.onTextChanged,
+                  onSubmitted: (_) => ctrl.sendMessage(),
+                  style: TextStyle(color: context.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Message your group…',
+                    hintStyle: TextStyle(
+                        color: context.textMuted, fontSize: 14),
+                    filled: true,
+                    fillColor: context.inputFill,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
             ),
             const SizedBox(width: 8),
-            Material(
-              color: const Color(0xFF1E3A8A),
-              borderRadius: BorderRadius.circular(24),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(24),
-                onTap: ctrl.sendMessage,
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Icon(Icons.send_rounded,
-                      color: Colors.white, size: 20),
-                ),
-              ),
+            // Swaps between send (has text) and mic (empty) — but the mic
+            // branch's GestureDetector keeps the same widget identity across
+            // isRecording/cancelPreview rebuilds, so an active long-press
+            // gesture is never interrupted mid-recording.
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: ctrl.textCtrl,
+              builder: (context, value, _) {
+                final hasText = value.text.trim().isNotEmpty;
+                return Obx(() {
+                  if (hasText && !ctrl.isRecording.value) {
+                    return Material(
+                      color: const Color(0xFF1E3A8A),
+                      borderRadius: BorderRadius.circular(24),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: ctrl.sendMessage,
+                        child: const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Icon(Icons.send_rounded,
+                              color: Colors.white, size: 20),
+                        ),
+                      ),
+                    );
+                  }
+                  final cancelPreview = ctrl.recordingCancelPreview.value;
+                  return GestureDetector(
+                    onLongPressStart: (_) => ctrl.startRecording(),
+                    onLongPressMoveUpdate: (d) =>
+                        ctrl.updateRecordingDrag(d.offsetFromOrigin.dx),
+                    onLongPressEnd: (_) => ctrl.stopRecordingAndSend(),
+                    onLongPressCancel: ctrl.cancelRecording,
+                    child: Material(
+                      color: cancelPreview ? Colors.redAccent : const Color(0xFF1E3A8A),
+                      borderRadius: BorderRadius.circular(24),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Icon(
+                          ctrl.isRecording.value ? Icons.mic : Icons.mic_none_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  );
+                });
+              },
             ),
           ],
         ),

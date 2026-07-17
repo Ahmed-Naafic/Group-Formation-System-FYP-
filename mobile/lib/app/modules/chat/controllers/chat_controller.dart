@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../../../core/config.dart';
 import '../../../data/models/chat_message_model.dart';
@@ -10,8 +14,18 @@ import '../../../data/repositories/chat_repository.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../notifications/controllers/notification_controller.dart';
 
+/// Voice notes are capped at 3 minutes — plenty for a chat aside, keeps
+/// uploads small, and stops recordings from becoming unwieldy to skim.
+const kMaxVoiceMessageSeconds = 180;
+
+/// Below this, a press-and-hold is almost certainly an accidental tap rather
+/// than an intentional recording — discard instead of uploading a blip.
+const _kMinRecordingMs = 400;
+
 class ChatController extends GetxController {
   final _repo = ChatRepository();
+  final _audioRecorder = AudioRecorder();
+  final _audioPlayer   = AudioPlayer();
 
   // Persists across controller recreation so re-opening chat is instant.
   static final _cache = <String, List<ChatMessage>>{};
@@ -26,11 +40,26 @@ class ChatController extends GetxController {
   final textCtrl          = TextEditingController();
   final scrollCtrl        = ScrollController();
 
+  // ── Recording ──────────────────────────────────────────────────────────────
+  final isRecording       = false.obs;
+  final recordingDuration = Duration.zero.obs;
+  final recordingCancelPreview = false.obs; // true once dragged past the cancel threshold
+
+  // ── Playback (one shared player — starting a bubble pauses any other) ──────
+  final currentlyPlayingMessageId = RxnString();
+  final playbackPosition          = Duration.zero.obs;
+  final playbackDurationTotal     = Duration.zero.obs;
+  final isPlaybackLoading         = false.obs;
+  final isPlaybackPlaying         = false.obs;
+
   WorkspaceModel? workspace;
   String _myStudentId = '';
   String _myFullName  = '';
   io.Socket? _socket;
   Timer? _typingTimer;
+  Timer? _recordingTimer;
+  DateTime? _recordingStartedAt;
+  bool _recordingCancelled = false;
   bool _disposed = false;
 
   static const _maxAttempts = 4;
@@ -77,6 +106,23 @@ class ChatController extends GetxController {
       _loadHistory();
     }
     _connectSocket();
+    _listenToPlayback();
+  }
+
+  void _listenToPlayback() {
+    _audioPlayer.positionStream.listen((p) => playbackPosition.value = p);
+    _audioPlayer.durationStream.listen((d) {
+      if (d != null) playbackDurationTotal.value = d;
+    });
+    _audioPlayer.playerStateStream.listen((state) {
+      isPlaybackPlaying.value = state.playing;
+      if (state.processingState == ProcessingState.completed) {
+        _audioPlayer.pause();
+        _audioPlayer.seek(Duration.zero);
+        currentlyPlayingMessageId.value = null;
+        isPlaybackPlaying.value = false;
+      }
+    });
   }
 
   // ── Full load ────────────────────────────────────────────────────────────────
@@ -248,8 +294,15 @@ class ChatController extends GetxController {
               ? msgJson
               : Map<String, dynamic>.from(msgJson),
         );
-        // My own message returning from server: upgrade pending → confirmed (2 ticks)
-        if (_myStudentId.isNotEmpty && msg.sender.studentId == _myStudentId) {
+        // My own message returning from server: upgrade pending → confirmed (2 ticks).
+        // Content-match only applies to text messages (msg.content.isNotEmpty) — a
+        // voice message's content is always '', so this must never match one of its
+        // pending bubbles. Voice messages reconcile via an explicit tempId in
+        // stopRecordingAndSend() instead, and fall through to the id-based add below
+        // regardless of whether the HTTP response or this socket echo arrives first.
+        if (_myStudentId.isNotEmpty &&
+            msg.sender.studentId == _myStudentId &&
+            msg.content.isNotEmpty) {
           final pendingIdx = messages.indexWhere(
             (m) => m.isPending && m.content == msg.content,
           );
@@ -361,10 +414,163 @@ class ChatController extends GetxController {
     }
   }
 
+  // ── Voice recording ──────────────────────────────────────────────────────────
+
+  Future<void> startRecording() async {
+    if (isRecording.value) return;
+    final hasPermission = await _audioRecorder.hasPermission();
+    if (!hasPermission) {
+      Get.snackbar(
+        'Microphone permission needed',
+        'Allow microphone access in your device settings to send voice messages.',
+      );
+      return;
+    }
+
+    final dir  = await getTemporaryDirectory();
+    final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+
+    _recordingStartedAt   = DateTime.now();
+    _recordingCancelled   = false;
+    isRecording.value     = true;
+    recordingCancelPreview.value = false;
+    recordingDuration.value = Duration.zero;
+
+    _recordingTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (_recordingStartedAt == null) return;
+      recordingDuration.value = DateTime.now().difference(_recordingStartedAt!);
+      if (recordingDuration.value.inSeconds >= kMaxVoiceMessageSeconds) {
+        stopRecordingAndSend();
+      }
+    });
+  }
+
+  /// Called as the user drags away from the mic button — past the cancel
+  /// threshold, releasing discards the recording instead of sending it.
+  void updateRecordingDrag(double dx) {
+    if (!isRecording.value) return;
+    recordingCancelPreview.value = dx < -80;
+  }
+
+  Future<void> cancelRecording() async {
+    if (!isRecording.value) return;
+    _recordingCancelled = true;
+    await _stopAndDiscard();
+  }
+
+  Future<void> _stopAndDiscard() async {
+    _recordingTimer?.cancel();
+    isRecording.value        = false;
+    recordingDuration.value  = Duration.zero;
+    recordingCancelPreview.value = false;
+    final path = await _audioRecorder.stop();
+    if (path != null) {
+      try { await File(path).delete(); } catch (_) {}
+    }
+  }
+
+  Future<void> stopRecordingAndSend() async {
+    if (!isRecording.value) return;
+
+    // Released past the slide-to-cancel threshold — discard, don't upload.
+    if (recordingCancelPreview.value) {
+      await _stopAndDiscard();
+      return;
+    }
+
+    _recordingTimer?.cancel();
+    isRecording.value = false;
+    final elapsed = recordingDuration.value;
+    recordingDuration.value = Duration.zero;
+    final path = await _audioRecorder.stop();
+
+    if (_recordingCancelled || path == null) {
+      if (path != null) { try { await File(path).delete(); } catch (_) {} }
+      return;
+    }
+
+    // Accidental-tap guard — a near-instant press/release produces a junk blip.
+    if (elapsed.inMilliseconds < _kMinRecordingMs) {
+      try { await File(path).delete(); } catch (_) {}
+      return;
+    }
+
+    final ws = workspace;
+    if (ws == null) return;
+
+    final tempId          = 'pending_voice_${DateTime.now().millisecondsSinceEpoch}';
+    final durationSeconds = elapsed.inSeconds.clamp(1, kMaxVoiceMessageSeconds);
+
+    final pending = ChatMessage(
+      id:             tempId,
+      workspaceId:    ws.id,
+      sender:         ChatSender(id: '', fullName: _myFullName, studentId: _myStudentId),
+      content:        '',
+      createdAt:      DateTime.now(),
+      isPending:      true,
+      audioDuration:  durationSeconds,
+      localAudioPath: path,
+    );
+    messages.add(pending);
+    _cache[ws.id] = List<ChatMessage>.from(messages);
+    _scrollToBottom(force: true);
+
+    try {
+      final real = await _repo.uploadVoiceMessage(ws.id, path, durationSeconds);
+      // Race-safe: the HTTP response and the 'new-message' socket broadcast are
+      // two independent deliveries with no ordering guarantee — the socket
+      // echo may have already added this message by the time we get here.
+      messages.removeWhere((m) => m.id == tempId);
+      if (!messages.any((m) => m.id == real.id)) {
+        messages.add(real.copyWith(localAudioPath: path));
+        _scrollToBottom();
+      }
+      _cache[ws.id] = List<ChatMessage>.from(messages);
+    } catch (_) {
+      messages.removeWhere((m) => m.id == tempId);
+      _cache[ws.id] = List<ChatMessage>.from(messages);
+      Get.snackbar('Failed to send', 'Your voice message could not be sent.');
+    }
+  }
+
+  // ── Voice playback ───────────────────────────────────────────────────────────
+
+  Future<void> togglePlayback(ChatMessage msg) async {
+    if (currentlyPlayingMessageId.value == msg.id) {
+      if (_audioPlayer.playing) {
+        await _audioPlayer.pause();
+      } else {
+        await _audioPlayer.play();
+      }
+      return;
+    }
+
+    isPlaybackLoading.value = true;
+    try {
+      if (msg.localAudioPath != null) {
+        await _audioPlayer.setFilePath(msg.localAudioPath!);
+      } else {
+        final url = await _repo.getVoiceMessageUrl(msg.workspaceId, msg.id);
+        await _audioPlayer.setUrl(url);
+      }
+      currentlyPlayingMessageId.value = msg.id;
+      playbackPosition.value = Duration.zero;
+      await _audioPlayer.play();
+    } catch (_) {
+      Get.snackbar('Playback failed', 'Could not play this voice message.');
+    } finally {
+      isPlaybackLoading.value = false;
+    }
+  }
+
   @override
   void onClose() {
     _disposed = true;
     _typingTimer?.cancel();
+    _recordingTimer?.cancel();
+    _audioRecorder.dispose();
+    _audioPlayer.dispose();
     final wsId = workspace?.id;
     if (_socket != null) {
       if (wsId != null) {

@@ -117,6 +117,14 @@ function initSocket(httpServer) {
   // Register notification + audit listeners (need io for real-time push)
   initListeners(io);
 
+  // Voice messages are created over REST (multipart upload), not the
+  // 'send-message' socket event — so they need this listener to reach
+  // everyone else in the room, mirroring what handleSendMessage does inline
+  // for text messages.
+  emitter.on('chat.voiceMessage', ({ workspaceId, message }) => {
+    io.to(roomName(workspaceId)).emit('new-message', { message });
+  });
+
   io.on('connection', (socket) => {
     // Auto-join personal room so notifications can be pushed without a client event
     socket.join(`user:${socket.context.userId}`);

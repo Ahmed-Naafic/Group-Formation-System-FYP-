@@ -2,6 +2,14 @@ const Joi = require('joi');
 
 const objectId = Joi.string().hex().length(24);
 
+const ALLOWED_AUDIO_MIME_TYPES = [
+  'audio/mp4', 'audio/x-m4a', 'audio/m4a', 'audio/aac',
+  'audio/webm', 'audio/wav', 'audio/mpeg',
+];
+
+const MAX_AUDIO_FILE_SIZE = 10 * 1024 * 1024; // 10 MB — generous headroom over a 3-minute AAC recording
+const MAX_AUDIO_DURATION_SECONDS = 180; // 3 minutes
+
 const messageValidation = {
   listMessages: Joi.object({
     limit:  Joi.number().integer().min(1).max(100).default(50),
@@ -12,10 +20,23 @@ const messageValidation = {
     content: Joi.string().trim().min(1).max(4000).required(),
   }),
 
+  sendVoiceMessage: Joi.object({
+    duration: Joi.number().integer().positive().max(MAX_AUDIO_DURATION_SECONDS).required().messages({
+      'number.base':     'Duration is required',
+      'any.required':    'Duration is required',
+      'number.max':      `Voice messages cannot exceed ${MAX_AUDIO_DURATION_SECONDS} seconds`,
+      'number.positive': 'Duration must be a positive number',
+    }),
+  }),
+
   markRead: Joi.object({
     workspaceId: objectId.required(),
     messageId:   objectId.required(),
   }),
+
+  ALLOWED_AUDIO_MIME_TYPES,
+  MAX_AUDIO_FILE_SIZE,
+  MAX_AUDIO_DURATION_SECONDS,
 };
 
 module.exports = messageValidation;
