@@ -57,10 +57,10 @@ async function buildTaskGradesRoster(taskId, context) {
     );
     for (const g of groups) {
       const submission = byGroupId.get(String(g._id));
-      const memberNames = (g.memberIds ?? []).map((m) => m.fullName).join('\n');
+      const memberNames = (g.memberIds ?? []).map((m) => m.fullName);
       rows.push({
         groupName:    g.name,
-        members:      memberNames,
+        members:      memberNames, // array — each builder joins with a format-appropriate separator
         submittedBy:  submission?.submittedBy?.fullName ?? '',
         status:       submission ? (STATUS_LABELS[submission.status] ?? submission.status) : 'Not submitted',
         grade:        submission?.grade ?? '',
@@ -340,11 +340,12 @@ const reportService = {
     const membersColIndex = columns.findIndex((c) => c.key === 'members') + 1; // 0 if no such column
 
     for (const row of rows) {
-      const excelRow = ws.addRow(columns.map((c) => row[c.key]));
+      const cellValues = columns.map((c) => (c.key === 'members' ? (row.members ?? []).join('\n') : row[c.key]));
+      const excelRow = ws.addRow(cellValues);
       if (membersColIndex) {
         const cell = excelRow.getCell(membersColIndex);
         cell.alignment = { wrapText: true, vertical: 'top' };
-        const lineCount = String(row.members ?? '').split('\n').length;
+        const lineCount = Math.max(1, (row.members ?? []).length);
         excelRow.height = Math.max(15, lineCount * 15);
       }
     }
@@ -353,10 +354,15 @@ const reportService = {
   },
 
   /**
-   * Returns an array of plain row objects (CSV-friendly).
+   * Returns an array of plain row objects (CSV-friendly). Multi-value fields
+   * (e.g. group members) are joined with "; " rather than a newline — many
+   * CSV viewers split rows on any raw newline even inside a quoted field.
    */
   async buildTaskGradesCsv(taskId, context) {
     const { rows } = await buildTaskGradesRoster(taskId, context);
+    for (const row of rows) {
+      if (Array.isArray(row.members)) row.members = row.members.join('; ');
+    }
     return rows;
   },
 };
