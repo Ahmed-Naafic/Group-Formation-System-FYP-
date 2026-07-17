@@ -19,6 +19,12 @@ const groupRepository = {
     return withMembers(Group.findById(id));
   },
 
+  // Lightweight — used by AI variation generation and bulk task creation,
+  // which only need identity/name/offering, not full member rosters.
+  findByIds(ids) {
+    return Group.find({ _id: { $in: ids } }, '_id name courseOfferingId');
+  },
+
   findByCourseOffering(courseOfferingId) {
     return withMembers(Group.find({ courseOfferingId, status: 'active' })).sort({ name: 1 });
   },

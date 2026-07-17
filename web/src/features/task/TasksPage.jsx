@@ -1,15 +1,16 @@
 import { useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { Loader2, Plus, Trash2, ClipboardList, ArrowRight, Calendar, Paperclip, X, Pencil, Sparkles } from 'lucide-react';
+import { Loader2, Plus, Trash2, ClipboardList, ArrowRight, Calendar, Paperclip, X, Pencil, Sparkles, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetTasksQuery,
   useCreateTaskMutation,
+  useCreateBulkTasksMutation,
   useUpdateTaskMutation,
   useDeleteTaskMutation,
 } from './taskApi';
-import { useGenerateTaskMutation } from '@/features/ai/aiApi';
+import { useGenerateTaskMutation, useGenerateTaskVariationsMutation } from '@/features/ai/aiApi';
 import { useGetGroupsQuery } from '@/features/group/groupApi';
 import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Button } from '@/components/ui/button';
@@ -95,10 +96,13 @@ export default function TasksPage() {
   const { data: offering }                           = useGetCourseOfferingByIdQuery(offeringId);
   const { data: tasks = [], isLoading, error }       = useGetTasksQuery(offeringId);
   const { data: groups = [] }                        = useGetGroupsQuery({ courseOfferingId: offeringId });
-  const [createTask, { isLoading: creating }]        = useCreateTaskMutation();
-  const [updateTask, { isLoading: updating }]        = useUpdateTaskMutation();
-  const [deleteTask, { isLoading: deleting }]        = useDeleteTaskMutation();
-  const [generateTask, { isLoading: generating }]    = useGenerateTaskMutation();
+  const [createTask, { isLoading: creating }]              = useCreateTaskMutation();
+  const [createBulkTasks, { isLoading: creatingBulk }]     = useCreateBulkTasksMutation();
+  const [updateTask, { isLoading: updating }]              = useUpdateTaskMutation();
+  const [deleteTask, { isLoading: deleting }]              = useDeleteTaskMutation();
+  const [generateTask, { isLoading: generating }]          = useGenerateTaskMutation();
+  const [generateTaskVariations, { isLoading: generatingVariations }] = useGenerateTaskVariationsMutation();
+  const [regenerateOneVariation]                           = useGenerateTaskVariationsMutation();
 
   const [statusFilter,       setStatusFilter]       = useState('all');
   const [newOpen,            setNewOpen]            = useState(false);
@@ -112,11 +116,23 @@ export default function TasksPage() {
   const [attachmentFile,     setAttachmentFile]     = useState(null);
   const [aiPrompt,           setAiPrompt]           = useState('');
   const [aiError,            setAiError]            = useState(null);
+  const [aiMode,             setAiMode]             = useState('single'); // 'single' | 'variations'
+  const [variations,         setVariations]         = useState(null);
+  const [regeneratingGroupId, setRegeneratingGroupId] = useState(null);
+  const [backToSingleConfirmOpen, setBackToSingleConfirmOpen] = useState(false);
   const fileInputRef = useRef(null);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     defaultValues: { title: '', description: '', deadline: '' },
+    shouldUnregister: true,
   });
+
+  const isVariationsMode = pickedGroups.length >= 2 && aiMode === 'variations';
+
+  function handleGroupsChange(next) {
+    setPickedGroups(next);
+    setVariations(null); // stale once the group selection changes
+  }
 
   const offeringLabel = offering
     ? [offering.courseId?.name, offering.cohortId?.name].filter(Boolean).join(' — ')
@@ -130,11 +146,24 @@ export default function TasksPage() {
     setAttachmentFile(null);
     setAiPrompt('');
     setAiError(null);
+    setAiMode('single');
+    setVariations(null);
+    setRegeneratingGroupId(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   async function handleGenerateWithAI() {
     setAiError(null);
+    if (isVariationsMode) {
+      try {
+        const result = await generateTaskVariations({ prompt: aiPrompt.trim(), groupIds: pickedGroups }).unwrap();
+        setVariations(result);
+      } catch (err) {
+        const e = err?.data?.error;
+        setAiError(e?.details?.length ? e.details.join(' · ') : (e?.message ?? 'AI generation failed. Please try again.'));
+      }
+      return;
+    }
     try {
       const { title, description } = await generateTask(aiPrompt.trim()).unwrap();
       setValue('title', title, { shouldValidate: true });
@@ -143,6 +172,39 @@ export default function TasksPage() {
       const e = err?.data?.error;
       setAiError(e?.details?.length ? e.details.join(' · ') : (e?.message ?? 'AI generation failed. Please try again.'));
     }
+  }
+
+  function updateVariationField(index, field, value) {
+    setVariations((prev) => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)));
+  }
+
+  async function handleRegenerateOne(index) {
+    const target = variations[index];
+    setAiError(null);
+    setRegeneratingGroupId(target.groupId);
+    try {
+      const [result] = await regenerateOneVariation({ prompt: aiPrompt.trim(), groupIds: [target.groupId] }).unwrap();
+      setVariations((prev) => prev.map((v, i) => (i === index ? { ...v, title: result.title, description: result.description } : v)));
+    } catch (err) {
+      const e = err?.data?.error;
+      setAiError(e?.details?.length ? e.details.join(' · ') : (e?.message ?? 'AI generation failed. Please try again.'));
+    } finally {
+      setRegeneratingGroupId(null);
+    }
+  }
+
+  function handleBackToSingle() {
+    if (variations) {
+      setBackToSingleConfirmOpen(true);
+    } else {
+      setAiMode('single');
+    }
+  }
+
+  function confirmBackToSingle() {
+    setAiMode('single');
+    setVariations(null);
+    setBackToSingleConfirmOpen(false);
   }
 
   function openEdit(task) {
@@ -209,6 +271,31 @@ export default function TasksPage() {
       const e = err?.data?.error;
       toast.error(e?.details?.length ? e.details.join(' · ') : (e?.message ?? 'Failed to create task'));
     }
+  }
+
+  async function onCreateBulkTasks(data) {
+    if (variations.some((v) => !v.title.trim())) {
+      toast.error('Every group needs a title before creating tasks');
+      return;
+    }
+    try {
+      const deadlineAt = data.deadline ? `${data.deadline}T23:59` : undefined;
+      const tasks = variations.map((v) => ({
+        groupId:     v.groupId,
+        title:       v.title.trim(),
+        description: v.description?.trim() || undefined,
+      }));
+      await createBulkTasks({ deadlineAt, tasks }).unwrap();
+      toast.success(`${tasks.length} tasks created`);
+      resetDialog();
+    } catch (err) {
+      const e = err?.data?.error;
+      toast.error(e?.details?.length ? e.details.join(' · ') : (e?.message ?? 'Failed to create tasks'));
+    }
+  }
+
+  function onSubmitNewTask(data) {
+    return isVariationsMode ? onCreateBulkTasks(data) : onCreateTask(data);
   }
 
   async function confirmDelete() {
@@ -340,7 +427,7 @@ export default function TasksPage() {
             <DialogTitle>New Task</DialogTitle>
             <DialogDescription>Assign a task to one or more groups in {offeringLabel}.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onCreateTask)} className="space-y-4 py-1" noValidate>
+          <form onSubmit={handleSubmit(onSubmitNewTask)} className="space-y-4 py-1" noValidate>
             <div className="rounded-lg border border-just-blue-100 bg-just-blue-50/40 p-3 space-y-2">
               <Label htmlFor="t-ai-prompt" className="flex items-center gap-1.5 text-just-blue-700">
                 <Sparkles size={13} /> Generate with AI
@@ -353,6 +440,35 @@ export default function TasksPage() {
                 onChange={(e) => setAiPrompt(e.target.value)}
                 className="w-full rounded-md border border-input bg-white px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
               />
+              {pickedGroups.length >= 2 && (
+                <div className="flex flex-col gap-1.5 pt-1 border-t border-just-blue-100">
+                  <label className="flex items-start gap-2 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ai-mode"
+                      checked={aiMode === 'single'}
+                      onChange={() => setAiMode('single')}
+                      className="mt-0.5 accent-just-blue-600"
+                    />
+                    <span className="text-ink-700">Same task for all selected groups</span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ai-mode"
+                      checked={aiMode === 'variations'}
+                      onChange={() => setAiMode('variations')}
+                      className="mt-0.5 accent-just-blue-600"
+                    />
+                    <div>
+                      <span className="text-ink-700">Different variation for each group</span>
+                      <p className="text-ink-400">
+                        AI creates a unique scenario per group with the same difficulty — helps prevent copying.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-ink-400">AI fills the form — you review and edit before saving.</p>
                 <Button
@@ -360,35 +476,96 @@ export default function TasksPage() {
                   variant="outline"
                   size="sm"
                   className="gap-1.5 shrink-0"
-                  disabled={aiPrompt.trim().length < 10 || generating}
+                  disabled={aiPrompt.trim().length < 10 || (isVariationsMode ? generatingVariations : generating)}
                   onClick={handleGenerateWithAI}
                 >
-                  {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                  {generating ? 'Generating...' : 'Generate with AI'}
+                  {(isVariationsMode ? generatingVariations : generating)
+                    ? <Loader2 size={13} className="animate-spin" />
+                    : <Sparkles size={13} />}
+                  {isVariationsMode
+                    ? (generatingVariations ? `Generating ${pickedGroups.length} variations...` : 'Generate with AI')
+                    : (generating ? 'Generating...' : 'Generate with AI')}
                 </Button>
               </div>
               {aiError && <p className="text-xs text-danger">{aiError}</p>}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="t-title">Title <span className="text-danger">*</span></Label>
-              <Input
-                id="t-title"
-                placeholder="e.g. Final Project Submission"
-                {...register('title', { required: 'Title is required' })}
-                aria-invalid={!!errors.title}
-              />
-              {errors.title && <p className="text-xs text-danger">{errors.title.message}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="t-desc">Description</Label>
-              <textarea
-                id="t-desc"
-                rows={3}
-                placeholder="Instructions, requirements…"
-                className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-                {...register('description')}
-              />
-            </div>
+            {isVariationsMode ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label>Task variations {variations ? `(${variations.length})` : ''}</Label>
+                  <button
+                    type="button"
+                    onClick={handleBackToSingle}
+                    className="text-xs text-just-blue-600 hover:underline"
+                  >
+                    Back to single task
+                  </button>
+                </div>
+                {!variations ? (
+                  <p className="text-sm text-ink-400">
+                    Click "Generate with AI" above to create a unique variation for each selected group.
+                  </p>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {variations.map((v, i) => (
+                      <div key={v.groupId} className="rounded-md border border-border p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-ink-500 uppercase tracking-wide">{v.groupName}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700"
+                            disabled={regeneratingGroupId === v.groupId}
+                            onClick={() => handleRegenerateOne(i)}
+                          >
+                            {regeneratingGroupId === v.groupId
+                              ? <Loader2 size={12} className="animate-spin" />
+                              : <RefreshCw size={12} />}
+                            Regenerate
+                          </Button>
+                        </div>
+                        <Input
+                          value={v.title}
+                          onChange={(e) => updateVariationField(i, 'title', e.target.value)}
+                          placeholder="Title"
+                        />
+                        <textarea
+                          rows={3}
+                          value={v.description}
+                          onChange={(e) => updateVariationField(i, 'description', e.target.value)}
+                          className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                          placeholder="Description"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="t-title">Title <span className="text-danger">*</span></Label>
+                  <Input
+                    id="t-title"
+                    placeholder="e.g. Final Project Submission"
+                    {...register('title', { required: 'Title is required' })}
+                    aria-invalid={!!errors.title}
+                  />
+                  {errors.title && <p className="text-xs text-danger">{errors.title.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="t-desc">Description</Label>
+                  <textarea
+                    id="t-desc"
+                    rows={3}
+                    placeholder="Instructions, requirements…"
+                    className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                    {...register('description')}
+                  />
+                </div>
+              </>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="t-deadline">Deadline <span className="text-danger">*</span></Label>
               <div className="relative">
@@ -407,83 +584,106 @@ export default function TasksPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Assign to groups</Label>
-              <GroupPicker groups={groups} selected={pickedGroups} onChange={setPickedGroups} />
+              <GroupPicker groups={groups} selected={pickedGroups} onChange={handleGroupsChange} />
               <p className="text-xs text-ink-400">
                 {pickedGroups.length === 0
                   ? 'No groups selected — task will be visible to all groups.'
                   : `${pickedGroups.length} group${pickedGroups.length !== 1 ? 's' : ''} selected.`}
               </p>
             </div>
-            <div className="space-y-1.5">
-              <Label>Submission type</Label>
-              <div className="flex rounded-md border border-border overflow-hidden text-sm">
-                {['group', 'individual'].map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setSubmissionType(t)}
-                    className={cn(
-                      'flex-1 py-1.5 text-center capitalize transition-colors',
-                      submissionType === t
-                        ? 'bg-just-blue-600 text-white font-medium'
-                        : 'bg-white text-ink-500 hover:bg-ink-50',
-                    )}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-ink-400">
-                {submissionType === 'group'
-                  ? 'One submission per group — any member can submit on behalf of the group.'
-                  : 'Each student submits individually — every member must submit their own work.'}
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Attachment <span className="text-ink-400 font-normal">(optional)</span></Label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
-              />
-              {attachmentFile ? (
-                <div className="flex items-center gap-2 rounded-md border border-border bg-ink-50 px-3 py-2 text-sm">
-                  <Paperclip size={13} className="shrink-0 text-ink-400" />
-                  <span className="flex-1 truncate text-ink-700 min-w-0">{attachmentFile.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => { setAttachmentFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                    className="shrink-0 text-ink-400 hover:text-danger transition-colors"
-                    aria-label="Remove attachment"
-                  >
-                    <X size={13} />
-                  </button>
+            {!isVariationsMode && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Submission type</Label>
+                  <div className="flex rounded-md border border-border overflow-hidden text-sm">
+                    {['group', 'individual'].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setSubmissionType(t)}
+                        className={cn(
+                          'flex-1 py-1.5 text-center capitalize transition-colors',
+                          submissionType === t
+                            ? 'bg-just-blue-600 text-white font-medium'
+                            : 'bg-white text-ink-500 hover:bg-ink-50',
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-ink-400">
+                    {submissionType === 'group'
+                      ? 'One submission per group — any member can submit on behalf of the group.'
+                      : 'Each student submits individually — every member must submit their own work.'}
+                  </p>
                 </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Paperclip size={13} /> Attach file
-                </Button>
-              )}
-            </div>
+                <div className="space-y-1.5">
+                  <Label>Attachment <span className="text-ink-400 font-normal">(optional)</span></Label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
+                  />
+                  {attachmentFile ? (
+                    <div className="flex items-center gap-2 rounded-md border border-border bg-ink-50 px-3 py-2 text-sm">
+                      <Paperclip size={13} className="shrink-0 text-ink-400" />
+                      <span className="flex-1 truncate text-ink-700 min-w-0">{attachmentFile.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => { setAttachmentFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                        className="shrink-0 text-ink-400 hover:text-danger transition-colors"
+                        aria-label="Remove attachment"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Paperclip size={13} /> Attach file
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={resetDialog}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={creating}>
-                {creating && <Loader2 size={14} className="animate-spin" />}
-                Create Task
+              <Button
+                type="submit"
+                disabled={isVariationsMode ? (creatingBulk || !variations?.length) : creating}
+              >
+                {(isVariationsMode ? creatingBulk : creating) && <Loader2 size={14} className="animate-spin" />}
+                {isVariationsMode ? `Create ${variations?.length ?? pickedGroups.length} Tasks` : 'Create Task'}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Discard variations confirm */}
+      <AlertDialog open={backToSingleConfirmOpen} onOpenChange={setBackToSingleConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard variations?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Switching back to a single task will discard the {variations?.length ?? 0} generated variation{variations?.length !== 1 ? 's' : ''}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBackToSingle}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Edit task dialog */}
       <Dialog open={!!editTarget} onOpenChange={(v) => { if (!v) closeEdit(); }}>

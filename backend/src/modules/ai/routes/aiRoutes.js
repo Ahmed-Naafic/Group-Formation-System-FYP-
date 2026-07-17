@@ -14,4 +14,11 @@ router.post(
   aiController.generateTask,
 );
 
+router.post(
+  '/generate-task-variations',
+  authenticate, requireRole('admin', 'instructor'),
+  validate(aiValidation.generateTaskVariations, 'body'),
+  aiController.generateTaskVariations,
+);
+
 module.exports = router;

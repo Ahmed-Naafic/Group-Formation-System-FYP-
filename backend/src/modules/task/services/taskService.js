@@ -73,6 +73,55 @@ const taskService = {
     return task;
   },
 
+  // Creates one Task per { groupId, title, description } entry, all sharing
+  // deadlineAt. Used by the AI "different variation per group" flow. Every
+  // entry is validated before any document is inserted (see taskRepository.createMany).
+  async createBulk(data, context) {
+    const { deadlineAt, tasks } = data;
+
+    const groupIds = tasks.map((t) => t.groupId);
+    const groups = await groupRepository.findByIds(groupIds);
+    if (groups.length !== groupIds.length) {
+      const foundIds = new Set(groups.map((g) => String(g._id)));
+      const missing = groupIds.filter((id) => !foundIds.has(String(id)));
+      throw new NotFoundError(`Group(s) not found: ${missing.join(', ')}`);
+    }
+
+    const offeringIds = new Set(groups.map((g) => String(g.courseOfferingId?._id ?? g.courseOfferingId)));
+    if (offeringIds.size > 1) {
+      throw new BadRequestError('All tasks must be for groups in the same course offering');
+    }
+    const [courseOfferingId] = offeringIds;
+    await assertCourseOfferingAccess(courseOfferingId, context);
+
+    const docs = tasks.map((t) => ({
+      courseOfferingId,
+      assignedGroups: [t.groupId],
+      assignedBy:     context.userId,
+      title:          t.title,
+      description:    t.description || undefined,
+      deadline:       deadlineAt,
+      status:         'open',
+      submissionType: 'group',
+    }));
+
+    const created = await taskRepository.createMany(docs);
+
+    for (const task of created) {
+      await task.populate({
+        path: 'assignedGroups',
+        populate: { path: 'memberIds', select: 'userId', populate: { path: 'userId', select: '_id' } },
+      });
+      emitter.emit('task.created', {
+        task,
+        actorId: context.userId, actorRole: context.role,
+        ipAddress: context.ipAddress, userAgent: context.userAgent,
+      });
+    }
+
+    return created;
+  },
+
   // Admin/instructor: list all tasks for an offering.
   // Student: list only tasks whose assignedGroups include their group in this offering.
   async list(courseOfferingId, context) {

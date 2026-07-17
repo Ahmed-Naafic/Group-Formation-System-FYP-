@@ -43,6 +43,13 @@ router.post(
   taskController.create,
 );
 
+router.post(
+  '/bulk',
+  authenticate, requireRole('admin', 'instructor'),
+  validate(taskValidation.bulkCreate, 'body'),
+  taskController.createBulk,
+);
+
 router.get(
   '/',
   authenticate, requireRole('admin', 'instructor', 'student'),

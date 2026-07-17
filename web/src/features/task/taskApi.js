@@ -23,6 +23,12 @@ export const taskApi = baseApi.injectEndpoints({
       invalidatesTags: ['Task'],
     }),
 
+    createBulkTasks: build.mutation({
+      query: (body) => ({ url: '/api/tasks/bulk', method: 'POST', body }),
+      transformResponse: (res) => res.data.tasks,
+      invalidatesTags: ['Task'],
+    }),
+
     updateTask: build.mutation({
       query: ({ id, ...body }) => ({ url: `/api/tasks/${id}`, method: 'PATCH', body }),
       transformResponse: (res) => res.data.task,
@@ -85,6 +91,7 @@ export const {
   useGetTasksQuery,
   useGetTaskByIdQuery,
   useCreateTaskMutation,
+  useCreateBulkTasksMutation,
   useUpdateTaskMutation,
   useDeleteTaskMutation,
   useGetTaskSubmissionsQuery,

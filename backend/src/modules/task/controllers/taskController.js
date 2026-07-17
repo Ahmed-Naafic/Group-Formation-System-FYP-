@@ -10,6 +10,11 @@ const taskController = {
     return sendSuccess(res, { status: 201, data: { task } });
   }),
 
+  createBulk: asyncHandler(async (req, res) => {
+    const tasks = await taskService.createBulk(req.body, req.context);
+    return sendSuccess(res, { status: 201, data: { tasks } });
+  }),
+
   downloadAttachment: asyncHandler(async (req, res) => {
     const { publicId, originalName } = await taskService.getAttachment(req.params.id, req.context);
     if (!publicId) {

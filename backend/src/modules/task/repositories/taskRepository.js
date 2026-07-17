@@ -12,6 +12,14 @@ const taskRepository = {
     return Task.create(data);
   },
 
+  // Schema-validates every doc before issuing the insert; if any doc fails
+  // validation, insertMany rejects and nothing is written (no transactions
+  // are used elsewhere in this codebase, so this is the "all or nothing"
+  // guarantee available without one).
+  createMany(docs) {
+    return Task.insertMany(docs);
+  },
+
   findById(id) {
     return Task.findById(id).populate(BASE_POPULATE);
   },
