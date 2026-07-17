@@ -13,7 +13,7 @@ class ChatRepository {
   }) async {
     final params = <String, dynamic>{'limit': limit};
     if (before != null) params['before'] = before;
-    if (after  != null) params['after']  = after;
+    if (after != null) params['after'] = after;
 
     final response = await _client.dio.get(
       '/workspaces/$workspaceId/messages',
@@ -38,6 +38,7 @@ class ChatRepository {
     String audioFilePath,
     int durationSeconds, {
     String mimeType = 'audio/mp4',
+    String? replyToId,
   }) async {
     final multipart = await MultipartFile.fromFile(
       audioFilePath,
@@ -45,24 +46,55 @@ class ChatRepository {
       contentType: DioMediaType.parse(mimeType),
     );
     final form = FormData.fromMap({
-      'audio':    multipart,
+      'audio': multipart,
       'duration': durationSeconds,
+      'replyToId': ?replyToId,
     });
     final response = await _client.dio.post(
       '/workspaces/$workspaceId/messages/voice',
       data: form,
       options: Options(
-        sendTimeout:    const Duration(minutes: 2),
+        sendTimeout: const Duration(minutes: 2),
         receiveTimeout: const Duration(minutes: 1),
       ),
     );
-    return ChatMessage.fromJson(response.data['data']['message'] as Map<String, dynamic>);
+    return ChatMessage.fromJson(
+      response.data['data']['message'] as Map<String, dynamic>,
+    );
   }
 
   /// Resolves a fresh, short-lived playback URL for a voice message — the
   /// storage bucket is private, so URLs aren't cached client-side.
-  Future<String> getVoiceMessageUrl(String workspaceId, String messageId) async {
-    final response = await _client.dio.get('/workspaces/$workspaceId/messages/$messageId/audio');
+  Future<String> getVoiceMessageUrl(
+    String workspaceId,
+    String messageId,
+  ) async {
+    final response = await _client.dio.get(
+      '/workspaces/$workspaceId/messages/$messageId/audio',
+    );
     return response.data['data']['url'] as String;
+  }
+
+  /// Deletes a message for everyone — sender-only, enforced server-side.
+  /// Other clients remove it locally via the 'message-deleted' socket event.
+  Future<void> deleteMessage(String workspaceId, String messageId) async {
+    await _client.dio.delete('/workspaces/$workspaceId/messages/$messageId');
+  }
+
+  /// Sets (or, sending the same emoji again, clears) the caller's reaction.
+  /// Returns the full updated message; other clients get it via the
+  /// 'message-reacted' socket event.
+  Future<ChatMessage> reactToMessage(
+    String workspaceId,
+    String messageId,
+    String emoji,
+  ) async {
+    final response = await _client.dio.post(
+      '/workspaces/$workspaceId/messages/$messageId/react',
+      data: {'emoji': emoji},
+    );
+    return ChatMessage.fromJson(
+      response.data['data']['message'] as Map<String, dynamic>,
+    );
   }
 }

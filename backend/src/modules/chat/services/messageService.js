@@ -2,7 +2,18 @@ const messageRepository   = require('../repositories/messageRepository');
 const workspaceService    = require('../../workspace/services/workspaceService');
 const StorageService      = require('../../../common/services/storage/StorageService');
 const emitter             = require('../../../common/events/emitter');
-const { NotFoundError, ForbiddenError } = require('../../../common/errors');
+const { NotFoundError, ForbiddenError, BadRequestError } = require('../../../common/errors');
+
+// Shared by send() and sendVoice() — a reply target must exist and belong to
+// the same workspace. Soft-deleted messages are excluded by findById's query
+// middleware, so replying to a deleted message correctly fails here too.
+async function assertReplyTargetValid(workspaceId, replyToId) {
+  if (!replyToId) return;
+  const target = await messageRepository.findById(replyToId);
+  if (!target || String(target.workspaceId) !== String(workspaceId)) {
+    throw new BadRequestError('The message being replied to could not be found');
+  }
+}
 
 const messageService = {
   /**
@@ -21,15 +32,17 @@ const messageService = {
    * Persists a new message and returns it populated.
    * Admin is NOT allowed to chat (see §2.2 permissions matrix).
    */
-  async send(workspaceId, content, context) {
+  async send(workspaceId, content, context, replyToId = null) {
     if (context.role === 'admin') {
       throw new ForbiddenError('Admins cannot send chat messages');
     }
     await workspaceService.getById(workspaceId, context);
+    await assertReplyTargetValid(workspaceId, replyToId);
     return messageRepository.create({
       workspaceId,
       senderId: context.userId,
       content,
+      replyTo:  replyToId || null,
     });
   },
 
@@ -42,11 +55,12 @@ const messageService = {
    *  - 'message.sent' — reuses the existing FCM-push listener unchanged.
    * `multerFile` is multer's memoryStorage object: { originalname, mimetype, size, buffer }.
    */
-  async sendVoice(workspaceId, multerFile, durationSeconds, context) {
+  async sendVoice(workspaceId, multerFile, durationSeconds, context, replyToId = null) {
     if (context.role === 'admin') {
       throw new ForbiddenError('Admins cannot send chat messages');
     }
     await workspaceService.getById(workspaceId, context);
+    await assertReplyTargetValid(workspaceId, replyToId);
 
     const { publicId } = await StorageService.save(
       multerFile.buffer,
@@ -62,8 +76,12 @@ const messageService = {
       audioPublicId:  publicId,
       audioDuration:  durationSeconds,
       audioSizeBytes: multerFile.size,
+      replyTo:        replyToId || null,
     });
-    await message.populate({ path: 'senderId', select: 'fullName role studentId' });
+    await message.populate([
+      { path: 'senderId', select: 'fullName role studentId' },
+      { path: 'replyTo', select: 'content senderId audioDuration', populate: { path: 'senderId', select: 'fullName' } },
+    ]);
 
     emitter.emit('chat.voiceMessage', { workspaceId: String(workspaceId), message });
     emitter.emit('message.sent', {
@@ -114,6 +132,55 @@ const messageService = {
   async markAllRead(workspaceId, context) {
     await workspaceService.getById(workspaceId, context);
     return messageRepository.markAllRead(workspaceId, context.userId);
+  },
+
+  /**
+   * Deletes a message for everyone in the workspace. Sender-only (no admin
+   * override, unlike task/file deletion) — matches how ephemeral chat
+   * messages are treated versus persistent course artifacts. Cleans up the
+   * audio blob first, same order fileService.remove uses for attachments.
+   */
+  async remove(workspaceId, messageId, context) {
+    await workspaceService.getById(workspaceId, context);
+    const message = await messageRepository.findById(messageId);
+    if (!message) throw new NotFoundError('Message not found');
+    if (String(message.workspaceId) !== String(workspaceId)) {
+      throw new ForbiddenError('Message does not belong to this workspace');
+    }
+    if (String(message.senderId?._id ?? message.senderId) !== String(context.userId)) {
+      throw new ForbiddenError('You can only delete your own messages');
+    }
+
+    if (message.audioPublicId) {
+      await StorageService.delete(message.audioPublicId);
+    }
+    await messageRepository.softDelete(messageId, context.userId);
+
+    // Broadcast to everyone currently in the room — mirrors the
+    // 'chat.voiceMessage' pattern (sockets/index.js has the one listener
+    // with `io` in scope).
+    emitter.emit('chat.messageDeleted', {
+      workspaceId: String(workspaceId),
+      messageId:   String(messageId),
+    });
+  },
+
+  /**
+   * Sets (or, tapping the same emoji again, clears) the caller's reaction on
+   * a message. Anyone in the workspace may react — unlike delete, this isn't
+   * sender-only. Broadcasts the full updated message so every client's local
+   * reaction list stays in sync without a separate diffing step.
+   */
+  async react(workspaceId, messageId, emoji, context) {
+    await workspaceService.getById(workspaceId, context);
+    const message = await messageRepository.setReaction(messageId, context.userId, emoji);
+    if (!message) throw new NotFoundError('Message not found');
+    if (String(message.workspaceId) !== String(workspaceId)) {
+      throw new ForbiddenError('Message does not belong to this workspace');
+    }
+
+    emitter.emit('chat.messageReacted', { workspaceId: String(workspaceId), message });
+    return message;
   },
 };
 

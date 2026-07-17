@@ -22,9 +22,13 @@ const messageController = {
       req.params.workspaceId,
       req.body.content,
       req.context,
+      req.body.replyToId,
     );
-    // Populate sender for the HTTP response (socket path populates inline)
-    await message.populate({ path: 'senderId', select: 'fullName role studentId' });
+    // Populate for the HTTP response (socket path populates inline)
+    await message.populate([
+      { path: 'senderId', select: 'fullName role studentId' },
+      { path: 'replyTo', select: 'content senderId audioDuration', populate: { path: 'senderId', select: 'fullName' } },
+    ]);
     return sendSuccess(res, { status: 201, data: { message } });
   }),
 
@@ -36,6 +40,7 @@ const messageController = {
       req.file,
       req.body.duration,
       req.context,
+      req.body.replyToId,
     );
     return sendSuccess(res, { status: 201, data: { message } });
   }),
@@ -61,6 +66,20 @@ const messageController = {
   markAllRead: asyncHandler(async (req, res) => {
     await messageService.markAllRead(req.params.workspaceId, req.context);
     return sendSuccess(res, { message: 'All messages marked as read' });
+  }),
+
+  // DELETE /api/workspaces/:workspaceId/messages/:messageId
+  remove: asyncHandler(async (req, res) => {
+    await messageService.remove(req.params.workspaceId, req.params.messageId, req.context);
+    return sendSuccess(res, { message: 'Message deleted' });
+  }),
+
+  // POST /api/workspaces/:workspaceId/messages/:messageId/react
+  react: asyncHandler(async (req, res) => {
+    const message = await messageService.react(
+      req.params.workspaceId, req.params.messageId, req.body.emoji, req.context,
+    );
+    return sendSuccess(res, { data: { message } });
   }),
 };
 

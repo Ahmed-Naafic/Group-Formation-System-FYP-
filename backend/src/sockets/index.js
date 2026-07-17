@@ -63,13 +63,16 @@ async function handleLeaveWorkspace(socket, { workspaceId }) {
   await socket.leave(roomName(workspaceId));
 }
 
-async function handleSendMessage(io, socket, { workspaceId, content }) {
+async function handleSendMessage(io, socket, { workspaceId, content, replyToId }) {
   try {
     if (!workspaceId || !content?.trim()) {
       return socket.emit('error', { message: 'workspaceId and content are required' });
     }
-    const message = await messageService.send(workspaceId, content.trim(), socket.context);
-    await message.populate({ path: 'senderId', select: 'fullName role studentId' });
+    const message = await messageService.send(workspaceId, content.trim(), socket.context, replyToId);
+    await message.populate([
+      { path: 'senderId', select: 'fullName role studentId' },
+      { path: 'replyTo', select: 'content senderId audioDuration', populate: { path: 'senderId', select: 'fullName' } },
+    ]);
     // Broadcast to everyone in the room (including sender for consistency)
     io.to(roomName(workspaceId)).emit('new-message', { message });
     // Push FCM to members not currently in this room
@@ -123,6 +126,20 @@ function initSocket(httpServer) {
   // for text messages.
   emitter.on('chat.voiceMessage', ({ workspaceId, message }) => {
     io.to(roomName(workspaceId)).emit('new-message', { message });
+  });
+
+  // Message deletion is also REST-only (DELETE /workspaces/:id/messages/:messageId) —
+  // same reasoning as voice messages: no socket in scope at that point, so it
+  // reaches the room via the shared emitter instead.
+  emitter.on('chat.messageDeleted', ({ workspaceId, messageId }) => {
+    io.to(roomName(workspaceId)).emit('message-deleted', { messageId });
+  });
+
+  // Reactions are REST-only too (POST .../messages/:messageId/react) — same
+  // reasoning again. Broadcasts the full updated message so every client's
+  // local reaction list stays in sync without a separate diff/merge step.
+  emitter.on('chat.messageReacted', ({ workspaceId, message }) => {
+    io.to(roomName(workspaceId)).emit('message-reacted', { message });
   });
 
   io.on('connection', (socket) => {

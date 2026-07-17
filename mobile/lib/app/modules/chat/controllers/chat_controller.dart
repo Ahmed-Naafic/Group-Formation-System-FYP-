@@ -25,36 +25,41 @@ const _kMinRecordingMs = 400;
 class ChatController extends GetxController {
   final _repo = ChatRepository();
   final _audioRecorder = AudioRecorder();
-  final _audioPlayer   = AudioPlayer();
+  final _audioPlayer = AudioPlayer();
 
   // Persists across controller recreation so re-opening chat is instant.
   static final _cache = <String, List<ChatMessage>>{};
 
-  final messages          = <ChatMessage>[].obs;
-  final isLoading         = true.obs;
-  final isSyncing         = false.obs;
-  final errorMessage      = ''.obs;
-  final isConnecting      = true.obs;
+  final messages = <ChatMessage>[].obs;
+  final isLoading = true.obs;
+  final isSyncing = false.obs;
+  final errorMessage = ''.obs;
+  final isConnecting = true.obs;
   final isSocketConnected = false.obs;
-  final typingUsers       = <String>[].obs;
-  final textCtrl          = TextEditingController();
-  final scrollCtrl        = ScrollController();
+  final typingUsers = <String>[].obs;
+  final textCtrl = TextEditingController();
+  final scrollCtrl = ScrollController();
 
   // ── Recording ──────────────────────────────────────────────────────────────
-  final isRecording       = false.obs;
+  final isRecording = false.obs;
   final recordingDuration = Duration.zero.obs;
-  final recordingCancelPreview = false.obs; // true once dragged past the cancel threshold
+  final recordingCancelPreview =
+      false.obs; // true once dragged past the cancel threshold
 
   // ── Playback (one shared player — starting a bubble pauses any other) ──────
   final currentlyPlayingMessageId = RxnString();
-  final playbackPosition          = Duration.zero.obs;
-  final playbackDurationTotal     = Duration.zero.obs;
-  final isPlaybackLoading         = false.obs;
-  final isPlaybackPlaying         = false.obs;
+  final playbackPosition = Duration.zero.obs;
+  final playbackDurationTotal = Duration.zero.obs;
+  final isPlaybackLoading = false.obs;
+  final isPlaybackPlaying = false.obs;
+
+  // ── Reply-to (null = not currently composing a reply) ──────────────────────
+  final replyTarget = Rxn<ChatMessage>();
 
   WorkspaceModel? workspace;
   String _myStudentId = '';
-  String _myFullName  = '';
+  String _myFullName = '';
+  String _myUserId = '';
   io.Socket? _socket;
   Timer? _typingTimer;
   Timer? _recordingTimer;
@@ -67,6 +72,8 @@ class ChatController extends GetxController {
 
   bool isMyMessage(ChatMessage msg) =>
       _myStudentId.isNotEmpty && msg.sender.studentId == _myStudentId;
+
+  String get myUserId => _myUserId;
 
   // Called by DashboardController on app open to warm the cache before the
   // user taps into a workspace, so the chat screen opens without a spinner.
@@ -84,16 +91,19 @@ class ChatController extends GetxController {
     final args = Get.arguments;
     if (args is! WorkspaceModel) {
       errorMessage.value = 'No workspace selected. Please open a group first.';
-      isLoading.value    = false;
+      isLoading.value = false;
       isConnecting.value = false;
       return;
     }
-    workspace    = args;
+    workspace = args;
     _myStudentId = Get.find<AuthController>().userStudentId.value;
-    _myFullName  = Get.find<AuthController>().userName.value;
+    _myFullName = Get.find<AuthController>().userName.value;
+    _myUserId = Get.find<AuthController>().userId.value;
 
     // Clear the unread badge for this workspace now that the user is here
-    try { Get.find<NotificationController>().clearUnread(workspace!.id); } catch (_) {}
+    try {
+      Get.find<NotificationController>().clearUnread(workspace!.id);
+    } catch (_) {}
 
     final cached = _cache[workspace!.id];
     if (cached != null && cached.isNotEmpty) {
@@ -130,7 +140,7 @@ class ChatController extends GetxController {
   Future<void> _loadHistory({int attempt = 0}) async {
     final ws = workspace;
     if (ws == null || _disposed) return;
-    isLoading.value    = true;
+    isLoading.value = true;
     errorMessage.value = '';
     try {
       final msgs = await _repo.getHistory(ws.id);
@@ -164,7 +174,7 @@ class ChatController extends GetxController {
     isSyncing.value = true;
     try {
       final lastId = confirmed.last.id;
-      final newer  = await _repo.getHistory(ws.id, after: lastId);
+      final newer = await _repo.getHistory(ws.id, after: lastId);
       if (_disposed) return;
       if (newer.isNotEmpty) {
         for (final msg in newer) {
@@ -212,15 +222,15 @@ class ChatController extends GetxController {
     _socket?.dispose();
     _socket = null;
     isSocketConnected.value = false;
-    isConnecting.value      = true;
-    errorMessage.value      = '';
+    isConnecting.value = true;
+    errorMessage.value = '';
     await _connectSocket();
   }
 
   // ── Socket ───────────────────────────────────────────────────────────────────
 
   Future<void> _connectSocket() async {
-    final ws    = workspace;
+    final ws = workspace;
     final token = await ApiClient().getToken();
     if (ws == null || token == null) {
       isConnecting.value = false;
@@ -243,8 +253,8 @@ class ChatController extends GetxController {
     void joinWorkspace() {
       _socket!.emit('join-workspace', {'workspaceId': ws.id});
       isSocketConnected.value = true;
-      isConnecting.value      = false;
-      errorMessage.value      = '';
+      isConnecting.value = false;
+      errorMessage.value = '';
     }
 
     if (_socket!.connected) {
@@ -257,18 +267,18 @@ class ChatController extends GetxController {
     // Only flip to disconnected after all attempts are exhausted.
     _socket!.onConnectError((_) {
       isSocketConnected.value = false;
-      isConnecting.value      = true; // still retrying
+      isConnecting.value = true; // still retrying
     });
 
     _socket!.onDisconnect((_) {
       isSocketConnected.value = false;
-      isConnecting.value      = true; // reconnecting…
+      isConnecting.value = true; // reconnecting…
     });
 
     _socket!.onReconnect((_) {
       _socket!.emit('join-workspace', {'workspaceId': ws.id});
       isSocketConnected.value = true;
-      isConnecting.value      = false;
+      isConnecting.value = false;
       _syncNew(); // catch up on messages sent while disconnected
     });
 
@@ -341,8 +351,53 @@ class ChatController extends GetxController {
     });
 
     _socket!.on('error', (data) {
-      final err = data is Map ? (data['message'] ?? 'Socket error') : 'Socket error';
+      final err = data is Map
+          ? (data['message'] ?? 'Socket error')
+          : 'Socket error';
       errorMessage.value = err.toString();
+    });
+
+    // Another client's own deleteMessage() call already removes it from
+    // their local list directly — this only needs to reach everyone else.
+    _socket!.on('message-deleted', (data) {
+      try {
+        final map = data is Map<String, dynamic>
+            ? data
+            : Map<String, dynamic>.from(data as Map);
+        final messageId = map['messageId'] as String?;
+        if (messageId == null) return;
+        messages.removeWhere((m) => m.id == messageId);
+        if (currentlyPlayingMessageId.value == messageId) {
+          _audioPlayer.stop();
+          currentlyPlayingMessageId.value = null;
+        }
+        _cache[workspace!.id] = List<ChatMessage>.from(messages);
+      } catch (_) {}
+    });
+
+    // Another client's own reactToMessage() call already updates their local
+    // list directly — this reaches everyone else (and also the reactor's own
+    // other devices/sessions, which is fine — it's an idempotent replace).
+    _socket!.on('message-reacted', (data) {
+      try {
+        final map = data is Map<String, dynamic>
+            ? data
+            : Map<String, dynamic>.from(data as Map);
+        final msgJson = map['message'];
+        if (msgJson is! Map) return;
+        final updated = ChatMessage.fromJson(
+          msgJson is Map<String, dynamic>
+              ? msgJson
+              : Map<String, dynamic>.from(msgJson),
+        );
+        final index = messages.indexWhere((m) => m.id == updated.id);
+        if (index != -1) {
+          messages[index] = updated.copyWith(
+            localAudioPath: messages[index].localAudioPath,
+          );
+          _cache[workspace!.id] = List<ChatMessage>.from(messages);
+        }
+      } catch (_) {}
     });
   }
 
@@ -372,7 +427,10 @@ class ChatController extends GetxController {
   void onTextChanged(String text) {
     final ws = workspace;
     if (ws == null || _socket == null || !isSocketConnected.value) return;
-    if (text.trim().isEmpty) { _stopTyping(); return; }
+    if (text.trim().isEmpty) {
+      _stopTyping();
+      return;
+    }
     _socket!.emit('typing', {'workspaceId': ws.id});
     _typingTimer?.cancel();
     _typingTimer = Timer(const Duration(seconds: 2), _stopTyping);
@@ -386,21 +444,32 @@ class ChatController extends GetxController {
     _socket!.emit('stop-typing', {'workspaceId': ws.id});
   }
 
+  void startReply(ChatMessage msg) => replyTarget.value = msg;
+  void cancelReply() => replyTarget.value = null;
+
   void sendMessage() {
-    final ws   = workspace;
+    final ws = workspace;
     final text = textCtrl.text.trim();
     if (text.isEmpty || ws == null) return;
     _stopTyping();
     textCtrl.clear();
 
+    final replyingTo = replyTarget.value;
+    replyTarget.value = null;
+
     // Optimistic message — shows immediately with 1 tick
     final pending = ChatMessage(
-      id:          'pending_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
       workspaceId: ws.id,
-      sender:      ChatSender(id: '', fullName: _myFullName, studentId: _myStudentId),
-      content:     text,
-      createdAt:   DateTime.now(),
-      isPending:   true,
+      sender: ChatSender(
+        id: '',
+        fullName: _myFullName,
+        studentId: _myStudentId,
+      ),
+      content: text,
+      createdAt: DateTime.now(),
+      isPending: true,
+      replyTo: replyingTo != null ? ReplyPreview.fromMessage(replyingTo) : null,
     );
     messages.add(pending);
     _cache[ws.id] = List<ChatMessage>.from(messages);
@@ -409,7 +478,8 @@ class ChatController extends GetxController {
     if (isSocketConnected.value) {
       _socket!.emit('send-message', {
         'workspaceId': ws.id,
-        'content':     text,
+        'content': text,
+        if (replyingTo != null) 'replyToId': replyingTo.id,
       });
     }
   }
@@ -427,13 +497,17 @@ class ChatController extends GetxController {
       return;
     }
 
-    final dir  = await getTemporaryDirectory();
-    final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-    await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+    final dir = await getTemporaryDirectory();
+    final path =
+        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _audioRecorder.start(
+      const RecordConfig(encoder: AudioEncoder.aacLc),
+      path: path,
+    );
 
-    _recordingStartedAt   = DateTime.now();
-    _recordingCancelled   = false;
-    isRecording.value     = true;
+    _recordingStartedAt = DateTime.now();
+    _recordingCancelled = false;
+    isRecording.value = true;
     recordingCancelPreview.value = false;
     recordingDuration.value = Duration.zero;
 
@@ -461,12 +535,14 @@ class ChatController extends GetxController {
 
   Future<void> _stopAndDiscard() async {
     _recordingTimer?.cancel();
-    isRecording.value        = false;
-    recordingDuration.value  = Duration.zero;
+    isRecording.value = false;
+    recordingDuration.value = Duration.zero;
     recordingCancelPreview.value = false;
     final path = await _audioRecorder.stop();
     if (path != null) {
-      try { await File(path).delete(); } catch (_) {}
+      try {
+        await File(path).delete();
+      } catch (_) {}
     }
   }
 
@@ -486,38 +562,56 @@ class ChatController extends GetxController {
     final path = await _audioRecorder.stop();
 
     if (_recordingCancelled || path == null) {
-      if (path != null) { try { await File(path).delete(); } catch (_) {} }
+      if (path != null) {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+      }
       return;
     }
 
     // Accidental-tap guard — a near-instant press/release produces a junk blip.
     if (elapsed.inMilliseconds < _kMinRecordingMs) {
-      try { await File(path).delete(); } catch (_) {}
+      try {
+        await File(path).delete();
+      } catch (_) {}
       return;
     }
 
     final ws = workspace;
     if (ws == null) return;
 
-    final tempId          = 'pending_voice_${DateTime.now().millisecondsSinceEpoch}';
+    final tempId = 'pending_voice_${DateTime.now().millisecondsSinceEpoch}';
     final durationSeconds = elapsed.inSeconds.clamp(1, kMaxVoiceMessageSeconds);
+    final replyingTo = replyTarget.value;
+    replyTarget.value = null;
 
     final pending = ChatMessage(
-      id:             tempId,
-      workspaceId:    ws.id,
-      sender:         ChatSender(id: '', fullName: _myFullName, studentId: _myStudentId),
-      content:        '',
-      createdAt:      DateTime.now(),
-      isPending:      true,
-      audioDuration:  durationSeconds,
+      id: tempId,
+      workspaceId: ws.id,
+      sender: ChatSender(
+        id: '',
+        fullName: _myFullName,
+        studentId: _myStudentId,
+      ),
+      content: '',
+      createdAt: DateTime.now(),
+      isPending: true,
+      audioDuration: durationSeconds,
       localAudioPath: path,
+      replyTo: replyingTo != null ? ReplyPreview.fromMessage(replyingTo) : null,
     );
     messages.add(pending);
     _cache[ws.id] = List<ChatMessage>.from(messages);
     _scrollToBottom(force: true);
 
     try {
-      final real = await _repo.uploadVoiceMessage(ws.id, path, durationSeconds);
+      final real = await _repo.uploadVoiceMessage(
+        ws.id,
+        path,
+        durationSeconds,
+        replyToId: replyingTo?.id,
+      );
       // Race-safe: the HTTP response and the 'new-message' socket broadcast are
       // two independent deliveries with no ordering guarantee — the socket
       // echo may have already added this message by the time we get here.
@@ -565,7 +659,9 @@ class ChatController extends GetxController {
       _fireAndForgetPlay(msg.id);
     } catch (_) {
       isPlaybackLoading.value = false;
-      if (currentlyPlayingMessageId.value == msg.id) currentlyPlayingMessageId.value = null;
+      if (currentlyPlayingMessageId.value == msg.id) {
+        currentlyPlayingMessageId.value = null;
+      }
       Get.snackbar('Playback failed', 'Could not play this voice message.');
     }
   }
@@ -579,14 +675,66 @@ class ChatController extends GetxController {
   /// reject — surfacing as a spurious "Playback failed" for audio that had
   /// actually played back just fine.
   void _fireAndForgetPlay(String messageId) {
-    unawaited(_audioPlayer.play().catchError((_) {
-      // A rejection here just means playback was interrupted (e.g. the user
-      // switched to another message) — expected, not a real failure, so it's
-      // only worth reacting to if this message is still the "current" one.
-      if (currentlyPlayingMessageId.value == messageId) {
-        currentlyPlayingMessageId.value = null;
+    unawaited(
+      _audioPlayer.play().catchError((_) {
+        // A rejection here just means playback was interrupted (e.g. the user
+        // switched to another message) — expected, not a real failure, so it's
+        // only worth reacting to if this message is still the "current" one.
+        if (currentlyPlayingMessageId.value == messageId) {
+          currentlyPlayingMessageId.value = null;
+        }
+      }),
+    );
+  }
+
+  // ── Deletion ─────────────────────────────────────────────────────────────────
+
+  Future<void> deleteMessage(ChatMessage msg) async {
+    final ws = workspace;
+    if (ws == null) return;
+
+    if (currentlyPlayingMessageId.value == msg.id) {
+      await _audioPlayer.stop();
+      currentlyPlayingMessageId.value = null;
+    }
+
+    final removed = msg;
+    final index = messages.indexWhere((m) => m.id == msg.id);
+    messages.removeWhere((m) => m.id == msg.id);
+    _cache[ws.id] = List<ChatMessage>.from(messages);
+
+    try {
+      await _repo.deleteMessage(ws.id, msg.id);
+      // Other clients remove it themselves via the 'message-deleted' socket event.
+    } catch (e) {
+      // Restore on failure — the delete didn't actually happen server-side.
+      if (index != -1 && index <= messages.length) {
+        messages.insert(index, removed);
+      } else {
+        messages.add(removed);
       }
-    }));
+      _cache[ws.id] = List<ChatMessage>.from(messages);
+      Get.snackbar('Delete failed', 'Could not delete this message.');
+    }
+  }
+
+  // ── Reactions ────────────────────────────────────────────────────────────────
+
+  /// Sets (or, tapping the same emoji again, clears) the caller's reaction.
+  /// Anyone in the workspace may react, not just the sender.
+  Future<void> reactToMessage(ChatMessage msg, String emoji) async {
+    final ws = workspace;
+    if (ws == null) return;
+    try {
+      final updated = await _repo.reactToMessage(ws.id, msg.id, emoji);
+      final index = messages.indexWhere((m) => m.id == msg.id);
+      if (index != -1) {
+        messages[index] = updated.copyWith(localAudioPath: msg.localAudioPath);
+        _cache[ws.id] = List<ChatMessage>.from(messages);
+      }
+    } catch (_) {
+      Get.snackbar('Reaction failed', 'Could not react to this message.');
+    }
   }
 
   @override
@@ -599,7 +747,7 @@ class ChatController extends GetxController {
     final wsId = workspace?.id;
     if (_socket != null) {
       if (wsId != null) {
-        _socket!.emit('stop-typing',     {'workspaceId': wsId});
+        _socket!.emit('stop-typing', {'workspaceId': wsId});
         _socket!.emit('leave-workspace', {'workspaceId': wsId});
       }
       _socket!.dispose();

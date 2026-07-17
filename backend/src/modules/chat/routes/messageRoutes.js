@@ -71,4 +71,17 @@ router.patch(
   messageController.markRead,
 );
 
+router.delete(
+  '/:messageId',
+  validate(msgParam, 'params'),
+  messageController.remove,
+);
+
+router.post(
+  '/:messageId/react',
+  validate(msgParam, 'params'),
+  validate(messageValidation.react, 'body'),
+  messageController.react,
+);
+
 module.exports = router;

@@ -17,7 +17,8 @@ const messageValidation = {
   }),
 
   sendMessage: Joi.object({
-    content: Joi.string().trim().min(1).max(4000).required(),
+    content:    Joi.string().trim().min(1).max(4000).required(),
+    replyToId:  objectId.allow(null),
   }),
 
   sendVoiceMessage: Joi.object({
@@ -26,6 +27,14 @@ const messageValidation = {
       'any.required':    'Duration is required',
       'number.max':      `Voice messages cannot exceed ${MAX_AUDIO_DURATION_SECONDS} seconds`,
       'number.positive': 'Duration must be a positive number',
+    }),
+    replyToId: objectId.allow(null),
+  }),
+
+  react: Joi.object({
+    emoji: Joi.string().trim().min(1).max(8).required().messages({
+      'string.empty': 'Emoji is required',
+      'any.required': 'Emoji is required',
     }),
   }),
 

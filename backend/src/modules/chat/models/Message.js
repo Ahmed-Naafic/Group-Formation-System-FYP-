@@ -1,9 +1,21 @@
-const mongoose = require('mongoose');
+const mongoose   = require('mongoose');
+const softDelete = require('../../../common/plugins/softDelete');
 
 const readReceiptSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     readAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+// One reaction per user per message — setting a new emoji replaces the
+// previous one, tapping the same emoji again removes it. Enforced in
+// messageRepository.setReaction, not at the schema level.
+const reactionSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    emoji:  { type: String, required: true },
   },
   { _id: false },
 );
@@ -20,12 +32,16 @@ const messageSchema = new mongoose.Schema(
     audioPublicId:   { type: String, default: null },
     audioDuration:   { type: Number, default: null }, // seconds
     audioSizeBytes:  { type: Number, default: null },
+    reactions:   [reactionSchema],
+    replyTo:     { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
     readBy:      [readReceiptSchema],
   },
   {
-    timestamps: { createdAt: true, updatedAt: false }, // messages are immutable
+    timestamps: { createdAt: true, updatedAt: false }, // content itself is never edited, only (soft-)deleted
   },
 );
+
+messageSchema.plugin(softDelete);
 
 // Compound index for efficient paginated queries
 messageSchema.index({ workspaceId: 1, createdAt: -1 });

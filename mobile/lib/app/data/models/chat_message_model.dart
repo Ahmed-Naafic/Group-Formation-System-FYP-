@@ -16,6 +16,68 @@ class ChatSender {
       );
 }
 
+class MessageReaction {
+  final String userId;
+  final String userName;
+  final String emoji;
+
+  const MessageReaction({
+    required this.userId,
+    required this.userName,
+    required this.emoji,
+  });
+
+  factory MessageReaction.fromJson(Map<String, dynamic> json) {
+    final raw = json['userId'];
+    final user = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
+    return MessageReaction(
+      userId:   user['_id'] as String? ?? raw?.toString() ?? '',
+      userName: user['fullName'] as String? ?? 'Unknown',
+      emoji:    json['emoji'] as String? ?? '',
+    );
+  }
+}
+
+/// A compact preview of the message being replied to — null replyTo (either
+/// this message isn't a reply, or the original was since deleted) just means
+/// no quote block is shown.
+class ReplyPreview {
+  final String messageId;
+  final String senderName;
+  final String content;
+  final bool isAudio;
+
+  const ReplyPreview({
+    required this.messageId,
+    required this.senderName,
+    required this.content,
+    required this.isAudio,
+  });
+
+  /// Builds a quote preview directly from a message already on-screen — lets
+  /// the optimistic pending bubble show the correct quote immediately,
+  /// without waiting for the server to echo it back.
+  factory ReplyPreview.fromMessage(ChatMessage m) => ReplyPreview(
+        messageId: m.id,
+        senderName: m.sender.fullName,
+        content: m.content,
+        isAudio: m.hasAudio,
+      );
+
+  factory ReplyPreview.fromJson(Map<String, dynamic> json) {
+    final rawSender = json['senderId'];
+    final senderName = rawSender is Map<String, dynamic>
+        ? (rawSender['fullName'] as String? ?? 'Unknown')
+        : 'Unknown';
+    return ReplyPreview(
+      messageId:  json['_id'] as String? ?? '',
+      senderName: senderName,
+      content:    json['content'] as String? ?? '',
+      isAudio:    json['audioDuration'] != null,
+    );
+  }
+}
+
 class ChatMessage {
   final String id;
   final String workspaceId;
@@ -32,6 +94,9 @@ class ChatMessage {
   /// parsed from JSON; the server doesn't know about the local file.
   final String? localAudioPath;
 
+  final List<MessageReaction> reactions;
+  final ReplyPreview? replyTo;
+
   bool get hasAudio => audioDuration != null || localAudioPath != null;
 
   const ChatMessage({
@@ -43,6 +108,8 @@ class ChatMessage {
     this.isPending = false,
     this.audioDuration,
     this.localAudioPath,
+    this.reactions = const [],
+    this.replyTo,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -51,6 +118,9 @@ class ChatMessage {
         ? ChatSender.fromJson(raw)
         : ChatSender(id: raw?.toString() ?? '', fullName: 'Unknown');
 
+    final rawReactions = json['reactions'] as List<dynamic>? ?? const [];
+    final rawReply = json['replyTo'];
+
     return ChatMessage(
       id:            json['_id']          as String? ?? '',
       workspaceId:   json['workspaceId']  as String? ?? '',
@@ -58,6 +128,12 @@ class ChatMessage {
       content:       json['content']      as String? ?? '',
       createdAt:     DateTime.parse(json['createdAt'] as String),
       audioDuration: json['audioDuration'] as int?,
+      reactions: rawReactions
+          .map((r) => MessageReaction.fromJson(r as Map<String, dynamic>))
+          .toList(),
+      replyTo: rawReply is Map<String, dynamic>
+          ? ReplyPreview.fromJson(rawReply)
+          : null,
     );
   }
 
@@ -66,6 +142,7 @@ class ChatMessage {
     bool? isPending,
     int? audioDuration,
     String? localAudioPath,
+    List<MessageReaction>? reactions,
   }) {
     return ChatMessage(
       id:             id ?? this.id,
@@ -76,6 +153,8 @@ class ChatMessage {
       isPending:      isPending ?? this.isPending,
       audioDuration:  audioDuration ?? this.audioDuration,
       localAudioPath: localAudioPath ?? this.localAudioPath,
+      reactions:      reactions ?? this.reactions,
+      replyTo:        replyTo,
     );
   }
 }
