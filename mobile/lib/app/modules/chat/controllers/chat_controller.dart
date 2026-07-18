@@ -687,6 +687,16 @@ class ChatController extends GetxController {
     );
   }
 
+  /// Scrubs to a position in the currently-loaded voice message — the bubble
+  /// slider only accepts drags while its message is the active one, so this
+  /// is always a no-op guard against a stale/already-switched-away message.
+  Future<void> seekTo(ChatMessage msg, Duration position) async {
+    if (currentlyPlayingMessageId.value != msg.id) return;
+    await _audioPlayer.seek(position);
+    playbackPosition.value =
+        position; // immediate feedback; positionStream confirms shortly after
+  }
+
   // ── Deletion ─────────────────────────────────────────────────────────────────
 
   Future<void> deleteMessage(ChatMessage msg) async {

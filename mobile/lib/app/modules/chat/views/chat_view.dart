@@ -320,7 +320,7 @@ class _MessageBubble extends StatelessWidget {
           : total;
 
       return SizedBox(
-        width: 190,
+        width: 210,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -347,19 +347,39 @@ class _MessageBubble extends StatelessWidget {
                       ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 3,
-                  backgroundColor: iconColor.withAlpha(60),
-                  valueColor: AlwaysStoppedAnimation<Color>(iconColor),
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 3,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 5,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 12,
+                  ),
+                  activeTrackColor: iconColor,
+                  inactiveTrackColor: iconColor.withAlpha(60),
+                  thumbColor: iconColor,
+                  overlayColor: iconColor.withAlpha(40),
+                ),
+                // Only draggable once this bubble's audio is actually loaded —
+                // dragging before that has nothing to seek within yet.
+                child: Slider(
+                  value: progress.clamp(0.0, 1.0),
+                  onChanged: (isThisMsg && total.inMilliseconds > 0)
+                      ? (value) {
+                          final target = Duration(
+                            milliseconds: (value * total.inMilliseconds)
+                                .round(),
+                          );
+                          ctrl.seekTo(msg, target);
+                        }
+                      : null,
                 ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             Text(
               _fmtDuration(remaining.inSeconds),
               style: TextStyle(fontSize: 11, color: iconColor.withAlpha(200)),
