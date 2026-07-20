@@ -17,11 +17,15 @@ class ApiClient {
   ApiClient._internal() {
     dio = Dio(BaseOptions(
       baseUrl: kApiBaseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 15),
+      // Generous windows — the backend (Render free tier) can take up to ~60s
+      // to wake from a cold start, and weak wifi/mobile data need more room
+      // than a fast connection to even finish the TLS handshake.
+      connectTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 30),
       headers: {'Content-Type': 'application/json'},
     ));
 
+    dio.interceptors.add(_RetryOnConnectionFailureInterceptor(dio));
     dio.interceptors.add(_AuthInterceptor(_storage));
     dio.interceptors.add(_UnauthorizedInterceptor());
   }
@@ -51,6 +55,49 @@ class ApiClient {
   Future<void> clearAll() async {
     await clearToken();
     await clearUserData();
+  }
+}
+
+// Retries a request when the connection itself couldn't be established
+// (DNS failure, refused connection, handshake timeout) — exactly what
+// happens on a weak connection hitting a Render instance that's still
+// spinning up from a cold start. Mirrors the web app's own retry-with-backoff
+// fix for the same problem (see web/src/lib/api.js).
+//
+// Deliberately does NOT retry receiveTimeout/sendTimeout: those mean the
+// request already reached the server, so blindly resending a non-idempotent
+// POST/PATCH/DELETE could duplicate the action server-side. connectionError/
+// connectionTimeout mean the request never got there — always safe to retry.
+class _RetryOnConnectionFailureInterceptor extends Interceptor {
+  final Dio _dio;
+  _RetryOnConnectionFailureInterceptor(this._dio);
+
+  static const _delays = [
+    Duration(seconds: 5),
+    Duration(seconds: 8),
+    Duration(seconds: 10),
+    Duration(seconds: 12),
+    Duration(seconds: 15),
+    Duration(seconds: 15),
+  ];
+
+  @override
+  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
+    final isConnectionFailure = err.type == DioExceptionType.connectionError ||
+        err.type == DioExceptionType.connectionTimeout;
+    if (!isConnectionFailure) return handler.next(err);
+
+    final attempt = (err.requestOptions.extra['retryAttempt'] as int?) ?? 0;
+    if (attempt >= _delays.length) return handler.next(err);
+
+    await Future.delayed(_delays[attempt]);
+    try {
+      final options = err.requestOptions..extra['retryAttempt'] = attempt + 1;
+      final response = await _dio.fetch(options);
+      handler.resolve(response);
+    } catch (_) {
+      handler.next(err);
+    }
   }
 }
 
