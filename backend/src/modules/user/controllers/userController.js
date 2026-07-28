@@ -4,10 +4,11 @@ const { ConflictError } = require('../../../common/errors');
 const userService = require('../services/userService');
 
 const userController = {
-  // GET /api/users?role=instructor
+  // GET /api/users?role=instructor&isActive=true
   getAll: asyncHandler(async (req, res) => {
     const filter = {};
     if (req.query.role) filter.role = req.query.role;
+    if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
     const users = await userService.findAll(filter);
     return sendSuccess(res, { data: { users } });
   }),

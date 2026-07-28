@@ -1,10 +1,10 @@
 const columnMapper    = require('../utils/columnMapper');
 const cohortService   = require('../../cohort/services/cohortService');
-const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
 const userService     = require('../../user/services/userService');
 const studentService  = require('../../student/services/studentService');
 const performanceService = require('../../performance/services/performanceService');
 const passwordGenerator = require('../../../common/utils/passwordGenerator');
+const instructorAssignmentService = require('../../instructorAssignment/services/instructorAssignmentService');
 const { ForbiddenError, BadRequestError, TransferConfirmationError } = require('../../../common/errors');
 
 // averageScore is 0–100; blank/invalid → null (UNGRADED)
@@ -19,12 +19,8 @@ function parseAverageScore(val) {
 async function assertCohortAccess(cohortId, context) {
   const cohort = await cohortService.getById(cohortId);
   if (context.role === 'admin') return cohort;
-  const offerings = await courseOfferingRepository.findAll({
-    cohortId,
-    instructorId: context.userId,
-    status: 'active',
-  });
-  if (!offerings || offerings.length === 0) {
+  const hasAccess = await instructorAssignmentService.hasActiveOfferingInCohort(context.userId, cohortId);
+  if (!hasAccess) {
     throw new ForbiddenError('You do not have access to this cohort');
   }
   return cohort;

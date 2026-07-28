@@ -7,6 +7,7 @@ const CourseOffering = require('../../courseOffering/models/CourseOffering');
 const Submission     = require('../../submission/models/Submission');
 const AuditLog       = require('../../auditLog/models/AuditLog');
 const Task           = require('../../task/models/Task');
+const instructorAssignmentService = require('../../instructorAssignment/services/instructorAssignmentService');
 
 const dashboardService = {
   async getStats() {
@@ -54,7 +55,8 @@ const dashboardService = {
   },
 
   async getInstructorStats(instructorId) {
-    const offerings = await CourseOffering.find({ instructorId, status: 'active', deletedAt: null })
+    const activeOfferingIds = await instructorAssignmentService.getActiveOfferingIdsForInstructor(instructorId);
+    const offerings = await CourseOffering.find({ _id: { $in: activeOfferingIds }, status: 'active', deletedAt: null })
       .populate('courseId',   'name code')
       .populate('cohortId',   'name')
       .populate('semesterId', 'name')

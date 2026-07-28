@@ -16,6 +16,7 @@ const Semester           = require('../modules/semester/models/Semester');
 const Cohort             = require('../modules/cohort/models/Cohort');
 const Student            = require('../modules/student/models/Student');
 const CourseOffering     = require('../modules/courseOffering/models/CourseOffering');
+const InstructorAssignment = require('../modules/instructorAssignment/models/InstructorAssignment');
 const Attendance         = require('../modules/attendance/models/Attendance');
 const Group              = require('../modules/group/models/Group');
 const GroupHistory       = require('../modules/grouping/models/GroupHistory');
@@ -330,19 +331,24 @@ async function main() {
   console.log('\n[seed] Creating Semester 7 course offerings …');
   const off_db  = await CourseOffering.create({
     courseId: courseDocs['DB401']._id,  cohortId: cohort._id,
-    semesterId: sem7._id, instructorId: drHassan._id,
+    semesterId: sem7._id,
     status: 'active', createdBy: admin._id,
   });
   const off_net = await CourseOffering.create({
     courseId: courseDocs['NET301']._id, cohortId: cohort._id,
-    semesterId: sem7._id, instructorId: drFarah._id,
+    semesterId: sem7._id,
     status: 'active', createdBy: admin._id,
   });
   const off_sp  = await CourseOffering.create({
     courseId: courseDocs['SP501']._id,  cohortId: cohort._id,
-    semesterId: sem7._id, instructorId: drAmina._id,
+    semesterId: sem7._id,
     status: 'active', createdBy: admin._id,
   });
+  await InstructorAssignment.insertMany([
+    { courseOfferingId: off_db._id,  instructorId: drHassan._id, startDate: off_db.createdAt,  endDate: null, assignedBy: admin._id },
+    { courseOfferingId: off_net._id, instructorId: drFarah._id,  startDate: off_net.createdAt, endDate: null, assignedBy: admin._id },
+    { courseOfferingId: off_sp._id,  instructorId: drAmina._id,  startDate: off_sp.createdAt,  endDate: null, assignedBy: admin._id },
+  ]);
   console.log('       DB401 (Dr. Hassan) | NET301 (Dr. Farah) | SP501 (Dr. Amina)');
 
   // ── SEM 7 ATTENDANCE ──────────────────────────────────────────────────────────
@@ -374,14 +380,18 @@ async function main() {
   console.log('\n[seed] Creating Semester 6 course offerings …');
   const off_wd = await CourseOffering.create({
     courseId: courseDocs['WD201']._id, cohortId: cohort._id,
-    semesterId: sem6._id, instructorId: drHassan._id,
+    semesterId: sem6._id,
     status: 'completed', createdBy: admin._id,
   });
   const off_ai = await CourseOffering.create({
     courseId: courseDocs['AI401']._id, cohortId: cohort._id,
-    semesterId: sem6._id, instructorId: drFarah._id,
+    semesterId: sem6._id,
     status: 'completed', createdBy: admin._id,
   });
+  await InstructorAssignment.insertMany([
+    { courseOfferingId: off_wd._id, instructorId: drHassan._id, startDate: off_wd.createdAt, endDate: null, assignedBy: admin._id },
+    { courseOfferingId: off_ai._id, instructorId: drFarah._id,  startDate: off_ai.createdAt, endDate: null, assignedBy: admin._id },
+  ]);
   console.log('       WD201 (Dr. Hassan, completed) | AI401 (Dr. Farah, completed)');
 
   // Create Sem 6 attendance records (so the engine has data for history generation)

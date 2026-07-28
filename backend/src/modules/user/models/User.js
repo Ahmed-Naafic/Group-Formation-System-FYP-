@@ -57,16 +57,19 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Partial unique indexes: only index documents where the field is an actual string.
+// Partial unique indexes: only index documents where the field is an actual string,
+// AND the account isn't soft-deleted — otherwise a deleted account permanently
+// blocks re-registering a new one at the same email/studentId (see
+// migrateUserIndexes in config/db.js for the one-time index migration this needed).
 // This allows unlimited documents with null email/studentId without uniqueness collisions,
 // while still preventing two admins from sharing an email or two students sharing a studentId.
 userSchema.index(
   { email: 1 },
-  { unique: true, partialFilterExpression: { email: { $type: 'string' } } }
+  { unique: true, partialFilterExpression: { email: { $type: 'string' }, deletedAt: null } }
 );
 userSchema.index(
   { studentId: 1 },
-  { unique: true, partialFilterExpression: { studentId: { $type: 'string' } } }
+  { unique: true, partialFilterExpression: { studentId: { $type: 'string' }, deletedAt: null } }
 );
 
 userSchema.plugin(softDeletePlugin);

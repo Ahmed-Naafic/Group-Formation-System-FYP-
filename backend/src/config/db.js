@@ -20,6 +20,43 @@ async function migrateSubmissionIndex(logger) {
   }
 }
 
+// Drops the old email/studentId unique indexes on User if they don't yet
+// exclude soft-deleted accounts, then explicitly recreates them with the
+// deletedAt filter — without this, a soft-deleted account permanently blocks
+// re-registering a new one at the same email/studentId. Recreated explicitly
+// rather than left to Mongoose's autoIndex: a unique index with the same key
+// pattern but different options can be silently skipped by the sync check
+// that runs once at connection time, before this drop even happens.
+async function migrateUserIndexes(logger) {
+  try {
+    const coll = mongoose.connection.collection('users');
+    const indexes = await coll.indexes();
+
+    const stale = indexes.filter(
+      (i) => i.unique === true &&
+        (i.key?.email === 1 || i.key?.studentId === 1) &&
+        !('deletedAt' in (i.partialFilterExpression ?? {})),
+    );
+    for (const idx of stale) {
+      await coll.dropIndex(idx.name);
+      logger.info(`Migration: dropped stale unique index on users.${Object.keys(idx.key)[0]} (missing deletedAt filter)`);
+    }
+
+    const current = await coll.indexes();
+    if (!current.some((i) => i.key?.email === 1 && i.unique)) {
+      await coll.createIndex({ email: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' }, deletedAt: null } });
+      logger.info('Migration: created unique email index on users (with deletedAt filter)');
+    }
+    if (!current.some((i) => i.key?.studentId === 1 && i.unique)) {
+      await coll.createIndex({ studentId: 1 }, { unique: true, partialFilterExpression: { studentId: { $type: 'string' }, deletedAt: null } });
+      logger.info('Migration: created unique studentId index on users (with deletedAt filter)');
+    }
+  } catch (e) {
+    // Non-fatal — worst case the old constraint stays in place
+    if (logger) logger.warn('User index migration skipped:', e.message);
+  }
+}
+
 const MAX_RETRIES = 5;
 const RETRY_INTERVAL_MS = 5000;
 
@@ -36,6 +73,7 @@ function connect() {
       retryCount = 0;
       logger.info('MongoDB connected', { uri: IS_PRODUCTION ? '[hidden]' : MONGODB_URI });
       await migrateSubmissionIndex(logger);
+      await migrateUserIndexes(logger);
     })
     .catch((err) => {
       retryCount += 1;

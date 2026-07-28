@@ -21,7 +21,7 @@ const groupHistoryRepository = {
     return GroupHistory.find({ cohortId })
       .populate({
         path: 'courseOfferingId',
-        select: 'courseId semesterId instructorId',
+        select: 'courseId semesterId',
         populate: [
           { path: 'courseId',   select: 'name code' },
           { path: 'semesterId', select: 'name' },

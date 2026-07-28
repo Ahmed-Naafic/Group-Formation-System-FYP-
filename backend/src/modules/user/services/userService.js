@@ -1,6 +1,8 @@
 const bcrypt = require('bcryptjs');
 const userRepository = require('../repositories/userRepository');
 const { NotFoundError, ForbiddenError, ConflictError } = require('../../../common/errors');
+const instructorAssignmentRepository = require('../../instructorAssignment/repositories/instructorAssignmentRepository');
+const AuditLog = require('../../auditLog/models/AuditLog');
 
 const BCRYPT_ROUNDS = 12;
 
@@ -54,7 +56,13 @@ const userService = {
 
   async createUser({ password, ...rest }) {
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    return userRepository.create({ ...rest, passwordHash });
+    const user = await userRepository.create({ ...rest, passwordHash });
+    // select: false on the schema only excludes passwordHash from queries
+    // (find/findOne/...) — a doc fresh off create() still carries it, so it
+    // has to be stripped by hand before this ever reaches a response body.
+    const obj = user.toObject();
+    delete obj.passwordHash;
+    return obj;
   },
 
   // Looks up a student-role user by their institutional studentId
@@ -103,7 +111,22 @@ const userService = {
     if (user.role !== 'instructor') {
       throw new ForbiddenError('Only instructor accounts can be deleted');
     }
-    return userRepository.deleteById(id);
+    // Any historical instructor assignment (past or current) or audit trail
+    // entry means real academic data hangs off this account — permanent
+    // deletion would orphan it. Deactivate instead (see setActive below).
+    const [hasAssignments, hasAuditLogs] = await Promise.all([
+      instructorAssignmentRepository.existsForInstructor(id),
+      AuditLog.exists({ actorId: id }),
+    ]);
+    if (hasAssignments || hasAuditLogs) {
+      throw new ConflictError(
+        'This instructor has historical academic records and cannot be permanently deleted. Deactivate them instead.',
+      );
+    }
+    // Soft delete, same as every other entity in this app (Student,
+    // CourseOffering, Group, ...) — reversible via user.restore(), unlike
+    // the User.findByIdAndDelete() this replaced.
+    return user.softDelete(requestingUserId);
   },
 
   async setActive(id, isActive, requestingUserId) {

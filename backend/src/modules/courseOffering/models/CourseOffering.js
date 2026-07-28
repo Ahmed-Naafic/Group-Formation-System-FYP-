@@ -6,7 +6,10 @@ const courseOfferingSchema = new mongoose.Schema(
     courseId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Course',   required: true },
     cohortId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Cohort',   required: true },
     semesterId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Semester', required: true },
-    instructorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User',     required: true },
+    // No instructorId field — InstructorAssignment (endDate: null = active) is
+    // the single source of truth for who currently teaches this offering, so
+    // reassignment never loses the prior instructor's history. See
+    // instructorAssignmentService.
     maxStudents:  { type: Number, min: 1, default: null },
     status:       { type: String, enum: ['active', 'completed', 'cancelled'], default: 'active' },
     createdBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User',     required: true },

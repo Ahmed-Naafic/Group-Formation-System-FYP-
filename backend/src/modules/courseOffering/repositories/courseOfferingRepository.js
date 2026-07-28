@@ -1,10 +1,13 @@
 const CourseOffering = require('../models/CourseOffering');
 
+// instructorId is intentionally not populated here — it's not a field on
+// this model. The current instructor is attached separately by
+// instructorAssignmentService.attachCurrentInstructor(Many) from the
+// InstructorAssignment ledger.
 const POPULATE = [
-  { path: 'courseId',     select: 'name code departmentId' },
-  { path: 'cohortId',     select: 'name departmentId yearOfEntry' },
-  { path: 'semesterId',   select: 'name startDate endDate status' },
-  { path: 'instructorId', select: 'fullName email isActive' },
+  { path: 'courseId',   select: 'name code departmentId' },
+  { path: 'cohortId',   select: 'name departmentId yearOfEntry' },
+  { path: 'semesterId', select: 'name startDate endDate status' },
 ];
 
 const courseOfferingRepository = {
@@ -40,11 +43,6 @@ const courseOfferingRepository = {
 
   countByCourse(courseId) {
     return CourseOffering.countDocuments({ courseId });
-  },
-
-  // Access check: is this instructor the instructor for this offering?
-  findActiveByIdAndInstructor(offeringId, instructorId) {
-    return CourseOffering.findOne({ _id: offeringId, instructorId });
   },
 
   // Grouping engine + student scoping: all offerings for a cohort

@@ -1,19 +1,15 @@
 const performanceSettingsRepository = require('../repositories/performanceSettingsRepository');
 const studentRepository      = require('../../student/repositories/studentRepository');
 const cohortService          = require('../../cohort/services/cohortService');
-const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
+const instructorAssignmentService = require('../../instructorAssignment/services/instructorAssignmentService');
 const { NotFoundError, ForbiddenError } = require('../../../common/errors');
 
 // Admin: unrestricted. Instructor: must have at least one active offering for this cohort.
 async function assertCohortAccess(cohortId, context) {
   const cohort = await cohortService.getById(cohortId);
   if (context.role === 'admin') return cohort;
-  const offerings = await courseOfferingRepository.findAll({
-    cohortId,
-    instructorId: context.userId,
-    status: 'active',
-  });
-  if (!offerings || offerings.length === 0) {
+  const hasAccess = await instructorAssignmentService.hasActiveOfferingInCohort(context.userId, cohortId);
+  if (!hasAccess) {
     throw new ForbiddenError('You do not have access to this cohort');
   }
   return cohort;

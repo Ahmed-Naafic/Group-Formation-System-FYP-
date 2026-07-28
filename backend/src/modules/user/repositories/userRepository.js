@@ -37,10 +37,6 @@ const userRepository = {
     return User.findByIdAndUpdate(id, updates, { new: true });
   },
 
-  deleteById(id) {
-    return User.findByIdAndDelete(id);
-  },
-
   existsWithRole(role) {
     return User.exists({ role });
   },

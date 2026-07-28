@@ -27,6 +27,12 @@ export const courseOfferingApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/api/course-offerings/${id}`, method: 'DELETE' }),
       invalidatesTags: ['CourseOffering'],
     }),
+
+    getInstructorHistory: build.query({
+      query: (id) => `/api/course-offerings/${id}/instructor-history`,
+      transformResponse: (res) => res.data.history,
+      providesTags: (result, error, id) => [{ type: 'CourseOffering', id: `history-${id}` }],
+    }),
   }),
   overrideExisting: false,
 });
@@ -37,4 +43,5 @@ export const {
   useCreateCourseOfferingMutation,
   useUpdateCourseOfferingMutation,
   useDeleteCourseOfferingMutation,
+  useGetInstructorHistoryQuery,
 } = courseOfferingApi;

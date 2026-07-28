@@ -13,6 +13,9 @@ const createCourseOfferingSchema = Joi.object({
 
 const updateCourseOfferingSchema = Joi.object({
   instructorId: objectId,
+  // Optional note captured on reassignment (instructorId actually changing).
+  // Ignored otherwise — see instructorAssignmentService.reassign.
+  reason:       Joi.string().trim().max(500).allow('', null),
   maxStudents:  Joi.number().integer().min(1).allow(null),
   status:       Joi.string().valid('active', 'completed', 'cancelled'),
 }).min(1);

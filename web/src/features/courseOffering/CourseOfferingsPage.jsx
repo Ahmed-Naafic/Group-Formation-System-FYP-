@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2, Users2, ClipboardList, Search } from 'lucide-react';
+import { useForm, Controller, useWatch } from 'react-hook-form';
+import { Pencil, Trash2, Plus, Loader2, Users2, ClipboardList, Search, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
 import {
@@ -9,6 +9,7 @@ import {
   useCreateCourseOfferingMutation,
   useUpdateCourseOfferingMutation,
   useDeleteCourseOfferingMutation,
+  useGetInstructorHistoryQuery,
 } from './courseOfferingApi';
 import { useGetCoursesQuery }     from '@/features/course/courseApi';
 import { useGetCohortsQuery }     from '@/features/cohort/cohortApi';
@@ -16,7 +17,7 @@ import { useGetSemestersQuery }   from '@/features/semester/semesterApi';
 import { useGetUsersQuery }       from '@/features/user/userApi';
 import { selectRole }             from '@/features/auth/authSlice';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -38,7 +39,8 @@ export default function CourseOfferingsPage() {
   const { data: courses    = [] } = useGetCoursesQuery();
   const { data: cohorts    = [] } = useGetCohortsQuery();
   const { data: semesters  = [] } = useGetSemestersQuery();
-  const { data: instructors = [] } = useGetUsersQuery({ role: 'instructor' });
+  // Deactivated instructors must not be assignable to offerings.
+  const { data: activeInstructors = [] } = useGetUsersQuery({ role: 'instructor', isActive: true });
 
   const [createCourseOffering, { isLoading: creating }] = useCreateCourseOfferingMutation();
   const [updateCourseOffering, { isLoading: updating }] = useUpdateCourseOfferingMutation();
@@ -50,8 +52,23 @@ export default function CourseOfferingsPage() {
   const [dialogOpen,     setDialogOpen]     = useState(false);
   const [editing,        setEditing]        = useState(null);
   const [deleteTarget,   setDeleteTarget]   = useState(null);
+  const [historyTarget,  setHistoryTarget]  = useState(null);
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
+
+  // The offering being edited might currently be taught by an instructor who
+  // has since been deactivated — keep them selectable (as the current value)
+  // even though they're excluded from the active list for new assignments.
+  const instructors = useMemo(() => {
+    const current = editing?.instructorId;
+    if (!current || current.isActive !== false) return activeInstructors;
+    if (activeInstructors.some((u) => u._id === current._id)) return activeInstructors;
+    return [...activeInstructors, current];
+  }, [activeInstructors, editing]);
+
+  const watchedInstructorId = useWatch({ control, name: 'instructorId' });
+  const originalInstructorId = String(editing?.instructorId?._id ?? editing?.instructorId ?? '');
+  const isReassigning = !!editing && !!watchedInstructorId && watchedInstructorId !== originalInstructorId;
 
   // Build lookup maps
   const courseMap   = Object.fromEntries(courses.map((c)    => [c._id, `${c.name} (${c.code})`]));
@@ -74,7 +91,7 @@ export default function CourseOfferingsPage() {
 
   useEffect(() => {
     if (!editing) {
-      reset({ courseId: '', cohortId: '', semesterId: '', instructorId: '', maxStudents: '', status: 'active' });
+      reset({ courseId: '', cohortId: '', semesterId: '', instructorId: '', maxStudents: '', status: 'active', reason: '' });
       return;
     }
     reset({
@@ -84,6 +101,7 @@ export default function CourseOfferingsPage() {
       instructorId: String(editing.instructorId?._id ?? editing.instructorId ?? ''),
       maxStudents:  editing.maxStudents ?? '',
       status:       editing.status,
+      reason:       '',
     });
   }, [editing, reset]);
 
@@ -98,10 +116,12 @@ export default function CourseOfferingsPage() {
         maxStudents: data.maxStudents ? Number(data.maxStudents) : null,
       };
       if (editing) {
-        // Only instructor, maxStudents, status are editable after creation
-        const { instructorId, maxStudents, status } = payload;
-        await updateCourseOffering({ id: editing._id, instructorId, maxStudents, status }).unwrap();
-        toast.success('Course offering updated');
+        // Only instructor, maxStudents, status are editable after creation.
+        // reason is only meaningful when instructorId is actually changing —
+        // the backend ignores it otherwise.
+        const { instructorId, maxStudents, status, reason } = payload;
+        await updateCourseOffering({ id: editing._id, instructorId, maxStudents, status, reason }).unwrap();
+        toast.success(isReassigning ? 'Instructor reassigned' : 'Course offering updated');
       } else {
         await createCourseOffering(payload).unwrap();
         toast.success('Course offering created');
@@ -246,6 +266,9 @@ export default function CourseOfferingsPage() {
                     {isAdmin && (
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setHistoryTarget(o)} aria-label="Instructor history">
+                            <History size={14} />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(o)} aria-label="Edit">
                             <Pencil size={14} />
                           </Button>
@@ -284,6 +307,20 @@ export default function CourseOfferingsPage() {
             )}
             <SelectField name="instructorId" label="Instructor" required
               options={instructors.map((u) => ({ value: u._id, label: u.fullName }))} />
+            {isReassigning && (
+              <div className="space-y-1.5">
+                <Label htmlFor="of-reason">
+                  Reassignment reason
+                  <span className="ml-1.5 text-xs font-normal text-ink-400">(optional)</span>
+                </Label>
+                <Input
+                  id="of-reason"
+                  placeholder="e.g. Instructor on leave"
+                  {...register('reason', { maxLength: { value: 500, message: 'Max 500 characters' } })}
+                />
+                {errors.reason && <p className="text-xs text-danger">{errors.reason.message}</p>}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="of-max">Max Students</Label>
@@ -350,6 +387,58 @@ export default function CourseOfferingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Instructor assignment history */}
+      <InstructorHistoryDialog offering={historyTarget} onClose={() => setHistoryTarget(null)} />
     </div>
+  );
+}
+
+// ── Instructor assignment history dialog ─────────────────────────────────────
+
+function InstructorHistoryDialog({ offering, onClose }) {
+  const { data: history = [], isLoading } = useGetInstructorHistoryQuery(offering?._id, { skip: !offering });
+
+  function formatDate(d) {
+    if (!d) return 'Present';
+    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  return (
+    <Dialog open={!!offering} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Instructor History</DialogTitle>
+          <DialogDescription>
+            {offering?.courseId?.name ?? 'This course offering'} — every instructor assignment, most recent first.
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 size={18} className="animate-spin text-ink-300" />
+          </div>
+        ) : history.length === 0 ? (
+          <p className="text-sm text-ink-400 py-4 text-center">No assignment history yet.</p>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {history.map((h) => (
+              <div key={h._id} className="rounded-md border border-border p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-ink-800">{h.instructorId?.fullName ?? '—'}</span>
+                  {!h.endDate && <Badge variant="success">Current</Badge>}
+                </div>
+                <p className="text-xs text-ink-500 mt-0.5">
+                  {formatDate(h.startDate)} – {formatDate(h.endDate)}
+                </p>
+                {h.assignedBy?.fullName && (
+                  <p className="text-xs text-ink-400 mt-1">Assigned by {h.assignedBy.fullName}</p>
+                )}
+                {h.reason && <p className="text-xs text-ink-500 mt-1 italic">"{h.reason}"</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

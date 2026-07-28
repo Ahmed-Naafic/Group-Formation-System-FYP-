@@ -9,6 +9,7 @@ const studentService         = require('../../student/services/studentService');
 const studentRepository      = require('../../student/repositories/studentRepository');
 const courseOfferingService  = require('../../courseOffering/services/courseOfferingService');
 const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
+const instructorAssignmentRepository = require('../../instructorAssignment/repositories/instructorAssignmentRepository');
 const { ForbiddenError, BadRequestError, NotFoundError, ConflictError } = require('../../../common/errors');
 
 // Resolves the offering and enforces ownership: instructor sees only their own offering.
@@ -266,12 +267,16 @@ const groupService = {
   async getHistory(cohortId, context) {
     const records = await groupHistoryRepository.findByCohortPopulated(cohortId);
 
-    const filtered = context.role === 'instructor'
-      ? records.filter(r => {
-          const instrId = String(r.courseOfferingId?.instructorId ?? '');
-          return instrId === String(context.userId);
-        })
-      : records;
+    let filtered = records;
+    if (context.role === 'instructor') {
+      const offeringIds = [...new Set(records.map(r => String(r.courseOfferingId?._id ?? r.courseOfferingId)))];
+      const activeMap = await instructorAssignmentRepository.findActiveMapForOfferings(offeringIds);
+      filtered = records.filter(r => {
+        const oid = String(r.courseOfferingId?._id ?? r.courseOfferingId);
+        const instructor = activeMap.get(oid);
+        return String(instructor?._id ?? instructor ?? '') === String(context.userId);
+      });
+    }
 
     // Group by generationId; Map preserves newest-first insertion order.
     const map = new Map();

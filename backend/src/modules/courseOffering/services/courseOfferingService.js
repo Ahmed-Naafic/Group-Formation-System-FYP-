@@ -1,32 +1,39 @@
 const courseOfferingRepository = require('../repositories/courseOfferingRepository');
-const courseService            = require('../../course/services/courseService');
-const cohortService            = require('../../cohort/services/cohortService');
-const semesterService          = require('../../semester/services/semesterService');
-const userService              = require('../../user/services/userService');
-const groupRepository          = require('../../group/repositories/groupRepository');
-const attendanceRepository     = require('../../attendance/repositories/attendanceRepository');
-const { NotFoundError, BadRequestError, ConflictError, ForbiddenError } = require('../../../common/errors');
+const courseService = require('../../course/services/courseService');
+const cohortService = require('../../cohort/services/cohortService');
+const semesterService = require('../../semester/services/semesterService');
+const groupRepository = require('../../group/repositories/groupRepository');
+const attendanceRepository = require('../../attendance/repositories/attendanceRepository');
+const instructorAssignmentService = require('../../instructorAssignment/services/instructorAssignmentService');
+const { NotFoundError, ConflictError, ForbiddenError } = require('../../../common/errors');
 
 // Resolves and authorises access to an offering.
-// Admin: unrestricted. Instructor: only their own offering.
+// Admin: unrestricted. Instructor: only the offering they are CURRENTLY
+// assigned to — resolved from InstructorAssignment (endDate: null), never a
+// stored field, so a reassigned-away instructor loses access immediately.
 async function resolveOffering(id, context) {
   const offering = await courseOfferingRepository.findById(id);
   if (!offering) throw new NotFoundError('Course offering not found');
+
+  const currentInstructorId = await instructorAssignmentService.getCurrentInstructorId(id);
   if (context.role === 'instructor') {
-    const instructorId = String(offering.instructorId?._id ?? offering.instructorId);
-    if (instructorId !== String(context.userId)) {
+    if (String(currentInstructorId ?? '') !== String(context.userId)) {
       throw new ForbiddenError('You are not the instructor for this course offering');
     }
   }
-  return offering;
+  return instructorAssignmentService.attachCurrentInstructor(offering);
 }
 
 const courseOfferingService = {
   async getAll(filter = {}, context) {
+    let offerings;
     if (context.role === 'instructor') {
-      return courseOfferingRepository.findAll({ ...filter, instructorId: context.userId });
+      const offeringIds = await instructorAssignmentService.getActiveOfferingIdsForInstructor(context.userId);
+      offerings = await courseOfferingRepository.findAll({ ...filter, _id: { $in: offeringIds } });
+    } else {
+      offerings = await courseOfferingRepository.findAll(filter);
     }
-    return courseOfferingRepository.findAll(filter);
+    return instructorAssignmentService.attachCurrentInstructorMany(offerings);
   },
 
   async getById(id, context) {
@@ -38,11 +45,7 @@ const courseOfferingService = {
     await courseService.getById(data.courseId);
     await cohortService.getById(data.cohortId);
     await semesterService.getById(data.semesterId);
-
-    const instructor = await userService.findById(data.instructorId);
-    if (!instructor)               throw new NotFoundError('Instructor user not found');
-    if (instructor.role !== 'instructor') throw new BadRequestError('The specified user is not an instructor');
-    if (!instructor.isActive)      throw new BadRequestError('Cannot assign a deactivated instructor');
+    await instructorAssignmentService.validateInstructor(data.instructorId);
 
     const duplicate = await courseOfferingRepository.findActiveByKey(
       data.courseId, data.cohortId, data.semesterId,
@@ -51,7 +54,11 @@ const courseOfferingService = {
       throw new ConflictError('This course is already offered to this cohort in this semester.');
     }
 
-    return courseOfferingRepository.create({ ...data, createdBy: context.userId });
+    const { instructorId, ...offeringData } = data;
+    const offering = await courseOfferingRepository.create({ ...offeringData, createdBy: context.userId });
+    await instructorAssignmentService.assign(offering._id, instructorId, { assignedBy: context.userId });
+
+    return instructorAssignmentService.attachCurrentInstructor(offering);
   },
 
   async update(id, updates, context) {
@@ -60,14 +67,30 @@ const courseOfferingService = {
     const offering = await courseOfferingRepository.findById(id);
     if (!offering) throw new NotFoundError('Course offering not found');
 
-    if (updates.instructorId) {
-      const instructor = await userService.findById(updates.instructorId);
-      if (!instructor)                    throw new NotFoundError('Instructor user not found');
-      if (instructor.role !== 'instructor') throw new BadRequestError('The specified user is not an instructor');
-      if (!instructor.isActive)             throw new BadRequestError('Cannot assign a deactivated instructor');
+    const { instructorId: newInstructorId, reason, ...rest } = updates;
+
+    if (newInstructorId) {
+      const currentInstructorId = await instructorAssignmentService.getCurrentInstructorId(id);
+      if (String(currentInstructorId ?? '') !== String(newInstructorId)) {
+        await instructorAssignmentService.reassign(
+          id, newInstructorId, { assignedBy: context.userId, reason: reason ?? null }, context,
+        );
+      }
     }
 
-    return courseOfferingRepository.updateById(id, updates);
+    const updated = Object.keys(rest).length
+      ? await courseOfferingRepository.updateById(id, rest)
+      : await courseOfferingRepository.findById(id);
+    return instructorAssignmentService.attachCurrentInstructor(updated);
+  },
+
+  // Read-only history of every instructor this offering has ever had — for
+  // auditing/reporting only. Access is gated by the same resolveOffering()
+  // rule as getById, so an instructor who has since been reassigned away
+  // loses visibility here too, same as everywhere else.
+  async getInstructorHistory(id, context) {
+    await resolveOffering(id, context);
+    return instructorAssignmentService.getHistory(id);
   },
 
   async softDelete(id, userId, context) {
@@ -92,13 +115,10 @@ const courseOfferingService = {
     return offering.softDelete(userId);
   },
 
-  // Replacement for courseAssignmentService.hasAccess — used from Step 6 onwards.
-  // Returns true if the instructor is assigned to the given offering.
+  // Returns true if the instructor is CURRENTLY assigned to the given offering.
   async hasAccess(instructorId, courseOfferingId) {
-    const offering = await courseOfferingRepository.findActiveByIdAndInstructor(
-      courseOfferingId, instructorId,
-    );
-    return !!offering;
+    const currentInstructorId = await instructorAssignmentService.getCurrentInstructorId(courseOfferingId);
+    return String(currentInstructorId ?? '') === String(instructorId);
   },
 };
 
