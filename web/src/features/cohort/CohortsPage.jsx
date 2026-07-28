@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2, Users, BarChart2, History } from 'lucide-react';
+import { Pencil, Trash2, Plus, Loader2, Users, BarChart2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetCohortsQuery,
@@ -149,9 +149,6 @@ export default function CohortsPage() {
                         </Button>
                         <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700" asChild>
                           <Link to={`/cohorts/${c._id}/scores`}><BarChart2 size={12} /> Scores</Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700" asChild>
-                          <Link to={`/cohorts/${c._id}/history`}><History size={12} /> History</Link>
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(c)} aria-label="Edit">
                           <Pencil size={14} />

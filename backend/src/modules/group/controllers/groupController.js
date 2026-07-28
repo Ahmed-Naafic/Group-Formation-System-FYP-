@@ -63,9 +63,9 @@ const groupController = {
     return sendSuccess(res, { message: 'Group updated', data: { group } });
   }),
 
-  // GET /api/groups/history?cohortId=
+  // GET /api/groups/history?courseOfferingId=
   getHistory: asyncHandler(async (req, res) => {
-    const generations = await groupService.getHistory(req.query.cohortId, req.context);
+    const generations = await groupService.getHistoryForOffering(req.query.courseOfferingId, req.context);
     return sendSuccess(res, { data: { generations } });
   }),
 

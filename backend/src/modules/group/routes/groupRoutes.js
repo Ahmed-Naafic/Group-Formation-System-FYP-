@@ -7,7 +7,7 @@ const {
   updateGroupSchema,
   offeringQuerySchema,
   groupParamSchema,
-  cohortHistoryQuerySchema,
+  offeringHistoryQuerySchema,
 } = require('../validations/groupValidation');
 const groupController = require('../controllers/groupController');
 
@@ -35,7 +35,7 @@ router.delete(
 router.get(
   '/history',
   authenticate, requireRole('admin', 'instructor'),
-  validate(cohortHistoryQuerySchema, 'query'),
+  validate(offeringHistoryQuerySchema, 'query'),
   groupController.getHistory,
 );
 

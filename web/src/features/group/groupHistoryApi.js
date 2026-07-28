@@ -3,7 +3,7 @@ import { baseApi } from '@/lib/api';
 export const groupHistoryApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     getGroupHistory: build.query({
-      query: (cohortId) => ({ url: '/api/groups/history', params: { cohortId } }),
+      query: (courseOfferingId) => ({ url: '/api/groups/history', params: { courseOfferingId } }),
       transformResponse: (res) => res.data.generations,
     }),
   }),

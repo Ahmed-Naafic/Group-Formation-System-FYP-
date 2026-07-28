@@ -62,9 +62,14 @@ const GroupGenerationService = {
       return plain;
     });
 
-    // History query: ALL prior generations for this cohort (across all offerings).
-    // Pair-avoidance spans the entire cohort history, not just this offering (Q3).
-    const historyDocs = await groupHistoryRepository.findByCohort(cohortId);
+    // History query scope: ALL prior generations for this cohort, across every
+    // offering it has ever run — pair-avoidance spans the entire cohort
+    // history, not just this offering (Q3). Ownership of each GroupHistory
+    // record is per-offering; this resolves the cohort's offering IDs first,
+    // then queries by that set.
+    const cohortOfferings = await courseOfferingRepository.findByCohort(cohortId);
+    const offeringIds     = cohortOfferings.map((o) => o._id);
+    const historyDocs     = await groupHistoryRepository.findByCourseOfferingIds(offeringIds);
 
     return this.generateFromData(students, historyDocs, groupSize, options);
   },

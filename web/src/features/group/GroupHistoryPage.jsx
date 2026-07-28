@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Loader2, Crown, ChevronRight, ChevronDown, History, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Crown, ChevronRight, ChevronDown, History } from 'lucide-react';
 import { useGetGroupHistoryQuery } from './groupHistoryApi';
-import { useGetCohortByIdQuery } from '@/features/cohort/cohortApi';
+import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
@@ -46,12 +46,7 @@ function MemberList({ members, leaderId }) {
   );
 }
 
-function GenerationCard({ generation, index, isOpen, onToggle }) {
-  const co = generation.courseOffering;
-  const courseName  = co?.courseId?.name  ?? '—';
-  const courseCode  = co?.courseId?.code  ?? '';
-  const semName     = co?.semesterId?.name ?? '—';
-
+function GenerationCard({ generation, isOpen, onToggle }) {
   return (
     <div className={cn(
       'rounded-lg border bg-white shadow-xs overflow-hidden',
@@ -68,16 +63,9 @@ function GenerationCard({ generation, index, isOpen, onToggle }) {
         </span>
         <span className="flex-1 min-w-0">
           <span className="font-semibold text-ink-800 text-sm">
-            {semName}
-            <span className="mx-1.5 text-ink-300">·</span>
-            {courseName}
-            {courseCode && (
-              <span className="ml-1.5 font-mono text-xs text-ink-400">({courseCode})</span>
-            )}
+            {formatDate(generation.generatedAt)}
           </span>
           <span className="ml-3 text-xs text-ink-400">
-            {formatDate(generation.generatedAt)}
-            <span className="mx-1.5">·</span>
             {generation.groups.length} groups of {generation.groupSize}
           </span>
         </span>
@@ -110,9 +98,9 @@ function GenerationCard({ generation, index, isOpen, onToggle }) {
 }
 
 export default function GroupHistoryPage() {
-  const { cohortId } = useParams();
-  const { data: cohort }                         = useGetCohortByIdQuery(cohortId);
-  const { data: generations = [], isLoading, error } = useGetGroupHistoryQuery(cohortId);
+  const { offeringId } = useParams();
+  const { data: offering, isLoading: loadingOffering } = useGetCourseOfferingByIdQuery(offeringId);
+  const { data: generations = [], isLoading, error }   = useGetGroupHistoryQuery(offeringId);
 
   const [openIds, setOpenIds] = useState(new Set());
 
@@ -125,22 +113,25 @@ export default function GroupHistoryPage() {
     });
   }
 
-  const cohortName = cohort?.name ?? '…';
+  const courseName    = offering?.courseId?.name ?? (loadingOffering ? '…' : 'Offering');
+  const cohortName    = offering?.cohortId?.name ?? '';
+  const semesterName  = offering?.semesterId?.name ?? '';
+  const offeringLabel = [courseName, cohortName, semesterName].filter(Boolean).join(' — ');
 
   return (
     <div>
       <div className="mb-6">
         <p className="eyebrow mb-1">
-          <Link to="/cohorts" className="hover:underline">Cohorts</Link>
+          <Link to="/course-offerings" className="hover:underline">Course Offerings</Link>
           {' / '}
-          <Link to={`/cohorts/${cohortId}/students`} className="hover:underline">{cohortName}</Link>
+          {offeringLabel}
           {' / '}
           History
         </p>
         <h2 className="text-ink-900 mb-1">Group History</h2>
         <p className="text-ink-500" style={{ fontSize: 'var(--fs-small)' }}>
-          Past group generations for {cohortName}, newest first. Used by the engine to avoid
-          repeating prior pairs across semesters.
+          Past group generations for {courseName}, newest first. Used by the engine to avoid
+          repeating prior pairs across semesters within this cohort.
         </p>
       </div>
 
@@ -161,12 +152,11 @@ export default function GroupHistoryPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {generations.map((gen, i) => {
+          {generations.map((gen) => {
             const id = String(gen.generationId);
             return (
               <GenerationCard
                 key={id}
-                index={i}
                 generation={gen}
                 isOpen={openIds.has(id)}
                 onToggle={() => toggle(id)}

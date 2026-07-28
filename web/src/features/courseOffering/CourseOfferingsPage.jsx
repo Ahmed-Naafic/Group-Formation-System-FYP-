@@ -261,6 +261,9 @@ export default function CourseOfferingsPage() {
                         <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700" asChild>
                           <Link to={`/course-offerings/${o._id}/attendance`}>Attendance</Link>
                         </Button>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700" asChild>
+                          <Link to={`/course-offerings/${o._id}/history`}><History size={12} /> Group History</Link>
+                        </Button>
                       </div>
                     </TableCell>
                     {isAdmin && (

@@ -9,16 +9,19 @@ const groupHistoryRepository = {
     return GroupHistory.insertMany(docs);
   },
 
-  // Reads ALL prior group history for a cohort across every offering.
-  // This is the pair-avoidance query: we avoid re-pairing students who shared
-  // a group in ANY previous offering for this cohort (Q3 design decision).
-  findByCohort(cohortId) {
-    return GroupHistory.find({ cohortId }).sort({ generatedAt: -1 });
+  // Cross-offering pair-avoidance query scope — the caller resolves which
+  // offering IDs belong to a cohort (courseOfferingRepository.findByCohort)
+  // and passes them here. We avoid re-pairing students who shared a group in
+  // ANY previous offering for that cohort (Q3 design decision) — ownership of
+  // each record is still per-offering, this is just how the algorithm reads
+  // across all of them.
+  findByCourseOfferingIds(courseOfferingIds) {
+    return GroupHistory.find({ courseOfferingId: { $in: courseOfferingIds } }).sort({ generatedAt: -1 });
   },
 
-  // Populated version used by the read-only history view.
-  findByCohortPopulated(cohortId) {
-    return GroupHistory.find({ cohortId })
+  // Populated version used by the read-only, offering-scoped history view.
+  findByCourseOffering(courseOfferingId) {
+    return GroupHistory.find({ courseOfferingId })
       .populate({
         path: 'courseOfferingId',
         select: 'courseId semesterId',

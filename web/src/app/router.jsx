@@ -118,6 +118,13 @@ export const router = createBrowserRouter([
         handle: { title: 'Group' },
       },
 
+      // ── Group History (offering-scoped, read-only) ──────────────────────
+      {
+        path: '/course-offerings/:offeringId/history',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><GroupHistoryPage /></ProtectedRoute>,
+        handle: { title: 'Group History' },
+      },
+
       // ── Tasks (offering-scoped) ─────────────────────────────────────────
       {
         path: '/course-offerings/:offeringId/tasks',
@@ -135,13 +142,6 @@ export const router = createBrowserRouter([
         path: '/cohorts/:cohortId/scores',
         element: <ProtectedRoute roles={['admin', 'instructor']}><ScoresPage /></ProtectedRoute>,
         handle: { title: 'Scores' },
-      },
-
-      // ── Group History (cohort-scoped, read-only) ────────────────────────
-      {
-        path: '/cohorts/:cohortId/history',
-        element: <ProtectedRoute roles={['admin', 'instructor']}><GroupHistoryPage /></ProtectedRoute>,
-        handle: { title: 'Group History' },
       },
 
       // ── Settings ────────────────────────────────────────────────────────

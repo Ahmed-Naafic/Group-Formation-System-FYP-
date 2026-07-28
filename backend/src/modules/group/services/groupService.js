@@ -9,11 +9,10 @@ const studentService         = require('../../student/services/studentService');
 const studentRepository      = require('../../student/repositories/studentRepository');
 const courseOfferingService  = require('../../courseOffering/services/courseOfferingService');
 const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
-const instructorAssignmentRepository = require('../../instructorAssignment/repositories/instructorAssignmentRepository');
 const { ForbiddenError, BadRequestError, NotFoundError, ConflictError } = require('../../../common/errors');
 
 // Resolves the offering and enforces ownership: instructor sees only their own offering.
-// Returns the offering document (used by generate/regenerate to read cohortId/courseId).
+// Returns the offering document (used by generate/regenerate to read courseId).
 async function assertCourseOfferingAccess(courseOfferingId, context) {
   return courseOfferingService.getById(courseOfferingId, context);
 }
@@ -23,7 +22,7 @@ async function assertCourseOfferingAccess(courseOfferingId, context) {
 // Writes assembled groups to DB (Groups → Workspaces → hasBeenLeader flags → GroupHistory).
 // GroupHistory is written LAST so that any earlier failure leaves history untouched;
 // _rollback() covers history cleanup via deleteByGenerationId if history itself fails.
-async function _persist(courseOfferingId, cohortId, courseName, assembledGroups, groupSize, options, context, generationId) {
+async function _persist(courseOfferingId, courseName, assembledGroups, groupSize, options, context, generationId) {
   const now            = new Date();
   const createdGroupIds = [];
 
@@ -54,7 +53,6 @@ async function _persist(courseOfferingId, cohortId, courseName, assembledGroups,
   await groupHistoryRepository.insertMany(
     assembledGroups.map(({ members, leaderId }) => ({
       courseOfferingId,
-      cohortId,
       generationId,
       memberIds:   members.map(m => m._id),
       leaderId,
@@ -91,7 +89,6 @@ const groupService = {
   // Creates groups for a course offering that has none yet.
   async generate(courseOfferingId, groupSize, options, context) {
     const offering = await assertCourseOfferingAccess(courseOfferingId, context);
-    const cohortId = String(offering.cohortId?._id ?? offering.cohortId);
 
     // Course name comes via offering.courseId (populated in getById)
     const courseName = offering.courseId?.name ?? 'Course';
@@ -110,7 +107,7 @@ const groupService = {
     const generationId = new mongoose.Types.ObjectId();
     let groups;
     try {
-      groups = await _persist(courseOfferingId, cohortId, courseName, assembledGroups, groupSize, options, context, generationId);
+      groups = await _persist(courseOfferingId, courseName, assembledGroups, groupSize, options, context, generationId);
     } catch (err) {
       await _rollback(generationId, []);
       throw err;
@@ -129,7 +126,6 @@ const groupService = {
   // History is now written by _persist() — the old-groups write here is removed.
   async regenerate(courseOfferingId, groupSize, options, context) {
     const offering = await assertCourseOfferingAccess(courseOfferingId, context);
-    const cohortId  = String(offering.cohortId?._id ?? offering.cohortId);
     const courseName = offering.courseId?.name ?? 'Course';
 
     const currentGroups    = await groupRepository.findActiveIdsByOffering(courseOfferingId);
@@ -148,7 +144,7 @@ const groupService = {
     const generationId = new mongoose.Types.ObjectId();
     let groups;
     try {
-      groups = await _persist(courseOfferingId, cohortId, courseName, assembledGroups, groupSize, options, context, generationId);
+      groups = await _persist(courseOfferingId, courseName, assembledGroups, groupSize, options, context, generationId);
     } catch (err) {
       await _rollback(generationId, archivedGroupIds);
       throw err;
@@ -262,25 +258,17 @@ const groupService = {
     return groupRepository.updateById(id, { leaderId: finalLeaderId, memberIds: newMemberIds });
   },
 
-  // Read-only history view: all past generations for a cohort, newest first.
-  // Instructor-scoped to offerings they own; admin sees all.
-  async getHistory(cohortId, context) {
-    const records = await groupHistoryRepository.findByCohortPopulated(cohortId);
-
-    let filtered = records;
-    if (context.role === 'instructor') {
-      const offeringIds = [...new Set(records.map(r => String(r.courseOfferingId?._id ?? r.courseOfferingId)))];
-      const activeMap = await instructorAssignmentRepository.findActiveMapForOfferings(offeringIds);
-      filtered = records.filter(r => {
-        const oid = String(r.courseOfferingId?._id ?? r.courseOfferingId);
-        const instructor = activeMap.get(oid);
-        return String(instructor?._id ?? instructor ?? '') === String(context.userId);
-      });
-    }
+  // Read-only history view: all past generations for a single course
+  // offering, newest first. Ownership (and therefore authorization) belongs
+  // to the offering — same gate generate()/regenerate() use, so an
+  // instructor only ever sees history for offerings they currently teach.
+  async getHistoryForOffering(courseOfferingId, context) {
+    await assertCourseOfferingAccess(courseOfferingId, context);
+    const records = await groupHistoryRepository.findByCourseOffering(courseOfferingId);
 
     // Group by generationId; Map preserves newest-first insertion order.
     const map = new Map();
-    for (const rec of filtered) {
+    for (const rec of records) {
       const gid = String(rec.generationId);
       if (!map.has(gid)) {
         map.set(gid, {

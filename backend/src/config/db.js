@@ -108,6 +108,42 @@ async function migrateCohortSchema(logger) {
   }
 }
 
+// Removes the retired cohortId field from GroupHistory docs (ownership is
+// courseOfferingId alone now — cross-offering pair-avoidance is a query-scope
+// concern handled in GroupGenerationService, not a stored field) and migrates
+// the index accordingly. No data backfill needed: courseOfferingId has always
+// been a required field on every GroupHistory doc.
+async function migrateGroupHistorySchema(logger) {
+  try {
+    const coll = mongoose.connection.collection('grouphistories');
+
+    const unsetResult = await coll.updateMany(
+      { cohortId: { $exists: true } },
+      { $unset: { cohortId: '' } },
+    );
+    if (unsetResult.modifiedCount > 0) {
+      logger.info(`Migration: removed legacy cohortId field from ${unsetResult.modifiedCount} group history record(s)`);
+    }
+
+    const indexes = await coll.indexes();
+    const oldCohortIdx = indexes.find((i) => i.key?.cohortId === 1 && i.key?.generatedAt === -1);
+    if (oldCohortIdx) {
+      await coll.dropIndex(oldCohortIdx.name);
+      logger.info('Migration: dropped (cohortId, generatedAt) index on grouphistories');
+    }
+
+    const hasOfferingIdx = (await coll.indexes()).some(
+      (i) => i.key?.courseOfferingId === 1 && i.key?.generatedAt === -1,
+    );
+    if (!hasOfferingIdx) {
+      await coll.createIndex({ courseOfferingId: 1, generatedAt: -1 });
+      logger.info('Migration: created (courseOfferingId, generatedAt) index on grouphistories');
+    }
+  } catch (e) {
+    if (logger) logger.warn('GroupHistory schema migration skipped:', e.message);
+  }
+}
+
 const MAX_RETRIES = 5;
 const RETRY_INTERVAL_MS = 5000;
 
@@ -126,6 +162,7 @@ function connect() {
       await migrateSubmissionIndex(logger);
       await migrateUserIndexes(logger);
       await migrateCohortSchema(logger);
+      await migrateGroupHistorySchema(logger);
     })
     .catch((err) => {
       retryCount += 1;

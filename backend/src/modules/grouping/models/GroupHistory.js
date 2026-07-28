@@ -2,12 +2,14 @@ const mongoose = require('mongoose');
 
 // One document per group per generation run.
 // courseOfferingId + generationId link all groups from a single run.
-// cohortId is stored denormalised so pair-avoidance can query across ALL offerings for a cohort.
+// courseOfferingId is the sole ownership relationship — pair-avoidance across
+// every offering in a cohort is a query-scope concern, not a stored field:
+// see GroupGenerationService.generate(), which resolves the cohort's offering
+// IDs via courseOfferingRepository.findByCohort() and queries by those.
 // No soft-delete — history is an immutable audit record.
 const groupHistorySchema = new mongoose.Schema(
   {
     courseOfferingId: { type: mongoose.Schema.Types.ObjectId, ref: 'CourseOffering', required: true },
-    cohortId:         { type: mongoose.Schema.Types.ObjectId, ref: 'Cohort',         required: true },
     generationId:     { type: mongoose.Schema.Types.ObjectId, required: true },
     memberIds:        [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }],
     leaderId:         { type: mongoose.Schema.Types.ObjectId, ref: 'Student', default: null },
@@ -18,7 +20,8 @@ const groupHistorySchema = new mongoose.Schema(
   { timestamps: false },
 );
 
-// Primary query: all history for a cohort (pair-avoidance reads across offerings).
-groupHistorySchema.index({ cohortId: 1, generatedAt: -1 });
+// Primary query: all history for an offering (also used, via $in, for the
+// cross-offering pair-avoidance query scope).
+groupHistorySchema.index({ courseOfferingId: 1, generatedAt: -1 });
 
 module.exports = mongoose.model('GroupHistory', groupHistorySchema);
