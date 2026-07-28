@@ -14,6 +14,7 @@ const submissionValidation = {
 
   taskIdParam: Joi.object({ taskId: objectId.required() }),
   idParam:     Joi.object({ id:     objectId.required() }),
+  memberIdParam: Joi.object({ id: objectId.required(), studentId: objectId.required() }),
 };
 
 module.exports = submissionValidation;

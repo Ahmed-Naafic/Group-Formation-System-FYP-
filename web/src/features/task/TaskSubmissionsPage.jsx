@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
-import { Loader2, ArrowLeft, Calendar, CheckCircle2, Clock, AlertTriangle, Paperclip, FileSpreadsheet, FileDown } from 'lucide-react';
+import {
+  Loader2, ArrowLeft, Calendar, CheckCircle2, Clock, AlertTriangle, Paperclip,
+  FileSpreadsheet, FileDown, ChevronDown, ChevronRight, Users,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetTaskByIdQuery,
   useGetTaskSubmissionsQuery,
   useUpdateTaskMutation,
   useGradeSubmissionMutation,
+  useGradeSubmissionMemberMutation,
 } from './taskApi';
 import { useGetGroupsQuery } from '@/features/group/groupApi';
 import { selectCurrentToken } from '@/features/auth/authSlice';
@@ -48,16 +52,29 @@ function formatDate(d) {
 }
 
 // ── Grade dialog ───────────────────────────────────────────────────────────────
+// `target` is either:
+//   { kind: 'submission', submissionId, label, currentGrade }         — whole submission
+//   { kind: 'member', submissionId, studentId, label, currentGrade }  — one group member
 
-function GradeDialog({ submission, onClose }) {
-  const [gradeSubmission, { isLoading }] = useGradeSubmissionMutation();
+function GradeDialog({ target, onClose }) {
+  const [gradeSubmission, { isLoading: savingSubmission }] = useGradeSubmissionMutation();
+  const [gradeMember, { isLoading: savingMember }] = useGradeSubmissionMemberMutation();
+  const isLoading = savingSubmission || savingMember;
   const { register, handleSubmit, formState: { errors } } = useForm({
-    defaultValues: { grade: submission?.grade ?? '' },
+    defaultValues: { grade: target?.currentGrade ?? '' },
   });
 
   async function onSubmit(data) {
     try {
-      await gradeSubmission({ id: submission._id, grade: Number(data.grade) }).unwrap();
+      if (target.kind === 'member') {
+        await gradeMember({
+          submissionId: target.submissionId,
+          studentId:    target.studentId,
+          grade:        Number(data.grade),
+        }).unwrap();
+      } else {
+        await gradeSubmission({ id: target.submissionId, grade: Number(data.grade) }).unwrap();
+      }
       toast.success('Grade saved');
       onClose();
     } catch (err) {
@@ -66,14 +83,12 @@ function GradeDialog({ submission, onClose }) {
   }
 
   return (
-    <Dialog open={!!submission} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={!!target} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Grade Submission</DialogTitle>
+          <DialogTitle>{target?.kind === 'member' ? 'Grade Member' : 'Grade Submission'}</DialogTitle>
           <DialogDescription>
-            {submission?.submittedBy?.fullName
-              ? `${submission.submittedBy.fullName} (${submission?.groupId?.name ?? 'group'})`
-              : submission?.groupId?.name} — enter a score from 0 to 100.
+            {target?.label} — enter a score from 0 to 100.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-1" noValidate>
@@ -179,14 +194,26 @@ export default function TaskSubmissionsPage() {
 
   const isAllGroups    = task?.assignedGroups?.length === 0;
   const taskOfferingId = offeringId ?? String(task?.courseOfferingId?._id ?? task?.courseOfferingId ?? '');
+  // Fetched unconditionally (not just for "all groups" tasks) — it's the only
+  // source that gives us full member rosters, needed for per-member grading
+  // even when the task targets specific assigned groups.
   const { data: offeringGroups = [] } = useGetGroupsQuery(
     { courseOfferingId: taskOfferingId },
-    { skip: !isAllGroups || !taskOfferingId },
+    { skip: !taskOfferingId },
   );
 
   const [gradeTarget, setGradeTarget] = useState(null);
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
   const [downloadingGrades, setDownloadingGrades] = useState(null);
   const token = useSelector(selectCurrentToken);
+
+  function toggleGroupExpanded(groupId) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
+      return next;
+    });
+  }
 
   async function downloadGrades(format) {
     setDownloadingGrades(format);
@@ -269,12 +296,17 @@ export default function TaskSubmissionsPage() {
 
   const isIndividual = task.submissionType === 'individual';
 
-  // Group mode: build rows keyed by group (with "Not submitted" placeholders)
+  // Group mode: build rows keyed by group (with "Not submitted" placeholders).
+  // Always resolved against offeringGroups so memberIds are populated even
+  // when the task is scoped to specific assigned groups.
   const submissionByGroup = {};
   for (const s of submissions) {
     submissionByGroup[String(s.groupId?._id ?? s.groupId)] = s;
   }
-  const baseGroups = isAllGroups ? offeringGroups : (task.assignedGroups ?? []);
+  const assignedGroupIds = new Set((task.assignedGroups ?? []).map((g) => String(g._id ?? g)));
+  const baseGroups = isAllGroups
+    ? offeringGroups
+    : offeringGroups.filter((g) => assignedGroupIds.has(String(g._id)));
   const groupRows = baseGroups.map((g) => ({
     group:      g,
     submission: submissionByGroup[String(g._id)] ?? null,
@@ -433,7 +465,14 @@ export default function TaskSubmissionsPage() {
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs text-just-blue-600 hover:text-just-blue-700"
-                          onClick={() => setGradeTarget(s)}
+                          onClick={() => setGradeTarget({
+                            kind: 'submission',
+                            submissionId: s._id,
+                            currentGrade: s.grade,
+                            label: s.submittedBy?.fullName
+                              ? `${s.submittedBy.fullName} (${s.groupId?.name ?? 'group'})`
+                              : s.groupId?.name,
+                          })}
                         >
                           {s.status === 'reviewed' ? 'Re-grade' : 'Grade'}
                         </Button>
@@ -456,6 +495,7 @@ export default function TaskSubmissionsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8" />
                 <TableHead>Group</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Submitted</TableHead>
@@ -466,52 +506,130 @@ export default function TaskSubmissionsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {groupRows.map(({ group, submission }) => (
-                <TableRow key={String(group?._id ?? group)} className="align-top">
-                  <TableCell className="font-medium text-ink-800 pt-3.5">
-                    {group?.name ?? '—'}
-                  </TableCell>
-                  <TableCell className="pt-3.5">
-                    {submission
-                      ? <SubmissionBadge status={submission.status} />
-                      : <Badge variant="secondary">Not submitted</Badge>}
-                  </TableCell>
-                  <TableCell className="text-xs text-ink-500 pt-3.5">
-                    {formatDate(submission?.submittedAt)}
-                  </TableCell>
-                  <TableCell className="text-sm text-ink-600 pt-3.5">
-                    {submission?.submittedBy?.fullName ?? '—'}
-                  </TableCell>
-                  <TableCell className="pt-3">
-                    <SubmissionContent
-                      submission={submission}
-                      onDownload={downloadFile}
-                    />
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm text-ink-700 pt-3.5">
-                    {submission?.grade != null ? `${submission.grade}/100` : '—'}
-                  </TableCell>
-                  <TableCell className="text-right pt-2.5">
-                    {submission && ['submitted', 'late', 'reviewed'].includes(submission.status) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs text-just-blue-600 hover:text-just-blue-700"
-                        onClick={() => setGradeTarget(submission)}
-                      >
-                        {submission.status === 'reviewed' ? 'Re-grade' : 'Grade'}
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {groupRows.map(({ group, submission }) => {
+                const groupId    = String(group?._id ?? group);
+                const members    = group?.memberIds ?? [];
+                const canGrade   = submission && ['submitted', 'late', 'reviewed'].includes(submission.status);
+                const isExpanded = expandedGroups.has(groupId) && members.length > 0;
+                const memberGradeById = new Map(
+                  (submission?.memberGrades ?? []).map((mg) => [String(mg.studentId?._id ?? mg.studentId), mg.grade]),
+                );
+
+                return (
+                  <Fragment key={groupId}>
+                    <TableRow className="align-top">
+                      <TableCell className="pt-3">
+                        {members.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupExpanded(groupId)}
+                            className="text-ink-400 hover:text-ink-700"
+                            aria-label={isExpanded ? 'Collapse members' : 'Expand members'}
+                          >
+                            {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                          </button>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium text-ink-800 pt-3.5">
+                        {group?.name ?? '—'}
+                        {group?.code && (
+                          <span className="ml-1.5 text-xs font-normal text-ink-400">({group.code})</span>
+                        )}
+                        {members.length > 0 && (
+                          <span className="inline-flex items-center gap-1 ml-2 text-xs text-ink-400 font-normal">
+                            <Users size={11} /> {members.length}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="pt-3.5">
+                        {submission
+                          ? <SubmissionBadge status={submission.status} />
+                          : <Badge variant="secondary">Not submitted</Badge>}
+                      </TableCell>
+                      <TableCell className="text-xs text-ink-500 pt-3.5">
+                        {formatDate(submission?.submittedAt)}
+                      </TableCell>
+                      <TableCell className="text-sm text-ink-600 pt-3.5">
+                        {submission?.submittedBy?.fullName ?? '—'}
+                      </TableCell>
+                      <TableCell className="pt-3">
+                        <SubmissionContent
+                          submission={submission}
+                          onDownload={downloadFile}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm text-ink-700 pt-3.5">
+                        {submission?.grade != null ? `${submission.grade}/100` : '—'}
+                      </TableCell>
+                      <TableCell className="text-right pt-2.5">
+                        {canGrade && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-just-blue-600 hover:text-just-blue-700"
+                            onClick={() => setGradeTarget({
+                              kind: 'submission',
+                              submissionId: submission._id,
+                              currentGrade: submission.grade,
+                              label: group?.name,
+                            })}
+                          >
+                            {submission.status === 'reviewed' ? 'Re-grade' : 'Grade'}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+
+                    {isExpanded && members.map((m) => {
+                      const memberGrade = memberGradeById.get(String(m._id));
+                      return (
+                        <TableRow key={`${groupId}-${m._id}`} className="bg-ink-50/60">
+                          <TableCell />
+                          <TableCell colSpan={4} className="py-2 pl-8 text-sm text-ink-600">
+                            {m.fullName}
+                            {m.userId?.studentId && (
+                              <span className="ml-2 text-xs text-ink-400">{m.userId.studentId}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2 text-xs text-ink-400">
+                            {memberGrade != null ? 'Individual grade' : 'Uses group grade'}
+                          </TableCell>
+                          <TableCell className="py-2 text-right font-mono text-sm text-ink-700">
+                            {memberGrade != null
+                              ? `${memberGrade}/100`
+                              : (submission?.grade != null ? `${submission.grade}/100` : '—')}
+                          </TableCell>
+                          <TableCell className="py-2 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-just-blue-600 hover:text-just-blue-700 disabled:text-ink-300"
+                              disabled={!canGrade}
+                              title={canGrade ? undefined : "Group hasn't submitted yet"}
+                              onClick={() => setGradeTarget({
+                                kind: 'member',
+                                submissionId: submission._id,
+                                studentId: String(m._id),
+                                currentGrade: memberGrade ?? '',
+                                label: `${m.fullName} (${group?.name ?? 'group'})`,
+                              })}
+                            >
+                              {memberGrade != null ? 'Re-grade' : 'Grade'}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </Fragment>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
       )}
 
       {gradeTarget && (
-        <GradeDialog submission={gradeTarget} onClose={() => setGradeTarget(null)} />
+        <GradeDialog target={gradeTarget} onClose={() => setGradeTarget(null)} />
       )}
     </div>
   );

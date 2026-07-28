@@ -55,6 +55,17 @@ export const taskApi = baseApi.injectEndpoints({
       invalidatesTags: (result, error, { id }) => [{ type: 'Submission', id }, 'Submission'],
     }),
 
+    // Grades one member's contribution within a group submission.
+    gradeSubmissionMember: build.mutation({
+      query: ({ submissionId, studentId, grade }) => ({
+        url: `/api/submissions/${submissionId}/members/${studentId}/grade`,
+        method: 'PATCH',
+        body: { grade },
+      }),
+      transformResponse: (res) => res.data.submission,
+      invalidatesTags: (result, error, { submissionId }) => [{ type: 'Submission', id: submissionId }, 'Submission'],
+    }),
+
     // Student: get their group's current submission for a task (null = not started)
     getMySubmission: build.query({
       query: (taskId) => `/api/tasks/${taskId}/my-submission`,
@@ -96,6 +107,7 @@ export const {
   useDeleteTaskMutation,
   useGetTaskSubmissionsQuery,
   useGradeSubmissionMutation,
+  useGradeSubmissionMemberMutation,
   useGetMySubmissionQuery,
   useSaveDraftMutation,
   useSubmitTaskMutation,

@@ -2,9 +2,11 @@ const Submission = require('../models/Submission');
 
 const BASE_POPULATE = [
   { path: 'submittedBy', select: 'fullName userId', populate: { path: 'userId', select: 'studentId' } },
-  { path: 'groupId',     select: 'name courseId' },
+  { path: 'groupId',     select: 'name code courseId' },
   { path: 'gradedBy',    select: 'fullName role' },
   { path: 'files',       select: 'originalName mimeType sizeBytes uploadedAt workspaceId' },
+  { path: 'memberGrades.studentId', select: 'fullName userId', populate: { path: 'userId', select: 'studentId' } },
+  { path: 'memberGrades.gradedBy',  select: 'fullName role' },
 ];
 
 const submissionRepository = {

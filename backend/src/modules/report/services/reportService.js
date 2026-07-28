@@ -4,6 +4,7 @@ const attendanceRepository     = require('../../attendance/repositories/attendan
 const courseOfferingService    = require('../../courseOffering/services/courseOfferingService');
 const taskRepository           = require('../../task/repositories/taskRepository');
 const submissionRepository     = require('../../submission/repositories/submissionRepository');
+const studentRepository        = require('../../student/repositories/studentRepository');
 const { BadRequestError, NotFoundError } = require('../../../common/errors');
 
 const STATUS_LABELS = {
@@ -13,61 +14,86 @@ const STATUS_LABELS = {
   reviewed:  'Reviewed',
 };
 
-// Builds the roster of grade rows for a task: every group (or every student,
-// for individual-submission tasks) assigned to the task, joined against
-// whatever Submission docs actually exist — students/groups who never
-// submitted still get a row, with status "Not submitted" and no grade.
+// Short group label for reports (e.g. "G3"). Falls back to a number parsed out
+// of the full name for groups created before the `code` field existed.
+function groupCode(group) {
+  if (!group) return 'Ungrouped';
+  if (group.code) return group.code;
+  const match = /(\d+)\s*$/.exec(group.name ?? '');
+  return match ? `G${match[1]}` : (group.name ?? 'Ungrouped');
+}
+
+// Builds one row per student — every student enrolled in the offering's cohort,
+// always, regardless of whether they submitted or were even assigned this task.
+// Ungraded/unsubmitted students still get a row with grade 0, never blank, so the
+// roster can be handed to a department as a complete mark sheet.
+//
+// Individual-mode tasks: grade comes from that student's own submission.
+// Group-mode tasks: grade is the member's per-student override
+// (Submission.memberGrades) if the instructor set one, else the shared group grade.
 async function buildTaskGradesRoster(taskId, context) {
   const task = await taskRepository.findById(taskId);
   if (!task) throw new NotFoundError('Task not found');
 
   const courseOfferingId = String(task.courseOfferingId?._id ?? task.courseOfferingId);
   const offering = await courseOfferingService.getById(courseOfferingId, context);
+  const cohortId = String(offering.cohortId?._id ?? offering.cohortId);
 
-  const allGroups = await groupRepository.findByCourseOffering(courseOfferingId);
-  const assignedIds = (task.assignedGroups ?? []).map((g) => String(g._id ?? g));
-  const groups = assignedIds.length
-    ? allGroups.filter((g) => assignedIds.includes(String(g._id)))
-    : allGroups;
+  const [students, groups, submissions] = await Promise.all([
+    studentRepository.findAll({ cohortId, deletedAt: null }),
+    groupRepository.findByCourseOffering(courseOfferingId),
+    submissionRepository.findByTask(taskId),
+  ]);
 
-  const submissions = await submissionRepository.findByTask(taskId);
-
-  const rows = [];
-
-  if (task.submissionType === 'individual') {
-    const byStudentId = new Map(
-      submissions.map((s) => [String(s.submittedBy?._id ?? s.submittedBy), s]),
-    );
-    for (const g of groups) {
-      for (const m of g.memberIds ?? []) {
-        const submission = byStudentId.get(String(m._id));
-        rows.push({
-          studentId:   m.userId?.studentId ?? '',
-          fullName:    m.fullName,
-          groupName:   g.name,
-          status:      submission ? (STATUS_LABELS[submission.status] ?? submission.status) : 'Not submitted',
-          grade:       submission?.grade ?? '',
-          submittedAt: submission?.submittedAt ? submission.submittedAt.toISOString().slice(0, 10) : '',
-        });
-      }
-    }
-  } else {
-    const byGroupId = new Map(
-      submissions.map((s) => [String(s.groupId?._id ?? s.groupId), s]),
-    );
-    for (const g of groups) {
-      const submission = byGroupId.get(String(g._id));
-      const memberNames = (g.memberIds ?? []).map((m) => m.fullName);
-      rows.push({
-        groupName:    g.name,
-        members:      memberNames, // array — each builder joins with a format-appropriate separator
-        submittedBy:  submission?.submittedBy?.fullName ?? '',
-        status:       submission ? (STATUS_LABELS[submission.status] ?? submission.status) : 'Not submitted',
-        grade:        submission?.grade ?? '',
-        submittedAt:  submission?.submittedAt ? submission.submittedAt.toISOString().slice(0, 10) : '',
-      });
+  const groupByStudentId = new Map();
+  for (const g of groups) {
+    for (const m of g.memberIds ?? []) {
+      groupByStudentId.set(String(m._id), g);
     }
   }
+
+  const isIndividual = task.submissionType === 'individual';
+
+  const submissionByStudentId = new Map(
+    submissions.map((s) => [String(s.submittedBy?._id ?? s.submittedBy), s]),
+  );
+  const submissionByGroupId = new Map(
+    submissions.map((s) => [String(s.groupId?._id ?? s.groupId), s]),
+  );
+
+  function gradeAndStatus(studentId, group) {
+    if (isIndividual) {
+      const s = submissionByStudentId.get(studentId);
+      if (!s) return { grade: 0, status: 'Not submitted', submittedAt: null };
+      return { grade: s.grade ?? 0, status: STATUS_LABELS[s.status] ?? s.status, submittedAt: s.submittedAt };
+    }
+    const s = group ? submissionByGroupId.get(String(group._id)) : null;
+    if (!s) return { grade: 0, status: 'Not submitted', submittedAt: null };
+    const override = (s.memberGrades ?? []).find(
+      (mg) => String(mg.studentId?._id ?? mg.studentId) === studentId,
+    );
+    const grade = override?.grade ?? s.grade ?? 0;
+    return { grade, status: STATUS_LABELS[s.status] ?? s.status, submittedAt: s.submittedAt };
+  }
+
+  const rows = students.map((student) => {
+    const sid   = String(student._id);
+    const group = groupByStudentId.get(sid) ?? null;
+    const { grade, status, submittedAt } = gradeAndStatus(sid, group);
+    return {
+      studentId:   student.userId?.studentId ?? '',
+      fullName:    student.fullName,
+      groupCode:   groupCode(group),
+      status,
+      grade,
+      submittedAt: submittedAt ? submittedAt.toISOString().slice(0, 10) : '',
+    };
+  });
+
+  rows.sort((a, b) =>
+    a.groupCode.localeCompare(b.groupCode, undefined, { numeric: true }) ||
+    a.fullName.localeCompare(b.fullName),
+  );
 
   return { task, offering, rows };
 }
@@ -269,8 +295,9 @@ const reportService = {
   },
 
   /**
-   * Grades export for a single task: one row per group (or per student, for
-   * individual-submission tasks), including anyone who hasn't submitted yet.
+   * Grades export for a single task: one row per student, always covering the
+   * whole cohort roster (see buildTaskGradesRoster), color-coded by status and
+   * score band so an instructor can scan a large class at a glance.
    */
   async buildTaskGradesExcel(taskId, context) {
     const { task, offering, rows } = await buildTaskGradesRoster(taskId, context);
@@ -280,73 +307,119 @@ const reportService = {
     wb.created = new Date();
     const ws = wb.addWorksheet('Grades');
 
-    const isIndividual = task.submissionType === 'individual';
-    const columns = isIndividual
-      ? [
-          { header: 'Student ID',   key: 'studentId',   width: 16 },
-          { header: 'Full Name',    key: 'fullName',    width: 26 },
-          { header: 'Group',        key: 'groupName',   width: 24 },
-          { header: 'Status',       key: 'status',      width: 14 },
-          { header: 'Grade',        key: 'grade',       width: 10 },
-          { header: 'Submitted At', key: 'submittedAt', width: 14 },
-        ]
-      : [
-          { header: 'Group',        key: 'groupName',   width: 24 },
-          { header: 'Members',      key: 'members',     width: 40 },
-          { header: 'Submitted By', key: 'submittedBy', width: 22 },
-          { header: 'Status',       key: 'status',      width: 14 },
-          { header: 'Grade',        key: 'grade',       width: 10 },
-          { header: 'Submitted At', key: 'submittedAt', width: 14 },
-        ];
+    const columns = [
+      { header: '#',            key: 'idx',         width: 5  },
+      { header: 'Student ID',   key: 'studentId',    width: 16 },
+      { header: 'Full Name',    key: 'fullName',     width: 26 },
+      { header: 'Group',        key: 'groupCode',    width: 10 },
+      { header: 'Status',       key: 'status',       width: 14 },
+      { header: 'Grade',        key: 'grade',        width: 10 },
+      { header: 'Submitted At', key: 'submittedAt',  width: 14 },
+    ];
     const colCount   = columns.length;
     const lastColLtr = String.fromCharCode(64 + colCount);
     columns.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
 
+    // ── Palette ────────────────────────────────────────────────────────────────
     const C_GREEN    = 'FF1D6F42';
     const C_WHITE    = 'FFFFFFFF';
     const C_LT_GREEN = 'FFC6EFCE';
     const C_DK_GREEN = 'FF276221';
+    const C_ROW_A    = 'FFFFFFFF';
+    const C_ROW_B    = 'FFF3F7F4';
+
+    const STATUS_STYLE = {
+      Reviewed:        { fill: 'FFC6EFCE', font: 'FF1E7B34' },
+      Submitted:       { fill: 'FFD6E4FF', font: 'FF1D4ED8' },
+      Late:            { fill: 'FFFFE8B3', font: 'FF9A6400' },
+      Draft:           { fill: 'FFEDEDED', font: 'FF666666' },
+      'Not submitted': { fill: 'FFFAD4D4', font: 'FFB42318' },
+    };
 
     function applyFill(cell, argb) {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
     }
-    function applyFont(cell, { bold = false, color = 'FF000000' } = {}) {
-      cell.font = { name: 'Arial', size: 11, bold, color: { argb: color } };
+    function applyFont(cell, { bold = false, color = 'FF1A1A1A', size = 11, italic = false } = {}) {
+      cell.font = { name: 'Arial', size, bold, italic, color: { argb: color } };
+    }
+    function gradeColor(status, grade) {
+      if (status === 'Not submitted' || status === 'Draft') return 'FF9AA0A6';
+      if (grade >= 70) return 'FF1E7B34';
+      if (grade >= 40) return 'FF9A6400';
+      return 'FFB42318';
     }
 
-    const courseName  = offering.courseId?.name ?? '—';
+    const courseName   = offering.courseId?.name ?? '—';
     const cohortName   = offering.cohortId?.name ?? '—';
-    const deadlineStr = task.deadline
+    const deadlineStr  = task.deadline
       ? new Date(task.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
       : '—';
+    const gradedCount  = rows.filter((r) => r.status === 'Reviewed').length;
 
+    // Title banner
     const r1 = ws.addRow([`Grades — ${task.title}`]);
     for (let c = 1; c <= colCount; c++) applyFill(r1.getCell(c), C_GREEN);
-    applyFont(r1.getCell(1), { bold: true, color: C_WHITE, size: 12 });
+    applyFont(r1.getCell(1), { bold: true, color: C_WHITE, size: 13 });
     ws.mergeCells(`A${r1.number}:${lastColLtr}${r1.number}`);
+    r1.height = 22;
 
-    const r2 = ws.addRow([`Course: ${courseName} — ${cohortName}    Deadline: ${deadlineStr}    Total: ${rows.length}`]);
-    applyFont(r2.getCell(1));
+    // Meta line
+    const r2 = ws.addRow([
+      `Course: ${courseName} — ${cohortName}    Deadline: ${deadlineStr}    ` +
+      `Students: ${rows.length}    Graded: ${gradedCount}/${rows.length}`,
+    ]);
+    applyFont(r2.getCell(1), { italic: true, color: 'FF555555', size: 10 });
     ws.mergeCells(`A${r2.number}:${lastColLtr}${r2.number}`);
 
     ws.addRow([]); // spacer
 
+    // Column headers
     const headerRow = ws.addRow(columns.map((c) => c.header));
     for (let c = 1; c <= colCount; c++) {
       applyFill(headerRow.getCell(c), C_LT_GREEN);
       applyFont(headerRow.getCell(c), { bold: true, color: C_DK_GREEN });
+      headerRow.getCell(c).alignment = { vertical: 'middle' };
     }
+    headerRow.height = 18;
+    ws.views = [{ state: 'frozen', ySplit: headerRow.number }];
+    ws.autoFilter = { from: { row: headerRow.number, column: 1 }, to: { row: headerRow.number, column: colCount } };
 
-    const membersColIndex = columns.findIndex((c) => c.key === 'members') + 1; // 0 if no such column
+    // Data rows
+    rows.forEach((row, i) => {
+      const excelRow = ws.addRow([i + 1, row.studentId, row.fullName, row.groupCode, row.status, row.grade, row.submittedAt]);
+      const bandColor = i % 2 === 0 ? C_ROW_A : C_ROW_B;
 
-    for (const row of rows) {
-      const cellValues = columns.map((c) => (c.key === 'members' ? (row.members ?? []).join('\n') : row[c.key]));
-      const excelRow = ws.addRow(cellValues);
-      if (membersColIndex) {
-        const cell = excelRow.getCell(membersColIndex);
-        cell.alignment = { wrapText: true, vertical: 'top' };
-        const lineCount = Math.max(1, (row.members ?? []).length);
-        excelRow.height = Math.max(15, lineCount * 15);
+      for (let c = 1; c <= colCount; c++) {
+        applyFill(excelRow.getCell(c), bandColor);
+        applyFont(excelRow.getCell(c));
+      }
+
+      const statusCell = excelRow.getCell(5);
+      const statusStyle = STATUS_STYLE[row.status] ?? STATUS_STYLE.Draft;
+      applyFill(statusCell, statusStyle.fill);
+      applyFont(statusCell, { bold: true, color: statusStyle.font, size: 10 });
+      statusCell.alignment = { horizontal: 'center' };
+
+      const gradeCell = excelRow.getCell(6);
+      applyFont(gradeCell, { bold: true, color: gradeColor(row.status, row.grade) });
+      gradeCell.alignment = { horizontal: 'center' };
+      gradeCell.numFmt = '0"/100"';
+
+      excelRow.getCell(4).alignment = { horizontal: 'center' };
+      excelRow.getCell(1).alignment = { horizontal: 'center' };
+    });
+
+    // Outer border for the whole table
+    const firstDataRow = headerRow.number;
+    const lastDataRow  = headerRow.number + rows.length;
+    for (let r = firstDataRow; r <= lastDataRow; r++) {
+      for (let c = 1; c <= colCount; c++) {
+        ws.getRow(r).getCell(c).border = {
+          top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+          left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+          right: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+        };
       }
     }
 
@@ -354,15 +427,10 @@ const reportService = {
   },
 
   /**
-   * Returns an array of plain row objects (CSV-friendly). Multi-value fields
-   * (e.g. group members) are joined with "; " rather than a newline — many
-   * CSV viewers split rows on any raw newline even inside a quoted field.
+   * Returns an array of plain row objects (CSV-friendly), one per student.
    */
   async buildTaskGradesCsv(taskId, context) {
     const { rows } = await buildTaskGradesRoster(taskId, context);
-    for (const row of rows) {
-      if (Array.isArray(row.members)) row.members = row.members.join('; ');
-    }
     return rows;
   },
 };

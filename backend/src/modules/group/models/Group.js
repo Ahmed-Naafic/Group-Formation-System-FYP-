@@ -5,6 +5,7 @@ const groupSchema = new mongoose.Schema(
   {
     courseOfferingId: { type: mongoose.Schema.Types.ObjectId, ref: 'CourseOffering', required: true },
     name:      { type: String, required: true, trim: true },
+    code:      { type: String, trim: true }, // short label e.g. "G3" — used on reports/exports
     leaderId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
     memberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }],
 

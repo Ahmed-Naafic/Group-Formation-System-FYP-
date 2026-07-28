@@ -46,6 +46,14 @@ const submissionController = {
     const submission = await submissionService.grade(req.params.id, req.body.grade, req.context);
     return sendSuccess(res, { data: { submission } });
   }),
+
+  // PATCH /api/submissions/:id/members/:studentId/grade
+  gradeMember: asyncHandler(async (req, res) => {
+    const submission = await submissionService.gradeMember(
+      req.params.id, req.params.studentId, req.body.grade, req.context,
+    );
+    return sendSuccess(res, { data: { submission } });
+  }),
 };
 
 module.exports = submissionController;

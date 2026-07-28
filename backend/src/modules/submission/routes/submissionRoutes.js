@@ -24,4 +24,13 @@ router.patch(
   submissionController.grade,
 );
 
+// PATCH /api/submissions/:id/members/:studentId/grade  — instructor grades one group member
+router.patch(
+  '/:id/members/:studentId/grade',
+  authenticate, requireRole('admin', 'instructor'),
+  validate(submissionValidation.memberIdParam, 'params'),
+  validate(submissionValidation.grade, 'body'),
+  submissionController.gradeMember,
+);
+
 module.exports = router;

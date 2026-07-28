@@ -17,6 +17,17 @@ const submissionSchema = new mongoose.Schema(
     gradedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     gradedAt:  { type: Date },
     submittedAt: { type: Date },
+    // Per-student overrides within a group submission — lets an instructor grade
+    // individual members' contribution instead of (or on top of) the shared group grade.
+    memberGrades: [
+      {
+        _id:       false,
+        studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
+        grade:     { type: Number, min: 0, max: 100, required: true },
+        gradedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        gradedAt:  { type: Date },
+      },
+    ],
   },
   { timestamps: true },
 );

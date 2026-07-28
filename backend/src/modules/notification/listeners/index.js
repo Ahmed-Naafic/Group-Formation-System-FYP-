@@ -3,6 +3,7 @@ const notificationService = require('../services/notificationService');
 const auditLogService    = require('../../auditLog/services/auditLogService');
 const userRepository     = require('../../user/repositories/userRepository');
 const groupRepository    = require('../../group/repositories/groupRepository');
+const studentRepository  = require('../../student/repositories/studentRepository');
 const Workspace          = require('../../workspace/models/Workspace');
 const pushService        = require('../../../common/services/push/PushService');
 const logger             = require('../../../common/utils/logger');
@@ -163,6 +164,44 @@ function initListeners(io) {
       });
     } catch (err) {
       logger.error('submission.graded listener error', { err: err.message });
+    }
+  });
+
+  // ── submission.memberGraded ─────────────────────────────────────────────────────
+  // Payload: { submission, task, studentId, grade, actorId, actorRole, ipAddress, userAgent }
+  emitter.on('submission.memberGraded', async (payload) => {
+    try {
+      const { submission, task, studentId, grade, actorId, actorRole, ipAddress, userAgent } = payload;
+
+      const student = await studentRepository.findById(studentId);
+      if (student?.userId) {
+        const userId = student.userId._id ?? student.userId;
+        const n = await notificationService.create({
+          userId,
+          type:    'SUBMISSION_GRADED',
+          title:   'Your submission has been graded',
+          message: `Your grade for "${task?.title ?? 'a task'}" is ${grade}/100.`,
+          relatedEntity: { kind: 'Submission', id: submission._id },
+        });
+        pushToUser(String(userId), n);
+
+        await sendFcmBatch(
+          [userId],
+          'Your submission has been graded',
+          `"${task?.title ?? 'A task'}" — ${grade}/100`,
+          { type: 'SUBMISSION_GRADED', entityId: String(submission._id) }
+        );
+      }
+
+      await auditLogService.log({
+        actorId, actorRole, ipAddress, userAgent,
+        action:     'SUBMISSION_MEMBER_GRADED',
+        entityKind: 'Submission',
+        entityId:   submission._id,
+        changes:    { studentId, grade },
+      });
+    } catch (err) {
+      logger.error('submission.memberGraded listener error', { err: err.message });
     }
   });
 

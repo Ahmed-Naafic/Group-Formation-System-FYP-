@@ -180,6 +180,49 @@ const submissionService = {
 
     return updated;
   },
+
+  // Grades one member's contribution within a group submission (overrides the
+  // shared group grade for that student on reports). Individual-mode tasks
+  // already grade per student via grade() above — this is group-mode only.
+  async gradeMember(id, studentId, grade, context) {
+    const submission = await submissionRepository.findById(id);
+    if (!submission) throw new NotFoundError('Submission not found');
+
+    const task = await taskRepository.findById(submission.taskId);
+    await assertCourseOfferingAccess(String(task.courseOfferingId?._id ?? task.courseOfferingId), context);
+
+    if (task.submissionType !== 'group') {
+      throw new BadRequestError('Individual-submission tasks are graded per submission, not per member');
+    }
+    if (!['submitted', 'late', 'reviewed'].includes(submission.status)) {
+      throw new BadRequestError('Cannot grade a submission that has not been submitted yet');
+    }
+
+    const group = await groupRepository.findById(submission.groupId?._id ?? submission.groupId);
+    const isMember = (group?.memberIds ?? []).some(
+      (m) => String(m._id ?? m) === String(studentId),
+    );
+    if (!isMember) throw new BadRequestError('Student is not a member of this submission\'s group');
+
+    const existing = (submission.memberGrades ?? []).filter(
+      (mg) => String(mg.studentId?._id ?? mg.studentId) !== String(studentId),
+    );
+    const updated = await submissionRepository.updateById(id, {
+      memberGrades: [
+        ...existing,
+        { studentId, grade, gradedBy: context.userId, gradedAt: new Date() },
+      ],
+      status: 'reviewed',
+    });
+
+    emitter.emit('submission.memberGraded', {
+      submission: updated, task, studentId, grade,
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+    });
+
+    return updated;
+  },
 };
 
 module.exports = submissionService;

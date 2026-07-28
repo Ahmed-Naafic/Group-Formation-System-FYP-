@@ -31,6 +31,7 @@ async function _persist(courseOfferingId, cohortId, courseName, assembledGroups,
     const group = await groupRepository.create({
       courseOfferingId,
       name:             `${courseName} Group ${i + 1}`,
+      code:             `G${i + 1}`,
       leaderId,
       memberIds:        members.map(m => m._id),
       generatedAt:      now,
