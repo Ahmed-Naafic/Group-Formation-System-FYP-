@@ -16,9 +16,9 @@ const cohortService = {
 
   async create(data) {
     await departmentService.getById(data.departmentId);
-    const duplicate = await cohortRepository.findActiveByNameAndDepartment(data.name, data.departmentId);
+    const duplicate = await cohortRepository.findActiveByName(data.name);
     if (duplicate) {
-      throw new ConflictError(`A cohort named "${data.name}" already exists in this department.`);
+      throw new ConflictError('A cohort with this name already exists.');
     }
     return cohortRepository.create(data);
   },
@@ -26,12 +26,10 @@ const cohortService = {
   async update(id, updates) {
     const cohort = await cohortService.getById(id);
     if (updates.departmentId) await departmentService.getById(updates.departmentId);
-    if (updates.name || updates.departmentId) {
-      const targetName = updates.name       ?? cohort.name;
-      const targetDept = updates.departmentId ?? String(cohort.departmentId?._id ?? cohort.departmentId);
-      const duplicate = await cohortRepository.findActiveByNameAndDepartment(targetName, targetDept);
+    if (updates.name) {
+      const duplicate = await cohortRepository.findActiveByName(updates.name);
       if (duplicate && String(duplicate._id) !== id) {
-        throw new ConflictError(`A cohort named "${targetName}" already exists in this department.`);
+        throw new ConflictError('A cohort with this name already exists.');
       }
     }
     return cohortRepository.updateById(id, updates);

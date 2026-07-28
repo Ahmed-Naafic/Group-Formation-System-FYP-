@@ -3,19 +3,28 @@ const softDeletePlugin = require('../../../common/plugins/softDelete');
 
 const cohortSchema = new mongoose.Schema(
   {
-    name:         { type: String, required: true, trim: true },
+    // Always normalized to uppercase on write (create and findOneAndUpdate/
+    // findByIdAndUpdate both apply this cast) — "ca226"/"Ca226"/"CA226" all
+    // store as "CA226". The collation below is defense in depth for any path
+    // that bypasses this cast (e.g. a raw driver write).
+    name:         { type: String, required: true, trim: true, uppercase: true },
     departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
-    yearOfEntry:  { type: Number, default: null },
     description:  { type: String, trim: true, default: '' },
     createdBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true },
 );
 
-// Name unique within a department — "CA226" can exist in two departments, not twice in one.
+// Name unique across the whole system (not just within a department), and
+// case-insensitive — "CA226" and "ca226" collide. Only enforced among active
+// (non-deleted) cohorts, so a deleted cohort's name can be reused.
 cohortSchema.index(
-  { departmentId: 1, name: 1 },
-  { unique: true, partialFilterExpression: { deletedAt: null } },
+  { name: 1 },
+  {
+    unique: true,
+    collation: { locale: 'en', strength: 2 },
+    partialFilterExpression: { deletedAt: null },
+  },
 );
 
 cohortSchema.plugin(softDeletePlugin);

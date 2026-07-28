@@ -274,7 +274,6 @@ async function main() {
   const cohort = await Cohort.create({
     name: 'CA226',
     departmentId: dept._id,
-    yearOfEntry: 2022,
     description: 'Software Engineering entry cohort of 2022',
     createdBy: admin._id,
   });

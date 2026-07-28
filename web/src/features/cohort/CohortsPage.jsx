@@ -50,10 +50,9 @@ export default function CohortsPage() {
     reset(editing ? {
       name:         editing.name,
       departmentId: String(editing.departmentId?._id ?? editing.departmentId ?? ''),
-      yearOfEntry:  editing.yearOfEntry ?? '',
       description:  editing.description ?? '',
     } : {
-      name: '', departmentId: '', yearOfEntry: '', description: '',
+      name: '', departmentId: '', description: '',
     });
   }, [editing, reset]);
 
@@ -63,10 +62,7 @@ export default function CohortsPage() {
 
   async function onSubmit(data) {
     try {
-      const payload = {
-        ...data,
-        yearOfEntry: data.yearOfEntry ? Number(data.yearOfEntry) : null,
-      };
+      const payload = { ...data };
       if (editing) {
         await updateCohort({ id: editing._id, ...payload }).unwrap();
         toast.success('Cohort updated');
@@ -136,7 +132,6 @@ export default function CohortsPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Department</TableHead>
-                <TableHead className="w-28">Year of Entry</TableHead>
                 <TableHead className="w-80" />
               </TableRow>
             </TableHeader>
@@ -147,7 +142,6 @@ export default function CohortsPage() {
                   <TableRow key={c._id}>
                     <TableCell className="font-medium text-ink-800">{c.name}</TableCell>
                     <TableCell className="text-ink-500">{deptMap[deptId] ?? '—'}</TableCell>
-                    <TableCell className="text-ink-500">{c.yearOfEntry ?? '—'}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-just-blue-600 hover:text-just-blue-700" asChild>
@@ -195,41 +189,26 @@ export default function CohortsPage() {
               />
               {errors.name && <p className="text-xs text-danger">{errors.name.message}</p>}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Department <span className="text-danger">*</span></Label>
-                <Controller
-                  control={control}
-                  name="departmentId"
-                  rules={{ required: 'Department is required' }}
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger aria-invalid={!!errors.departmentId}>
-                        <SelectValue placeholder="Select…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departments.map((d) => (
-                          <SelectItem key={d._id} value={d._id}>{d.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {errors.departmentId && <p className="text-xs text-danger">{errors.departmentId.message}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="co-year">Year of Entry</Label>
-                <Input
-                  id="co-year"
-                  type="number"
-                  placeholder="e.g. 2022"
-                  {...register('yearOfEntry', {
-                    min: { value: 1950, message: 'Min 1950' },
-                    max: { value: 2100, message: 'Max 2100' },
-                  })}
-                />
-                {errors.yearOfEntry && <p className="text-xs text-danger">{errors.yearOfEntry.message}</p>}
-              </div>
+            <div className="space-y-1.5">
+              <Label>Department <span className="text-danger">*</span></Label>
+              <Controller
+                control={control}
+                name="departmentId"
+                rules={{ required: 'Department is required' }}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger aria-invalid={!!errors.departmentId}>
+                      <SelectValue placeholder="Select…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((d) => (
+                        <SelectItem key={d._id} value={d._id}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.departmentId && <p className="text-xs text-danger">{errors.departmentId.message}</p>}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>

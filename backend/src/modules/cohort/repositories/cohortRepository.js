@@ -15,8 +15,11 @@ const cohortRepository = {
     return Cohort.findById(id).populate('departmentId', 'name facultyId');
   },
 
-  findActiveByNameAndDepartment(name, departmentId) {
-    return Cohort.findOne({ name, departmentId });
+  // Global, case-insensitive — cohort names must be unique across the whole
+  // system, not just within a department. The collation must match the one
+  // on the unique index (see Cohort.js) for both to agree on equality.
+  findActiveByName(name) {
+    return Cohort.findOne({ name }).collation({ locale: 'en', strength: 2 });
   },
 
   updateById(id, updates) {

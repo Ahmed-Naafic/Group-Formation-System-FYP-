@@ -6,7 +6,7 @@ const CourseOffering = require('../models/CourseOffering');
 // InstructorAssignment ledger.
 const POPULATE = [
   { path: 'courseId',   select: 'name code departmentId' },
-  { path: 'cohortId',   select: 'name departmentId yearOfEntry' },
+  { path: 'cohortId',   select: 'name departmentId' },
   { path: 'semesterId', select: 'name startDate endDate status' },
 ];
 

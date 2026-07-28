@@ -57,6 +57,57 @@ async function migrateUserIndexes(logger) {
   }
 }
 
+// Retired yearOfEntry field removed from Cohort docs; name normalized to
+// uppercase (matches the new schema-level `uppercase: true` cast going
+// forward — this catches data written before that cast existed); unique
+// name constraint migrated from department-scoped to global + case-insensitive.
+async function migrateCohortSchema(logger) {
+  try {
+    const coll = mongoose.connection.collection('cohorts');
+
+    const unsetResult = await coll.updateMany(
+      { yearOfEntry: { $exists: true } },
+      { $unset: { yearOfEntry: '' } },
+    );
+    if (unsetResult.modifiedCount > 0) {
+      logger.info(`Migration: removed legacy yearOfEntry field from ${unsetResult.modifiedCount} cohort(s)`);
+    }
+
+    const upperResult = await coll.updateMany(
+      {},
+      [{ $set: { name: { $toUpper: '$name' } } }],
+    );
+    if (upperResult.modifiedCount > 0) {
+      logger.info(`Migration: normalized ${upperResult.modifiedCount} cohort name(s) to uppercase`);
+    }
+
+    const indexes = await coll.indexes();
+    const oldNameIdx = indexes.find(
+      (i) => i.unique === true && i.key?.departmentId === 1 && i.key?.name === 1,
+    );
+    if (oldNameIdx) {
+      await coll.dropIndex(oldNameIdx.name);
+      logger.info('Migration: dropped department-scoped unique (departmentId, name) index on cohorts');
+    }
+
+    const hasGlobalNameIdx = (await coll.indexes()).some(
+      (i) => i.unique === true && i.key?.name === 1 && Object.keys(i.key).length === 1,
+    );
+    if (!hasGlobalNameIdx) {
+      await coll.createIndex(
+        { name: 1 },
+        { unique: true, collation: { locale: 'en', strength: 2 }, partialFilterExpression: { deletedAt: null } },
+      );
+      logger.info('Migration: created global case-insensitive unique name index on cohorts');
+    }
+  } catch (e) {
+    // Non-fatal — worst case the old constraint stays in place. Most likely
+    // cause: a pre-existing duplicate name across departments still needs
+    // manual resolution before the new unique index can be built.
+    if (logger) logger.warn('Cohort schema migration skipped:', e.message);
+  }
+}
+
 const MAX_RETRIES = 5;
 const RETRY_INTERVAL_MS = 5000;
 
@@ -74,6 +125,7 @@ function connect() {
       logger.info('MongoDB connected', { uri: IS_PRODUCTION ? '[hidden]' : MONGODB_URI });
       await migrateSubmissionIndex(logger);
       await migrateUserIndexes(logger);
+      await migrateCohortSchema(logger);
     })
     .catch((err) => {
       retryCount += 1;
