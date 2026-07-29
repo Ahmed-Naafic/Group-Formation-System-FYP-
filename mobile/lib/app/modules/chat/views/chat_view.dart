@@ -1286,21 +1286,131 @@ class _InputBar extends StatelessWidget {
                 ),
               );
             }),
+            Obx(() {
+              final path = ctrl.pickedAttachmentPath.value;
+              final name = ctrl.pickedAttachmentName.value;
+              if (path == null) return const SizedBox.shrink();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: context.inputFill,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        if (ctrl.pickedAttachmentIsImage)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(path),
+                              width: 44,
+                              height: 44,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        else
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: context.chatBubbleOther,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              ctrl.pickedAttachmentIsVideo
+                                  ? Icons.videocam_rounded
+                                  : Icons.insert_drive_file_outlined,
+                              color: context.textMuted,
+                            ),
+                          ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            name ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: context.textPrimary,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close, size: 18, color: context.textMuted),
+                          onPressed: ctrl.cancelPickedAttachment,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: ctrl.attachmentCaptionCtrl,
+                            style: TextStyle(color: context.textPrimary, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: 'Add a caption…',
+                              hintStyle: TextStyle(color: context.textMuted, fontSize: 13),
+                              isDense: true,
+                              filled: true,
+                              fillColor: context.cardColor,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Obx(
+                          () => Material(
+                            color: const Color(0xFF1E3A8A),
+                            borderRadius: BorderRadius.circular(20),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: ctrl.isUploadingAttachment.value
+                                  ? null
+                                  : ctrl.sendPickedAttachment,
+                              child: Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: ctrl.isUploadingAttachment.value
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
             Row(
               children: [
                 Obx(
                   () => IconButton(
-                    icon: ctrl.isUploadingAttachment.value
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.attach_file_rounded),
+                    icon: const Icon(Icons.attach_file_rounded),
                     color: context.textMuted,
-                    onPressed: ctrl.isUploadingAttachment.value
+                    onPressed: ctrl.pickedAttachmentPath.value != null
                         ? null
-                        : ctrl.pickAndSendAttachment,
+                        : ctrl.pickAttachment,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   ),

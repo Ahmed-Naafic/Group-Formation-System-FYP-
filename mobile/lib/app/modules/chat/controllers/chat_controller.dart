@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -63,6 +64,13 @@ class ChatController extends GetxController {
 
   // ── Attachments ──────────────────────────────────────────────────────────────
   final isUploadingAttachment = false.obs;
+  // Set once a file is picked, cleared on cancel/send — the composer shows a
+  // preview + caption field while this is non-null, and only uploads once
+  // the user explicitly taps Send (picking a file no longer sends it immediately).
+  final pickedAttachmentPath = RxnString();
+  final pickedAttachmentName = RxnString();
+  String? _pickedAttachmentMime;
+  final attachmentCaptionCtrl = TextEditingController();
 
   WorkspaceModel? workspace;
   String _myStudentId = '';
@@ -506,8 +514,8 @@ class ChatController extends GetxController {
   // ── Attachments (image / video / document) ───────────────────────────────────
 
   static const _attachmentExtensions = [
-    'jpg', 'jpeg', 'png', 'gif', 'webp',
-    'mp4', 'mov', 'webm', 'avi',
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif',
+    'mp4', 'mov', 'webm', 'avi', '3gp',
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv',
   ];
 
@@ -517,10 +525,13 @@ class ChatController extends GetxController {
     'png': 'image/png',
     'gif': 'image/gif',
     'webp': 'image/webp',
+    'heic': 'image/heic',
+    'heif': 'image/heif',
     'mp4': 'video/mp4',
     'mov': 'video/quicktime',
     'webm': 'video/webm',
     'avi': 'video/x-msvideo',
+    '3gp': 'video/3gpp',
     'pdf': 'application/pdf',
     'doc': 'application/msword',
     'docx':
@@ -536,7 +547,15 @@ class ChatController extends GetxController {
     return _mimeByExtension[ext] ?? 'application/octet-stream';
   }
 
-  Future<void> pickAndSendAttachment() async {
+  bool get pickedAttachmentIsImage =>
+      (_pickedAttachmentMime ?? '').startsWith('image/');
+  bool get pickedAttachmentIsVideo =>
+      (_pickedAttachmentMime ?? '').startsWith('video/');
+
+  /// Opens the file picker and stages the result for preview — does NOT
+  /// upload. The composer shows a preview card with a caption field; the
+  /// user must tap Send (sendPickedAttachment) to actually send it.
+  Future<void> pickAttachment() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
       type: FileType.custom,
@@ -546,20 +565,43 @@ class ChatController extends GetxController {
     );
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.single;
-    final path = picked.path;
-    final ws = workspace;
-    if (path == null || ws == null) return;
+    if (picked.path == null) {
+      Get.snackbar(
+        'Could not use this file',
+        'This file could not be accessed on your device. Try picking it a different way.',
+      );
+      return;
+    }
+    pickedAttachmentPath.value = picked.path;
+    pickedAttachmentName.value = picked.name;
+    _pickedAttachmentMime = _guessAttachmentMime(picked.name);
+  }
 
-    final mimeType = _guessAttachmentMime(picked.name);
+  void cancelPickedAttachment() {
+    pickedAttachmentPath.value = null;
+    pickedAttachmentName.value = null;
+    _pickedAttachmentMime = null;
+    attachmentCaptionCtrl.clear();
+  }
+
+  Future<void> sendPickedAttachment() async {
+    final path = pickedAttachmentPath.value;
+    final name = pickedAttachmentName.value;
+    final mimeType = _pickedAttachmentMime;
+    final ws = workspace;
+    if (path == null || name == null || mimeType == null || ws == null) return;
+
+    final caption = attachmentCaptionCtrl.text.trim();
     final tempId = 'pending_attachment_${DateTime.now().millisecondsSinceEpoch}';
     final replyingTo = replyTarget.value;
     replyTarget.value = null;
+    cancelPickedAttachment(); // clear the preview card; the pending bubble takes over
 
     final pending = ChatMessage(
       id: tempId,
       workspaceId: ws.id,
       sender: ChatSender(id: '', fullName: _myFullName, studentId: _myStudentId),
-      content: '',
+      content: caption,
       createdAt: DateTime.now(),
       isPending: true,
       localAttachmentPath: path,
@@ -575,8 +617,9 @@ class ChatController extends GetxController {
       final real = await _repo.uploadAttachment(
         ws.id,
         path,
-        picked.name,
+        name,
         mimeType,
+        caption: caption.isEmpty ? null : caption,
         replyToId: replyingTo?.id,
       );
       // Race-safe against the 'new-message' socket echo — same reasoning as
@@ -592,6 +635,16 @@ class ChatController extends GetxController {
         _scrollToBottom();
       }
       _cache[ws.id] = List<ChatMessage>.from(messages);
+    } on DioException catch (e) {
+      messages.removeWhere((m) => m.id == tempId);
+      _cache[ws.id] = List<ChatMessage>.from(messages);
+      final serverMessage = e.response?.data is Map
+          ? (e.response?.data['error']?['message'] as String?)
+          : null;
+      Get.snackbar(
+        'Failed to send',
+        serverMessage ?? 'Your attachment could not be sent. Check your connection and try again.',
+      );
     } catch (_) {
       messages.removeWhere((m) => m.id == tempId);
       _cache[ws.id] = List<ChatMessage>.from(messages);
@@ -910,6 +963,7 @@ class ChatController extends GetxController {
       _socket!.dispose();
     }
     textCtrl.dispose();
+    attachmentCaptionCtrl.dispose();
     scrollCtrl.dispose();
     super.onClose();
   }
