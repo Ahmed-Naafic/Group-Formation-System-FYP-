@@ -50,4 +50,20 @@ class TaskRepository {
       options: Options(receiveTimeout: const Duration(minutes: 5)),
     );
   }
+
+  /// Fetches a single task by id — used to resolve a TASK_ASSIGNED
+  /// notification's entityId into a full TaskModel for navigation.
+  Future<TaskModel> getTaskById(String taskId) async {
+    final response = await _api.dio.get('/tasks/$taskId');
+    return TaskModel.fromJson(response.data['data']['task'] as Map<String, dynamic>);
+  }
+
+  /// Resolves a SUBMISSION_GRADED notification's entityId (a submission id)
+  /// to its parent task id, so the navigator can then call getTaskById.
+  Future<String?> getTaskIdForSubmission(String submissionId) async {
+    final response = await _api.dio.get('/submissions/$submissionId');
+    final submission = response.data['data']['submission'] as Map<String, dynamic>?;
+    final rawTaskId = submission?['taskId'];
+    return rawTaskId is Map ? rawTaskId['_id'] as String? : rawTaskId as String?;
+  }
 }

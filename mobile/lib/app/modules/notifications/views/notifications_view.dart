@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/notification_model.dart';
+import '../../../services/notification_navigator.dart';
 import '../controllers/notification_controller.dart';
 
 class NotificationsView extends StatelessWidget {
@@ -67,7 +68,13 @@ class NotificationsView extends StatelessWidget {
             ),
             itemBuilder: (_, i) {
               final n = ctrl.notifications[i];
-              return _NotificationTile(n: n, onTap: () => ctrl.markRead(n.id));
+              return _NotificationTile(
+                n: n,
+                onTap: () {
+                  ctrl.markRead(n.id);
+                  NotificationNavigator.open(type: n.type, entityId: n.relatedEntityId);
+                },
+              );
             },
           ),
         );

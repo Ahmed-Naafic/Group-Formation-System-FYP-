@@ -10,6 +10,10 @@ class TaskModel {
   final String? attachmentMimeType;
   final String? attachmentUrl;
 
+  // Not populated by the list/detail endpoints beyond the raw id — only used
+  // to resolve which workspace a task belongs to (see NotificationNavigator).
+  final String? courseOfferingId;
+
   const TaskModel({
     required this.id,
     required this.title,
@@ -21,6 +25,7 @@ class TaskModel {
     this.attachmentName,
     this.attachmentMimeType,
     this.attachmentUrl,
+    this.courseOfferingId,
   });
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
@@ -28,6 +33,7 @@ class TaskModel {
     final first = (attachments?.isNotEmpty ?? false)
         ? attachments!.first as Map<String, dynamic>
         : null;
+    final rawOffering = json['courseOfferingId'];
     return TaskModel(
       id:                 json['_id']   as String? ?? '',
       title:              json['title'] as String? ?? '',
@@ -41,6 +47,9 @@ class TaskModel {
       attachmentName:     first?['originalName'] as String?,
       attachmentMimeType: first?['mimeType']     as String?,
       attachmentUrl:      first?['url']          as String?,
+      courseOfferingId:   rawOffering is Map
+          ? rawOffering['_id'] as String?
+          : rawOffering as String?,
     );
   }
 

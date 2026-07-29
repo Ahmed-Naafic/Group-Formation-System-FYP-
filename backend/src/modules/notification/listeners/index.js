@@ -40,7 +40,6 @@ function initListeners(io) {
       const { groups, courseId, actorId, actorRole, ipAddress, userAgent } = payload;
 
       const docs = [];
-      const allUserIds = [];
       for (const group of groups) {
         for (const member of group.memberIds ?? []) {
           const userId  = member.userId?._id ?? member.userId;
@@ -52,19 +51,26 @@ function initListeners(io) {
             message: `You are now in ${group.name}${isLeader ? ' as the group leader' : ''}.`,
             relatedEntity: { kind: 'Group', id: group._id },
           });
-          allUserIds.push(userId);
         }
       }
 
       const created = await notificationService.createMany(docs);
       for (const n of created) pushToUser(String(n.userId), n);
 
-      await sendFcmBatch(
-        allUserIds,
-        'You have been placed in a group',
-        'Open the app to see your new group.',
-        { type: 'GROUP_FORMED' }
-      );
+      // Sent per-group (not one combined batch) so each recipient's push data
+      // carries the id of *their own* group — a single shared payload can't
+      // deep-link every recipient to the right place since each is in a
+      // different group.
+      for (const group of groups) {
+        const memberUserIds = (group.memberIds ?? []).map((m) => m.userId?._id ?? m.userId);
+        if (!memberUserIds.length) continue;
+        await sendFcmBatch(
+          memberUserIds,
+          'You have been placed in a group',
+          'Open the app to see your new group.',
+          { type: 'GROUP_FORMED', entityId: String(group._id) }
+        );
+      }
 
       await auditLogService.log({
         actorId, actorRole, ipAddress, userAgent,

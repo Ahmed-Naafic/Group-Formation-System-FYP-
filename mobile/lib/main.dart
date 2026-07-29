@@ -5,9 +5,9 @@ import 'package:get/get.dart';
 import 'app/core/theme/app_theme.dart';
 import 'app/core/theme/theme_controller.dart';
 import 'app/modules/auth/controllers/auth_controller.dart';
-import 'app/modules/dashboard/controllers/dashboard_controller.dart';
 import 'app/modules/notifications/controllers/notification_controller.dart';
 import 'app/routes/app_pages.dart';
+import 'app/services/notification_navigator.dart';
 
 // Must be a top-level function — called by FCM when app is terminated
 @pragma('vm:entry-point')
@@ -15,18 +15,17 @@ Future<void> _onBackgroundMessage(RemoteMessage _) async {
   await Firebase.initializeApp();
 }
 
+// Routes to the relevant screen for any notification type — NotificationNavigator
+// itself waits for the app to be past the splash/auth gate, so this can be
+// called immediately without a fixed startup delay.
 void _handleFcmTap(Map<String, dynamic> data) {
   final type = data['type'] as String?;
-  if (type != 'NEW_MESSAGE') return;
-  final workspaceId = data['workspaceId'] as String?;
-  if (workspaceId == null) return;
-  try {
-    final dash = Get.find<DashboardController>();
-    try {
-      final ws = dash.workspaces.firstWhere((w) => w.id == workspaceId);
-      Get.toNamed(Routes.workspace, arguments: ws);
-    } catch (_) {}
-  } catch (_) {}
+  if (type == null) return;
+  NotificationNavigator.open(
+    type: type,
+    entityId: data['entityId'] as String?,
+    workspaceId: data['workspaceId'] as String?,
+  );
 }
 
 Future<void> _initFcmHandlers() async {
@@ -36,15 +35,15 @@ Future<void> _initFcmHandlers() async {
     try { Get.find<NotificationController>().refresh(); } catch (_) {}
   });
 
-  // Navigate to workspace when user taps an FCM notification from background.
+  // Navigate when the user taps an FCM notification from the background.
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
     _handleFcmTap(message.data);
   });
 
-  // Navigate when app was fully terminated and user taps the notification.
+  // Navigate when the app was fully terminated and the user taps the notification.
   final initial = await FirebaseMessaging.instance.getInitialMessage();
   if (initial != null) {
-    Future.delayed(const Duration(seconds: 2), () => _handleFcmTap(initial.data));
+    _handleFcmTap(initial.data);
   }
 }
 
