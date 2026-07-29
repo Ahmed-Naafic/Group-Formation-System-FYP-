@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -11,6 +14,7 @@ import '../../../data/models/chat_message_model.dart';
 import '../../../data/models/workspace_model.dart';
 import '../../../data/providers/api_client.dart';
 import '../../../data/repositories/chat_repository.dart';
+import '../../../data/repositories/file_repository.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../notifications/controllers/notification_controller.dart';
 
@@ -24,6 +28,7 @@ const _kMinRecordingMs = 400;
 
 class ChatController extends GetxController {
   final _repo = ChatRepository();
+  final _fileRepo = FileRepository();
   final _audioRecorder = AudioRecorder();
   final _audioPlayer = AudioPlayer();
 
@@ -55,6 +60,9 @@ class ChatController extends GetxController {
 
   // ── Reply-to (null = not currently composing a reply) ──────────────────────
   final replyTarget = Rxn<ChatMessage>();
+
+  // ── Attachments ──────────────────────────────────────────────────────────────
+  final isUploadingAttachment = false.obs;
 
   WorkspaceModel? workspace;
   String _myStudentId = '';
@@ -394,6 +402,8 @@ class ChatController extends GetxController {
         if (index != -1) {
           messages[index] = updated.copyWith(
             localAudioPath: messages[index].localAudioPath,
+            localAttachmentPath: messages[index].localAttachmentPath,
+            localAttachmentMime: messages[index].localAttachmentMime,
           );
           _cache[workspace!.id] = List<ChatMessage>.from(messages);
         }
@@ -482,6 +492,139 @@ class ChatController extends GetxController {
         if (replyingTo != null) 'replyToId': replyingTo.id,
       });
     }
+  }
+
+  /// Sends a single sticker emoji immediately — reuses sendMessage()'s
+  /// pending-bubble/socket-emit logic exactly, since a sticker is just a
+  /// text message whose content is emoji-only (see isStickerContent in
+  /// chat_view.dart, which renders it big and borderless on receipt).
+  void sendSticker(String emoji) {
+    textCtrl.text = emoji;
+    sendMessage();
+  }
+
+  // ── Attachments (image / video / document) ───────────────────────────────────
+
+  static const _attachmentExtensions = [
+    'jpg', 'jpeg', 'png', 'gif', 'webp',
+    'mp4', 'mov', 'webm', 'avi',
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv',
+  ];
+
+  static const Map<String, String> _mimeByExtension = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'mp4': 'video/mp4',
+    'mov': 'video/quicktime',
+    'webm': 'video/webm',
+    'avi': 'video/x-msvideo',
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx':
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls': 'application/vnd.ms-excel',
+    'xlsx':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'csv': 'text/csv',
+  };
+
+  static String _guessAttachmentMime(String name) {
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    return _mimeByExtension[ext] ?? 'application/octet-stream';
+  }
+
+  Future<void> pickAndSendAttachment() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: _attachmentExtensions,
+      withData: false,
+      withReadStream: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final picked = result.files.single;
+    final path = picked.path;
+    final ws = workspace;
+    if (path == null || ws == null) return;
+
+    final mimeType = _guessAttachmentMime(picked.name);
+    final tempId = 'pending_attachment_${DateTime.now().millisecondsSinceEpoch}';
+    final replyingTo = replyTarget.value;
+    replyTarget.value = null;
+
+    final pending = ChatMessage(
+      id: tempId,
+      workspaceId: ws.id,
+      sender: ChatSender(id: '', fullName: _myFullName, studentId: _myStudentId),
+      content: '',
+      createdAt: DateTime.now(),
+      isPending: true,
+      localAttachmentPath: path,
+      localAttachmentMime: mimeType,
+      replyTo: replyingTo != null ? ReplyPreview.fromMessage(replyingTo) : null,
+    );
+    messages.add(pending);
+    _cache[ws.id] = List<ChatMessage>.from(messages);
+    _scrollToBottom(force: true);
+    isUploadingAttachment.value = true;
+
+    try {
+      final real = await _repo.uploadAttachment(
+        ws.id,
+        path,
+        picked.name,
+        mimeType,
+        replyToId: replyingTo?.id,
+      );
+      // Race-safe against the 'new-message' socket echo — same reasoning as
+      // stopRecordingAndSend().
+      messages.removeWhere((m) => m.id == tempId);
+      if (!messages.any((m) => m.id == real.id)) {
+        messages.add(
+          real.copyWith(
+            localAttachmentPath: path,
+            localAttachmentMime: mimeType,
+          ),
+        );
+        _scrollToBottom();
+      }
+      _cache[ws.id] = List<ChatMessage>.from(messages);
+    } catch (_) {
+      messages.removeWhere((m) => m.id == tempId);
+      _cache[ws.id] = List<ChatMessage>.from(messages);
+      Get.snackbar('Failed to send', 'Your attachment could not be sent.');
+    } finally {
+      isUploadingAttachment.value = false;
+    }
+  }
+
+  /// Downloads (if not already cached) and opens an attachment with the
+  /// device's default viewer — mirrors TaskController.downloadAttachment /
+  /// FilesController.downloadFile, the app's existing pattern for every
+  /// non-inline file type.
+  Future<void> openAttachment(ChatAttachment attachment) async {
+    final ws = workspace;
+    if (ws == null) return;
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final savePath = '${dir.path}/${attachment.id}_${attachment.originalName}';
+      final file = File(savePath);
+      if (!await file.exists()) {
+        await _fileRepo.downloadFile(ws.id, attachment.id, savePath);
+      }
+      await OpenFilex.open(savePath, type: attachment.mimeType);
+    } catch (_) {
+      Get.snackbar('Could not open file', 'Please try again.');
+    }
+  }
+
+  /// Fetches an image attachment's bytes for inline preview — see
+  /// ChatRepository.fetchAttachmentBytes.
+  Future<Uint8List> fetchAttachmentBytes(ChatAttachment attachment) {
+    return _repo.fetchAttachmentBytes(workspace!.id, attachment.id);
   }
 
   // ── Voice recording ──────────────────────────────────────────────────────────
@@ -739,7 +882,11 @@ class ChatController extends GetxController {
       final updated = await _repo.reactToMessage(ws.id, msg.id, emoji);
       final index = messages.indexWhere((m) => m.id == msg.id);
       if (index != -1) {
-        messages[index] = updated.copyWith(localAudioPath: msg.localAudioPath);
+        messages[index] = updated.copyWith(
+          localAudioPath: msg.localAudioPath,
+          localAttachmentPath: msg.localAttachmentPath,
+          localAttachmentMime: msg.localAttachmentMime,
+        );
         _cache[ws.id] = List<ChatMessage>.from(messages);
       }
     } catch (_) {

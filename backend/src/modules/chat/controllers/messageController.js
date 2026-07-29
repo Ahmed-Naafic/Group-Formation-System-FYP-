@@ -45,6 +45,19 @@ const messageController = {
     return sendSuccess(res, { status: 201, data: { message } });
   }),
 
+  // POST /api/workspaces/:workspaceId/messages/attachment
+  sendAttachment: asyncHandler(async (req, res) => {
+    if (!req.file) throw new BadRequestError('No file provided');
+    const message = await messageService.sendAttachment(
+      req.params.workspaceId,
+      req.file,
+      req.body.caption,
+      req.context,
+      req.body.replyToId,
+    );
+    return sendSuccess(res, { status: 201, data: { message } });
+  }),
+
   // GET /api/workspaces/:workspaceId/messages/:messageId/audio
   // Returns the signed URL as JSON (rather than redirecting, the convention
   // used by file downloads) so a native audio player can load it directly

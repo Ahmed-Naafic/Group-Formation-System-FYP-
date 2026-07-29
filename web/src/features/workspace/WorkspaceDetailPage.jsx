@@ -3,9 +3,10 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   Loader2, Crown, ArrowLeft, ArrowRight, Send, Paperclip, Download, Trash2,
-  File as FileIcon, FileText, FileImage, ClipboardList, Calendar, Eye, EyeOff,
-  Star, MessageSquare, Plus,
+  File as FileIcon, FileText, FileImage, FileVideo, ClipboardList, Calendar, Eye, EyeOff,
+  Star, MessageSquare, Smile, Sticker,
 } from 'lucide-react';
+import EmojiPicker from 'emoji-picker-react';
 import { toast } from 'sonner';
 import { selectRole, selectCurrentUser, selectCurrentToken } from '@/features/auth/authSlice';
 import { useGetWorkspaceByIdQuery, useGetMessagesQuery } from './workspaceApi';
@@ -46,8 +47,172 @@ function formatBytes(bytes) {
 
 function fileTypeIcon(mimeType) {
   if (mimeType?.startsWith('image/'))       return FileImage;
+  if (mimeType?.startsWith('video/'))       return FileVideo;
   if (mimeType?.includes('pdf'))            return FileText;
   return FileIcon;
+}
+
+const EMOJI_ONLY_RE = /\p{Extended_Pictographic}/u;
+
+// Sticker-style rendering (big, no bubble) applies to any attachment-free
+// message whose content is only 1-3 emoji — whether typed or sent via the
+// sticker picker, matching how WhatsApp treats emoji-only messages.
+function isStickerContent(content) {
+  const trimmed = content?.trim();
+  if (!trimmed) return false;
+  const graphemes = typeof Intl !== 'undefined' && Intl.Segmenter
+    ? [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(trimmed)].map((s) => s.segment)
+    : [...trimmed];
+  if (graphemes.length === 0 || graphemes.length > 3) return false;
+  return graphemes.every((g) => EMOJI_ONLY_RE.test(g));
+}
+
+const STICKER_EMOJIS = [
+  '😀', '😂', '🥹', '😍', '😎', '🥳', '😢', '😭', '😡', '🤔',
+  '👍', '👎', '👏', '🙏', '❤️', '💔', '🔥', '🎉', '✨', '💯',
+  '👌', '🙌', '🤝', '😴', '🤯', '😱', '😇', '🥰', '😜', '🤩',
+  '😅', '🙄', '😬', '🤗', '👋', '💪', '🌟', '✅', '❌', '🎁',
+];
+
+// Lightweight custom popover (no @radix-ui/react-popover in the project) —
+// just a positioned panel that closes on outside click.
+function usePopoverClose(open, onClose) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open, onClose]);
+  return ref;
+}
+
+function EmojiPopover({ open, onPick, onClose }) {
+  const ref = usePopoverClose(open, onClose);
+  if (!open) return null;
+  return (
+    <div ref={ref} className="absolute bottom-full left-0 mb-2 z-50 rounded-lg shadow-lg overflow-hidden">
+      <EmojiPicker onEmojiClick={(e) => onPick(e.emoji)} emojiStyle="native" height={360} width={320} />
+    </div>
+  );
+}
+
+function StickerPopover({ open, onPick, onClose }) {
+  const ref = usePopoverClose(open, onClose);
+  if (!open) return null;
+  return (
+    <div ref={ref} className="absolute bottom-full left-0 mb-2 z-50 w-72 max-h-72 overflow-y-auto rounded-lg border border-border bg-white shadow-lg p-2 grid grid-cols-6 gap-1">
+      {STICKER_EMOJIS.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          onClick={() => onPick(emoji)}
+          className="text-3xl leading-none rounded-md py-1.5 hover:bg-ink-100"
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Renders a chat attachment: image/video load via authenticated fetch → blob
+// object URL (the storage bucket is private, so a plain <img src> can't
+// resolve it); anything else shows as a downloadable file chip.
+function AttachmentContent({ attachment, workspaceId, token, isMine }) {
+  const [blobUrl, setBlobUrl]   = useState(null);
+  const [failed, setFailed]     = useState(false);
+  const isImage = attachment.mimeType?.startsWith('image/');
+  const isVideo = attachment.mimeType?.startsWith('video/');
+  const downloadUrl = `${API_BASE}/api/workspaces/${workspaceId}/files/${attachment._id}/download`;
+
+  useEffect(() => {
+    if (!isImage && !isVideo) return undefined;
+    let cancelled = false;
+    let objectUrl;
+    (async () => {
+      try {
+        const res = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) throw new Error('Failed to load');
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setBlobUrl(objectUrl);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [downloadUrl, isImage, isVideo, token]);
+
+  async function handleDownload() {
+    try {
+      const res = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = attachment.originalName;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch {
+      toast.error('Could not download file');
+    }
+  }
+
+  if (isImage) {
+    if (failed) return <div className="w-40 h-28 rounded-lg bg-ink-100 flex items-center justify-center text-xs text-ink-400">Failed to load image</div>;
+    if (!blobUrl) return <div className="w-40 h-28 rounded-lg bg-ink-100 flex items-center justify-center"><Loader2 size={16} className="animate-spin text-ink-300" /></div>;
+    return (
+      <img
+        src={blobUrl}
+        alt={attachment.originalName}
+        className="max-w-[240px] max-h-[240px] rounded-lg object-cover cursor-pointer"
+        onClick={() => window.open(blobUrl, '_blank')}
+      />
+    );
+  }
+
+  if (isVideo) {
+    if (failed) return <div className="w-48 h-28 rounded-lg bg-ink-100 flex items-center justify-center text-xs text-ink-400">Failed to load video</div>;
+    if (!blobUrl) return <div className="w-48 h-28 rounded-lg bg-ink-100 flex items-center justify-center"><Loader2 size={16} className="animate-spin text-ink-300" /></div>;
+    return <video src={blobUrl} controls className="max-w-[260px] max-h-[260px] rounded-lg" />;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      className={cn(
+        'flex items-center gap-2 rounded-lg px-3 py-2 text-left w-56',
+        isMine ? 'bg-just-blue-700' : 'bg-white border border-border',
+      )}
+    >
+      <DocIcon mimeType={attachment.mimeType} className={isMine ? 'text-white shrink-0' : 'text-ink-500 shrink-0'} />
+      <span className="min-w-0 flex-1">
+        <span className={cn('block text-sm font-medium truncate', isMine ? 'text-white' : 'text-ink-800')}>
+          {attachment.originalName}
+        </span>
+        <span className={cn('block text-xs', isMine ? 'text-just-blue-100' : 'text-ink-400')}>
+          {formatBytes(attachment.sizeBytes)}
+        </span>
+      </span>
+      <Download size={14} className={isMine ? 'text-white shrink-0' : 'text-ink-400 shrink-0'} />
+    </button>
+  );
+}
+
+function DocIcon({ mimeType, className }) {
+  // fileTypeIcon always returns one of a fixed set of stable icon components
+  // (never a freshly-defined one), so this doesn't actually reset state on
+  // re-render — safe to silence the compiler's conservative heuristic here.
+  const Icon = fileTypeIcon(mimeType);
+  // eslint-disable-next-line react-hooks/static-components
+  return <Icon size={20} className={className} />;
 }
 
 // ── Tab bar ────────────────────────────────────────────────────────────────────
@@ -130,9 +295,14 @@ function MembersTab({ workspace }) {
 function ChatTab({ workspaceId, isAdmin, currentUser }) {
   const { data: messages = [], isLoading } = useGetMessagesQuery(workspaceId);
   const { sendMessage } = useChatSocket(workspaceId);
+  const token = useSelector(selectCurrentToken);
 
-  const [text,    setText]   = useState('');
-  const containerRef         = useRef(null);
+  const [text,       setText]       = useState('');
+  const [uploading,  setUploading]  = useState(false);
+  const [emojiOpen,  setEmojiOpen]  = useState(false);
+  const [stickerOpen, setStickerOpen] = useState(false);
+  const containerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -152,6 +322,40 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  }
+
+  function handleEmojiPick(emoji) {
+    setText((t) => t + emoji);
+  }
+
+  function handleStickerPick(emoji) {
+    sendMessage(emoji);
+    setStickerOpen(false);
+  }
+
+  async function handleFileSelected(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`${API_BASE}/api/workspaces/${workspaceId}/messages/attachment`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error?.message ?? 'Upload failed');
+      }
+      // Sent message arrives back through the existing socket 'new-message' listener.
+    } catch (err) {
+      toast.error(err.message ?? 'Could not send attachment');
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -175,6 +379,8 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
         ) : (
           messages.map((msg) => {
             const isMine = myId && String(msg.senderId?._id ?? msg.senderId) === myId;
+            const hasAttachment = msg.attachments?.length > 0;
+            const sticker = !hasAttachment && isStickerContent(msg.content);
             return (
               <div key={msg._id} className={cn('flex gap-2', isMine ? 'flex-row-reverse' : 'flex-row')}>
                 {/* Avatar */}
@@ -192,14 +398,37 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
                       {msg.senderId?.fullName ?? '—'}
                     </span>
                   )}
-                  <div className={cn(
-                    'rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words',
-                    isMine
-                      ? 'bg-just-blue-600 text-white rounded-br-sm'
-                      : 'bg-ink-100 text-ink-800 rounded-bl-sm',
-                  )}>
-                    {msg.content}
-                  </div>
+                  {hasAttachment ? (
+                    <div className="flex flex-col gap-1">
+                      <AttachmentContent
+                        attachment={msg.attachments[0]}
+                        workspaceId={workspaceId}
+                        token={token}
+                        isMine={isMine}
+                      />
+                      {msg.content && (
+                        <div className={cn(
+                          'rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words',
+                          isMine
+                            ? 'bg-just-blue-600 text-white rounded-br-sm'
+                            : 'bg-ink-100 text-ink-800 rounded-bl-sm',
+                        )}>
+                          {msg.content}
+                        </div>
+                      )}
+                    </div>
+                  ) : sticker ? (
+                    <div className="text-5xl leading-none px-1">{msg.content}</div>
+                  ) : (
+                    <div className={cn(
+                      'rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words',
+                      isMine
+                        ? 'bg-just-blue-600 text-white rounded-br-sm'
+                        : 'bg-ink-100 text-ink-800 rounded-bl-sm',
+                    )}>
+                      {msg.content}
+                    </div>
+                  )}
                   <span className="text-[10px] text-ink-300 mx-1">{formatTime(msg.createdAt)}</span>
                 </div>
               </div>
@@ -210,7 +439,48 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
 
       {/* Input */}
       {!isAdmin && (
-        <div className="border-t border-border px-3 py-2.5 flex items-end gap-2">
+        <div className="border-t border-border px-3 py-2.5 flex items-end gap-1.5">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+            hidden
+            onChange={handleFileSelected}
+          />
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 h-9 w-9 p-0"
+              onClick={() => { setStickerOpen((v) => !v); setEmojiOpen(false); }}
+              aria-label="Stickers"
+            >
+              <Sticker size={16} />
+            </Button>
+            <StickerPopover open={stickerOpen} onPick={handleStickerPick} onClose={() => setStickerOpen(false)} />
+          </div>
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 h-9 w-9 p-0"
+              onClick={() => { setEmojiOpen((v) => !v); setStickerOpen(false); }}
+              aria-label="Emoji"
+            >
+              <Smile size={16} />
+            </Button>
+            <EmojiPopover open={emojiOpen} onPick={handleEmojiPick} onClose={() => setEmojiOpen(false)} />
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0 h-9 w-9 p-0"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            aria-label="Attach file"
+          >
+            {uploading ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={16} />}
+          </Button>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}

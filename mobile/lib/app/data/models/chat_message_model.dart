@@ -1,3 +1,27 @@
+class ChatAttachment {
+  final String id;
+  final String originalName;
+  final String mimeType;
+  final int sizeBytes;
+
+  const ChatAttachment({
+    required this.id,
+    required this.originalName,
+    required this.mimeType,
+    required this.sizeBytes,
+  });
+
+  bool get isImage => mimeType.startsWith('image/');
+  bool get isVideo => mimeType.startsWith('video/');
+
+  factory ChatAttachment.fromJson(Map<String, dynamic> json) => ChatAttachment(
+        id:           json['_id']          as String? ?? '',
+        originalName: json['originalName'] as String? ?? 'file',
+        mimeType:     json['mimeType']     as String? ?? '',
+        sizeBytes:    (json['sizeBytes']   as num?)?.toInt() ?? 0,
+      );
+}
+
 class ChatSender {
   final String id;
   final String fullName;
@@ -94,10 +118,18 @@ class ChatMessage {
   /// parsed from JSON; the server doesn't know about the local file.
   final String? localAudioPath;
 
+  final List<ChatAttachment> attachments;
+
+  /// Set only on the sender's own optimistic bubble, before the upload
+  /// finishes — mirrors localAudioPath. Never parsed from JSON.
+  final String? localAttachmentPath;
+  final String? localAttachmentMime;
+
   final List<MessageReaction> reactions;
   final ReplyPreview? replyTo;
 
   bool get hasAudio => audioDuration != null || localAudioPath != null;
+  bool get hasAttachment => attachments.isNotEmpty || localAttachmentPath != null;
 
   const ChatMessage({
     required this.id,
@@ -108,6 +140,9 @@ class ChatMessage {
     this.isPending = false,
     this.audioDuration,
     this.localAudioPath,
+    this.attachments = const [],
+    this.localAttachmentPath,
+    this.localAttachmentMime,
     this.reactions = const [],
     this.replyTo,
   });
@@ -120,6 +155,7 @@ class ChatMessage {
 
     final rawReactions = json['reactions'] as List<dynamic>? ?? const [];
     final rawReply = json['replyTo'];
+    final rawAttachments = json['attachments'] as List<dynamic>? ?? const [];
 
     return ChatMessage(
       id:            json['_id']          as String? ?? '',
@@ -128,6 +164,10 @@ class ChatMessage {
       content:       json['content']      as String? ?? '',
       createdAt:     DateTime.parse(json['createdAt'] as String),
       audioDuration: json['audioDuration'] as int?,
+      attachments: rawAttachments
+          .whereType<Map<String, dynamic>>()
+          .map(ChatAttachment.fromJson)
+          .toList(),
       reactions: rawReactions
           .map((r) => MessageReaction.fromJson(r as Map<String, dynamic>))
           .toList(),
@@ -142,19 +182,25 @@ class ChatMessage {
     bool? isPending,
     int? audioDuration,
     String? localAudioPath,
+    List<ChatAttachment>? attachments,
+    String? localAttachmentPath,
+    String? localAttachmentMime,
     List<MessageReaction>? reactions,
   }) {
     return ChatMessage(
-      id:             id ?? this.id,
-      workspaceId:    workspaceId,
-      sender:         sender,
-      content:        content,
-      createdAt:      createdAt,
-      isPending:      isPending ?? this.isPending,
-      audioDuration:  audioDuration ?? this.audioDuration,
-      localAudioPath: localAudioPath ?? this.localAudioPath,
-      reactions:      reactions ?? this.reactions,
-      replyTo:        replyTo,
+      id:                  id ?? this.id,
+      workspaceId:         workspaceId,
+      sender:              sender,
+      content:             content,
+      createdAt:           createdAt,
+      isPending:           isPending ?? this.isPending,
+      audioDuration:       audioDuration ?? this.audioDuration,
+      localAudioPath:      localAudioPath ?? this.localAudioPath,
+      attachments:         attachments ?? this.attachments,
+      localAttachmentPath: localAttachmentPath ?? this.localAttachmentPath,
+      localAttachmentMime: localAttachmentMime ?? this.localAttachmentMime,
+      reactions:           reactions ?? this.reactions,
+      replyTo:             replyTo,
     );
   }
 }

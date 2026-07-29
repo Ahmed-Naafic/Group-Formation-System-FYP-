@@ -6,8 +6,9 @@ const validate         = require('../../../common/validators/validate');
 const Joi              = require('joi');
 const messageController = require('../controllers/messageController');
 const messageValidation = require('../validations/messageValidation');
+const { ALLOWED_MIME_TYPES: ALLOWED_ATTACHMENT_MIME_TYPES } = require('../../file/validations/fileValidation');
 const { BadRequestError } = require('../../../common/errors');
-const { ALLOWED_AUDIO_MIME_TYPES, MAX_AUDIO_FILE_SIZE } = messageValidation;
+const { ALLOWED_AUDIO_MIME_TYPES, MAX_AUDIO_FILE_SIZE, MAX_ATTACHMENT_FILE_SIZE } = messageValidation;
 
 const router = Router({ mergeParams: true }); // picks up :workspaceId from parent
 
@@ -23,6 +24,18 @@ const upload = multer({
   fileFilter(_req, file, cb) {
     if (ALLOWED_AUDIO_MIME_TYPES.includes(file.mimetype)) return cb(null, true);
     cb(new BadRequestError(`Audio type '${file.mimetype}' is not allowed`));
+  },
+});
+
+// Same shared allow-list the file/task upload routes use (image/video/pdf/
+// word/excel/csv/zip) — chat attachments become File docs in the same
+// collection, so they should accept the same types.
+const uploadAttachment = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: MAX_ATTACHMENT_FILE_SIZE },
+  fileFilter(_req, file, cb) {
+    if (ALLOWED_ATTACHMENT_MIME_TYPES.includes(file.mimetype)) return cb(null, true);
+    cb(new BadRequestError(`File type '${file.mimetype}' is not allowed`));
   },
 });
 
@@ -51,6 +64,15 @@ router.post(
   upload.single('audio'),
   validate(messageValidation.sendVoiceMessage, 'body'),
   messageController.sendVoice,
+);
+
+// Multer must run before Joi validates req.body — same ordering as /voice.
+router.post(
+  '/attachment',
+  validate(wsParam, 'params'),
+  uploadAttachment.single('file'),
+  validate(messageValidation.sendAttachment, 'body'),
+  messageController.sendAttachment,
 );
 
 router.get(

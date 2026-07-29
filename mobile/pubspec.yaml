@@ -43,6 +43,9 @@ dependencies:
   record: ^7.1.1
   just_audio: ^0.9.42
 
+  # Emoji picker for chat composer (renders via the device's system emoji font)
+  emoji_picker_flutter: ^4.3.0
+
   # Firebase push notifications
   firebase_core: ^3.13.1
   firebase_messaging: ^15.2.5

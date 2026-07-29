@@ -9,6 +9,7 @@ const ALLOWED_AUDIO_MIME_TYPES = [
 
 const MAX_AUDIO_FILE_SIZE = 10 * 1024 * 1024; // 10 MB — generous headroom over a 3-minute AAC recording
 const MAX_AUDIO_DURATION_SECONDS = 180; // 3 minutes
+const MAX_ATTACHMENT_FILE_SIZE = 50 * 1024 * 1024; // 50 MB — bigger than the general 20 MB file limit, to fit short videos
 
 const messageValidation = {
   listMessages: Joi.object({
@@ -31,6 +32,11 @@ const messageValidation = {
     replyToId: objectId.allow(null),
   }),
 
+  sendAttachment: Joi.object({
+    caption:   Joi.string().trim().max(4000).allow('', null),
+    replyToId: objectId.allow(null),
+  }),
+
   react: Joi.object({
     emoji: Joi.string().trim().min(1).max(8).required().messages({
       'string.empty': 'Emoji is required',
@@ -46,6 +52,7 @@ const messageValidation = {
   ALLOWED_AUDIO_MIME_TYPES,
   MAX_AUDIO_FILE_SIZE,
   MAX_AUDIO_DURATION_SECONDS,
+  MAX_ATTACHMENT_FILE_SIZE,
 };
 
 module.exports = messageValidation;

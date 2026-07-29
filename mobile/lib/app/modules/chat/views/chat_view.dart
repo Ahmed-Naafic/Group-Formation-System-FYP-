@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +9,89 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/chat_message_model.dart';
 import '../../../routes/app_pages.dart';
 import '../controllers/chat_controller.dart';
+
+/// Sticker-style rendering (big, borderless) applies to any attachment/audio-
+/// free message whose content is only emoji — whether typed or sent via the
+/// sticker picker. Mirrors isStickerContent() in the web app's ChatTab.
+// Explicit codepoint ranges rather than \p{Extended_Pictographic} — Dart's
+// RegExp doesn't support named Unicode property escapes. Covers the emoji
+// blocks plus the variation-selector/ZWJ codepoints used to join composites.
+final _emojiPattern = RegExp(
+  r'[\u{2190}-\u{21FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{1F000}-\u{1FFFF}\u{FE0F}\u{200D}]',
+  unicode: true,
+);
+
+bool _isStickerContent(String content) {
+  final trimmed = content.trim();
+  if (trimmed.isEmpty) return false;
+  final nonEmoji = trimmed.replaceAll(_emojiPattern, '').trim();
+  if (nonEmoji.isNotEmpty) return false;
+  // Generous rune cap — composite emoji (flags, ZWJ sequences, skin-tone
+  // modifiers) can span several runes per visible glyph.
+  final runeCount = trimmed.runes.length;
+  return runeCount > 0 && runeCount <= 8;
+}
+
+const _stickerEmojis = [
+  '😀', '😂', '🥹', '😍', '😎', '🥳', '😢', '😭', '😡', '🤔',
+  '👍', '👎', '👏', '🙏', '❤️', '💔', '🔥', '🎉', '✨', '💯',
+  '👌', '🙌', '🤝', '😴', '🤯', '😱', '😇', '🥰', '😜', '🤩',
+  '😅', '🙄', '😬', '🤗', '👋', '💪', '🌟', '✅', '❌', '🎁',
+];
+
+/// Emoji picker — inserts into the composer text field, doesn't send.
+void _showEmojiSheet(BuildContext context, ChatController ctrl) {
+  showModalBottomSheet<void>(
+    context: context,
+    builder: (_) => SizedBox(
+      height: 280,
+      child: EmojiPicker(
+        onEmojiSelected: (category, emoji) {
+          final text = ctrl.textCtrl.text;
+          final selection = ctrl.textCtrl.selection;
+          final insertAt = selection.isValid ? selection.start : text.length;
+          ctrl.textCtrl.value = TextEditingValue(
+            text: text.replaceRange(insertAt, insertAt, emoji.emoji),
+            selection: TextSelection.collapsed(
+              offset: insertAt + emoji.emoji.length,
+            ),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+/// Sticker picker — a grid of large emoji; tapping one sends immediately
+/// (see ChatController.sendSticker) and closes the sheet.
+void _showStickerSheet(BuildContext context, ChatController ctrl) {
+  showModalBottomSheet<void>(
+    context: context,
+    builder: (sheetContext) => SafeArea(
+      child: SizedBox(
+        height: 280,
+        child: GridView.count(
+          padding: const EdgeInsets.all(12),
+          crossAxisCount: 6,
+          children: _stickerEmojis
+              .map(
+                (emoji) => InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    ctrl.sendSticker(emoji);
+                  },
+                  child: Center(
+                    child: Text(emoji, style: const TextStyle(fontSize: 30)),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    ),
+  );
+}
 
 class ChatView extends StatelessWidget {
   const ChatView({super.key});
@@ -390,6 +476,45 @@ class _MessageBubble extends StatelessWidget {
     });
   }
 
+  Widget _buildAttachmentContent(BuildContext context) {
+    final attachment = msg.attachments.isNotEmpty ? msg.attachments.first : null;
+    final mime = attachment?.mimeType ?? msg.localAttachmentMime ?? '';
+    final isImage = mime.startsWith('image/');
+    final isVideo = mime.startsWith('video/');
+
+    final Widget preview;
+    if (isImage) {
+      preview = _AttachmentImage(msg: msg, ctrl: ctrl);
+    } else if (isVideo) {
+      preview = _AttachmentVideoTile(
+        name: attachment?.originalName ?? 'Video',
+        onTap: attachment != null ? () => ctrl.openAttachment(attachment) : null,
+      );
+    } else {
+      preview = _AttachmentFileChip(
+        name: attachment?.originalName ?? 'File',
+        sizeBytes: attachment?.sizeBytes,
+        isMe: isMe,
+        onTap: attachment != null ? () => ctrl.openAttachment(attachment) : null,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        preview,
+        if (msg.content.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            msg.content,
+            style: TextStyle(fontSize: 14, color: isMe ? Colors.white : context.textPrimary),
+          ),
+        ],
+      ],
+    );
+  }
+
   static const _quickEmojis = ['❤️', '👍', '😂', '😮', '😢', '🙏'];
 
   void _confirmDelete(BuildContext context) {
@@ -400,7 +525,9 @@ class _MessageBubble extends StatelessWidget {
         content: Text(
           msg.hasAudio
               ? 'Remove this voice message for everyone in the group?'
-              : 'Remove this message for everyone in the group?',
+              : msg.hasAttachment
+                  ? 'Remove this attachment for everyone in the group?'
+                  : 'Remove this message for everyone in the group?',
         ),
         actions: [
           TextButton(
@@ -618,6 +745,15 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sticker-style: no attachment, no audio, content is just 1-3 emoji —
+    // rendered big and borderless instead of inside the usual colored bubble.
+    final isSticker = !msg.hasAttachment &&
+        !msg.hasAudio &&
+        _isStickerContent(msg.content);
+    final tickColor = isSticker
+        ? context.textMuted
+        : (isMe ? Colors.white.withAlpha(160) : context.textMuted);
+
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -649,62 +785,66 @@ class _MessageBubble extends StatelessWidget {
                   ? null
                   : () => _showMessageActions(context),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: isMe
-                      ? const Color(0xFF1E3A8A)
-                      : context.chatBubbleOther,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
-                    bottomLeft: Radius.circular(isMe ? 18 : 4),
-                    bottomRight: Radius.circular(isMe ? 4 : 18),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(10),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
+                padding: isSticker
+                    ? EdgeInsets.zero
+                    : const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                decoration: isSticker
+                    ? null
+                    : BoxDecoration(
+                        color: isMe
+                            ? const Color(0xFF1E3A8A)
+                            : context.chatBubbleOther,
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(18),
+                          topRight: const Radius.circular(18),
+                          bottomLeft: Radius.circular(isMe ? 18 : 4),
+                          bottomRight: Radius.circular(isMe ? 4 : 18),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(10),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
                 child: Column(
                   crossAxisAlignment: isMe
                       ? CrossAxisAlignment.end
                       : CrossAxisAlignment.start,
                   children: [
                     _buildReplyQuote(context),
-                    msg.hasAudio
-                        ? _buildAudioRow(context)
-                        : Text(
-                            msg.content,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isMe ? Colors.white : context.textPrimary,
-                            ),
-                          ),
+                    if (msg.hasAttachment)
+                      _buildAttachmentContent(context)
+                    else if (msg.hasAudio)
+                      _buildAudioRow(context)
+                    else if (isSticker)
+                      Text(msg.content, style: const TextStyle(fontSize: 52))
+                    else
+                      Text(
+                        msg.content,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isMe ? Colors.white : context.textPrimary,
+                        ),
+                      ),
                     const SizedBox(height: 4),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           DateFormat('h:mm a').format(msg.createdAt.toLocal()),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isMe
-                                ? Colors.white.withAlpha(160)
-                                : context.textMuted,
-                          ),
+                          style: TextStyle(fontSize: 10, color: tickColor),
                         ),
                         if (isMe) ...[
                           const SizedBox(width: 4),
                           Icon(
                             msg.isPending ? Icons.check : Icons.done_all,
                             size: 13,
-                            color: Colors.white.withAlpha(160),
+                            color: tickColor,
                           ),
                         ],
                       ],
@@ -714,6 +854,199 @@ class _MessageBubble extends StatelessWidget {
               ),
             ),
             _buildReactionsRow(context),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Attachment bubbles ────────────────────────────────────────────────────────
+
+/// Image attachment preview: local file directly for the sender's own
+/// optimistic bubble (no network round-trip needed), otherwise fetched bytes
+/// via ChatController.fetchAttachmentBytes (the storage bucket is private).
+class _AttachmentImage extends StatelessWidget {
+  final ChatMessage msg;
+  final ChatController ctrl;
+  const _AttachmentImage({required this.msg, required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    if (msg.localAttachmentPath != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.file(
+          File(msg.localAttachmentPath!),
+          width: 200,
+          height: 200,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+    final attachment = msg.attachments.isNotEmpty ? msg.attachments.first : null;
+    if (attachment == null) return const SizedBox.shrink();
+    return FutureBuilder<Uint8List>(
+      future: ctrl.fetchAttachmentBytes(attachment),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Container(
+            width: 200,
+            height: 150,
+            decoration: BoxDecoration(
+              color: context.chatBubbleOther,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Container(
+            width: 200,
+            height: 150,
+            decoration: BoxDecoration(
+              color: context.chatBubbleOther,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(Icons.broken_image_outlined, color: context.textMuted),
+          );
+        }
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: GestureDetector(
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (_) => Dialog(
+                backgroundColor: Colors.transparent,
+                child: InteractiveViewer(child: Image.memory(snapshot.data!)),
+              ),
+            ),
+            child: Image.memory(
+              snapshot.data!,
+              width: 200,
+              height: 200,
+              fit: BoxFit.cover,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Video attachments don't play inline (no video-player dependency in this
+/// app yet) — tapping downloads (if needed) and opens with the device's
+/// default video player, same pattern as every other file type already uses.
+class _AttachmentVideoTile extends StatelessWidget {
+  final String name;
+  final VoidCallback? onTap;
+  const _AttachmentVideoTile({required this.name, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 200,
+        height: 130,
+        decoration: BoxDecoration(
+          color: Colors.black87,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.play_circle_fill, color: Colors.white, size: 40),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white70, fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Document (PDF/Word/Excel/CSV/etc.) chip — tap downloads and opens with
+/// the device's default viewer.
+class _AttachmentFileChip extends StatelessWidget {
+  final String name;
+  final int? sizeBytes;
+  final bool isMe;
+  final VoidCallback? onTap;
+  const _AttachmentFileChip({
+    required this.name,
+    required this.isMe,
+    this.sizeBytes,
+    this.onTap,
+  });
+
+  String get _sizeLabel {
+    final b = sizeBytes;
+    if (b == null) return '';
+    if (b < 1024) return '${b}B';
+    if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)}KB';
+    return '${(b / (1024 * 1024)).toStringAsFixed(1)}MB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = isMe ? Colors.white : context.textPrimary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: (isMe ? Colors.white : const Color(0xFF1E3A8A)).withAlpha(
+            isMe ? 30 : 12,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.insert_drive_file_outlined, color: fg, size: 22),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: fg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (_sizeLabel.isNotEmpty)
+                    Text(
+                      _sizeLabel,
+                      style: TextStyle(fontSize: 11, color: fg.withAlpha(180)),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.download_rounded, color: fg, size: 16),
           ],
         ),
       ),
@@ -955,6 +1288,37 @@ class _InputBar extends StatelessWidget {
             }),
             Row(
               children: [
+                Obx(
+                  () => IconButton(
+                    icon: ctrl.isUploadingAttachment.value
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.attach_file_rounded),
+                    color: context.textMuted,
+                    onPressed: ctrl.isUploadingAttachment.value
+                        ? null
+                        : ctrl.pickAndSendAttachment,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.emoji_emotions_outlined),
+                  color: context.textMuted,
+                  onPressed: () => _showEmojiSheet(context, ctrl),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.emoji_emotions_rounded),
+                  color: context.textMuted,
+                  onPressed: () => _showStickerSheet(context, ctrl),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
                 // Text field while idle, recording indicator while recording — this
                 // is a sibling of the mic button below, never its ancestor, so
                 // swapping it never interrupts an in-progress press-and-hold.

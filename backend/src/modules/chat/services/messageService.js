@@ -1,8 +1,17 @@
 const messageRepository   = require('../repositories/messageRepository');
+const fileRepository      = require('../../file/repositories/fileRepository');
 const workspaceService    = require('../../workspace/services/workspaceService');
 const StorageService      = require('../../../common/services/storage/StorageService');
 const emitter             = require('../../../common/events/emitter');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../../../common/errors');
+
+// Short, mimetype-aware preview text for the FCM push notification —
+// mirrors the '🎤 Voice message' preview sendVoice() already uses.
+function attachmentPreview(mimeType, originalName) {
+  if (mimeType.startsWith('image/')) return '📷 Photo';
+  if (mimeType.startsWith('video/')) return '🎥 Video';
+  return `📎 ${originalName}`;
+}
 
 // Shared by send() and sendVoice() — a reply target must exist and belong to
 // the same workspace. Soft-deleted messages are excluded by findById's query
@@ -92,6 +101,62 @@ const messageService = {
       // auth middleware's manually-bolted-on context does.
       senderName:   message.senderId?.fullName ?? 'Someone',
       preview:      '🎤 Voice message',
+    });
+
+    return message;
+  },
+
+  /**
+   * Uploads an image/video/document, persists it as a File (so it also shows
+   * up in the workspace's Files tab, same as any other upload there), and
+   * sends a message referencing it. Mirrors sendVoice() in every other
+   * respect — REST-only (multipart), broadcasts via the shared emitter since
+   * there's no socket in scope here.
+   * `multerFile` is multer's memoryStorage object: { originalname, mimetype, size, buffer }.
+   */
+  async sendAttachment(workspaceId, multerFile, caption, context, replyToId = null) {
+    if (context.role === 'admin') {
+      throw new ForbiddenError('Admins cannot send chat messages');
+    }
+    await workspaceService.getById(workspaceId, context);
+    await assertReplyTargetValid(workspaceId, replyToId);
+
+    const { url, publicId } = await StorageService.save(
+      multerFile.buffer,
+      multerFile.originalname,
+      `workspaces/${workspaceId}/chat-attachments`,
+      multerFile.mimetype,
+    );
+
+    const file = await fileRepository.create({
+      workspaceId,
+      uploadedBy:   context.userId,
+      originalName: multerFile.originalname,
+      url,
+      publicId,
+      mimeType:     multerFile.mimetype,
+      sizeBytes:    multerFile.size,
+    });
+
+    const message = await messageRepository.create({
+      workspaceId,
+      senderId:    context.userId,
+      content:     caption || '',
+      attachments: [file._id],
+      replyTo:     replyToId || null,
+    });
+    await message.populate([
+      { path: 'senderId', select: 'fullName role studentId' },
+      { path: 'replyTo', select: 'content senderId audioDuration', populate: { path: 'senderId', select: 'fullName' } },
+      { path: 'attachments', select: 'originalName mimeType sizeBytes publicId' },
+    ]);
+
+    emitter.emit('chat.attachmentMessage', { workspaceId: String(workspaceId), message });
+    emitter.emit('message.sent', {
+      workspaceId:  String(workspaceId),
+      senderUserId: String(context.userId),
+      senderName:   message.senderId?.fullName ?? 'Someone',
+      preview:      attachmentPreview(multerFile.mimetype, multerFile.originalname),
     });
 
     return message;

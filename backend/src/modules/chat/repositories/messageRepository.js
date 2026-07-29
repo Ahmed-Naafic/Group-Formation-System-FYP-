@@ -10,7 +10,11 @@ const REPLY_POPULATE = {
   select: 'content senderId audioDuration',
   populate: { path: 'senderId', select: 'fullName' },
 };
-const BASE_POPULATE = [SENDER_POPULATE, REACTIONS_POPULATE, REPLY_POPULATE];
+// Never select `url` here — the storage bucket is private, so a URL captured
+// at upload time is unusable by the time a client renders it. Callers resolve
+// a fresh signed URL per request via the existing file-download endpoint.
+const ATTACHMENTS_POPULATE = { path: 'attachments', select: 'originalName mimeType sizeBytes publicId' };
+const BASE_POPULATE = [SENDER_POPULATE, REACTIONS_POPULATE, REPLY_POPULATE, ATTACHMENTS_POPULATE];
 
 const messageRepository = {
   create(data) {
