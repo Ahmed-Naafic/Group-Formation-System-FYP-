@@ -38,6 +38,13 @@ function formatTime(d) {
   });
 }
 
+function formatDuration(seconds) {
+  const s = Math.max(0, Math.round(seconds ?? 0));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${rem.toString().padStart(2, '0')}`;
+}
+
 function formatBytes(bytes) {
   if (!bytes) return '—';
   if (bytes < 1024)        return `${bytes} B`;
@@ -203,6 +210,63 @@ function AttachmentContent({ attachment, workspaceId, token, isMine }) {
       </span>
       <Download size={14} className={isMine ? 'text-white shrink-0' : 'text-ink-400 shrink-0'} />
     </button>
+  );
+}
+
+// Voice messages: unlike file/image attachments, the backend has no download-
+// redirect route for these — GET .../messages/:messageId/audio returns a
+// short-lived signed URL as JSON instead. Fetched once here (bytes → blob →
+// object URL) rather than used directly as <audio src>, so playback doesn't
+// break if the user leaves the chat open past the URL's ~5-minute TTL.
+function VoiceMessage({ workspaceId, messageId, duration, token, isMine }) {
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/workspaces/${workspaceId}/messages/${messageId}/audio`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error('Failed to resolve audio URL');
+        const { data } = await res.json();
+        const audioRes = await fetch(data.url);
+        if (!audioRes.ok) throw new Error('Failed to load audio');
+        const blob = await audioRes.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setAudioUrl(objectUrl);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [workspaceId, messageId, token]);
+
+  const mutedText = isMine ? 'text-just-blue-100' : 'text-ink-400';
+
+  if (failed) {
+    return <p className={cn('text-xs', mutedText)}>Failed to load voice message</p>;
+  }
+  if (!audioUrl) {
+    return (
+      <div className="flex items-center gap-2 w-56 h-9">
+        <Loader2 size={16} className={cn('animate-spin', mutedText)} />
+        <span className={cn('text-xs', mutedText)}>Loading voice message…</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-0.5 w-64 max-w-full">
+      <audio controls src={audioUrl} className="h-9 w-full" />
+      {duration != null && (
+        <span className={cn('text-[10px]', mutedText)}>{formatDuration(duration)}</span>
+      )}
+    </div>
   );
 }
 
@@ -380,7 +444,8 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
           messages.map((msg) => {
             const isMine = myId && String(msg.senderId?._id ?? msg.senderId) === myId;
             const hasAttachment = msg.attachments?.length > 0;
-            const sticker = !hasAttachment && isStickerContent(msg.content);
+            const hasAudio = !hasAttachment && msg.audioDuration != null;
+            const sticker = !hasAttachment && !hasAudio && isStickerContent(msg.content);
             return (
               <div key={msg._id} className={cn('flex gap-2', isMine ? 'flex-row-reverse' : 'flex-row')}>
                 {/* Avatar */}
@@ -417,6 +482,14 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
                         </div>
                       )}
                     </div>
+                  ) : hasAudio ? (
+                    <VoiceMessage
+                      workspaceId={workspaceId}
+                      messageId={msg._id}
+                      duration={msg.audioDuration}
+                      token={token}
+                      isMine={isMine}
+                    />
                   ) : sticker ? (
                     <div className="text-5xl leading-none px-1">{msg.content}</div>
                   ) : (
