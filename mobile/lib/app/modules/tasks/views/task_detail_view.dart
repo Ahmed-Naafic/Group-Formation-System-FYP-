@@ -165,7 +165,7 @@ class _TaskDetailViewState extends State<TaskDetailView> {
                 final sub = controller.currentSubmission.value;
 
                 if (sub != null && sub.isReviewed) {
-                  return _GradedCard(sub: sub);
+                  return _GradedCard(sub: sub, isGroupTask: !task.isIndividual);
                 }
 
                 if (sub != null && sub.isSubmitted) {
@@ -276,7 +276,8 @@ class _DeadlineRow extends StatelessWidget {
 
 class _GradedCard extends StatelessWidget {
   final SubmissionModel sub;
-  const _GradedCard({required this.sub});
+  final bool isGroupTask;
+  const _GradedCard({required this.sub, this.isGroupTask = false});
 
   @override
   Widget build(BuildContext context) {
@@ -344,6 +345,13 @@ class _GradedCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Graded ${DateFormat('MMM d, yyyy').format(sub.gradedAt!.toLocal())}',
+              style: TextStyle(fontSize: 12, color: context.textMuted),
+            ),
+          ],
+          if (isGroupTask && sub.submittedByName != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Submitted by ${sub.submittedByName}',
               style: TextStyle(fontSize: 12, color: context.textMuted),
             ),
           ],
