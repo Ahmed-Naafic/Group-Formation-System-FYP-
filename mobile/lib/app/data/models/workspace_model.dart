@@ -50,6 +50,45 @@ class TaskSummaryModel {
   static const empty = TaskSummaryModel(total: 0, done: 0, pending: 0, dueSoon: 0);
 }
 
+/// One task's grade within a workspace — "not started" (status null) through
+/// "reviewed" (status + grade both set). Used by the Grades screen.
+class WorkspaceTaskGrade {
+  final String taskId;
+  final String title;
+  final String submissionType; // group | individual
+  final DateTime? deadline;
+  final String? status; // null | draft | submitted | late | reviewed
+  final double? grade;
+  final DateTime? gradedAt;
+
+  const WorkspaceTaskGrade({
+    required this.taskId,
+    required this.title,
+    required this.submissionType,
+    this.deadline,
+    this.status,
+    this.grade,
+    this.gradedAt,
+  });
+
+  factory WorkspaceTaskGrade.fromJson(Map<String, dynamic> json) => WorkspaceTaskGrade(
+        taskId:         json['taskId'] as String? ?? '',
+        title:          json['title']  as String? ?? '',
+        submissionType: json['submissionType'] as String? ?? 'group',
+        deadline:       json['deadline'] != null
+            ? DateTime.tryParse(json['deadline'] as String)
+            : null,
+        status:   json['status'] as String?,
+        grade:    (json['grade'] as num?)?.toDouble(),
+        gradedAt: json['gradedAt'] != null
+            ? DateTime.tryParse(json['gradedAt'] as String)
+            : null,
+  );
+
+  bool get isGraded    => status == 'reviewed' && grade != null;
+  bool get isSubmitted => status == 'submitted' || status == 'late' || status == 'reviewed';
+}
+
 class WorkspaceModel {
   final String id;
   final String groupId;
@@ -61,6 +100,7 @@ class WorkspaceModel {
   final MemberModel leader;
   final List<MemberModel> members;
   final TaskSummaryModel taskSummary;
+  final List<WorkspaceTaskGrade> tasks;
 
   final String courseOfferingId;
 
@@ -76,6 +116,7 @@ class WorkspaceModel {
     required this.leader,
     required this.members,
     required this.taskSummary,
+    required this.tasks,
   });
 
   factory WorkspaceModel.fromJson(Map<String, dynamic> json) {
@@ -86,6 +127,7 @@ class WorkspaceModel {
     final semester   = offering['semesterId'] as Map<String, dynamic>? ?? {};
     final leaderJson = group['leaderId'] as Map<String, dynamic>? ?? {};
     final membersRaw = group['memberIds'] as List<dynamic>? ?? [];
+    final tasksRaw   = json['tasks'] as List<dynamic>? ?? [];
 
     return WorkspaceModel._(
       id:               json['_id']      as String? ?? '',
@@ -105,6 +147,10 @@ class WorkspaceModel {
               json['taskSummary'] as Map<String, dynamic>,
             )
           : TaskSummaryModel.empty,
+      tasks: tasksRaw
+          .whereType<Map<String, dynamic>>()
+          .map(WorkspaceTaskGrade.fromJson)
+          .toList(),
     );
   }
 

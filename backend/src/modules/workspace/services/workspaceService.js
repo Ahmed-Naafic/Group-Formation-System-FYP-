@@ -37,14 +37,22 @@ const workspaceService = {
     // Task.courseOfferingId does not exist until Step 7 — query will return 0 results until then.
     const [tasks, submissions] = await Promise.all([
       Task.find({ courseOfferingId: { $in: offeringIds }, deletedAt: null })
-        .select('_id courseOfferingId assignedGroups deadline')
+        .select('_id courseOfferingId assignedGroups deadline title submissionType')
         .lean(),
       Submission.find({ groupId: { $in: groupIds }, deletedAt: null })
-        .select('taskId groupId status')
+        .select('taskId groupId status grade gradedAt submittedBy')
         .lean(),
     ]);
 
-    const subMap = new Map(submissions.map(s => [`${s.taskId}-${s.groupId}`, s.status]));
+    // Grouped by task+group rather than a single value per key — individual-mode
+    // tasks can have several submissions (one per member) sharing the same
+    // group, so picking "my" one needs the full list, not just the last write.
+    const subsByTaskAndGroup = new Map();
+    for (const s of submissions) {
+      const key = `${s.taskId}-${s.groupId}`;
+      if (!subsByTaskAndGroup.has(key)) subsByTaskAndGroup.set(key, []);
+      subsByTaskAndGroup.get(key).push(s);
+    }
 
     const now         = new Date();
     const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -63,17 +71,37 @@ const workspaceService = {
       );
 
       let done = 0, pending = 0, dueSoon = 0;
+      const taskList = [];
       for (const t of groupTasks) {
-        const status = subMap.get(`${t._id}-${gid}`);
+        const candidates = subsByTaskAndGroup.get(`${t._id}-${gid}`) ?? [];
+        // Individual-mode: only *this* student's own submission counts — a
+        // groupmate submitting doesn't grade or complete it for anyone else.
+        // Group-mode: any member's submission represents the whole group.
+        const mySubmission = t.submissionType === 'individual'
+          ? candidates.find(s => studentIds.some(sid => String(sid) === String(s.submittedBy)))
+          : candidates[0];
+
+        const status = mySubmission?.status;
         if (status === 'submitted' || status === 'late' || status === 'reviewed') {
           done++;
         } else {
           pending++;
           if (t.deadline && t.deadline >= now && t.deadline <= weekFromNow) dueSoon++;
         }
+
+        taskList.push({
+          taskId:         t._id,
+          title:          t.title,
+          submissionType: t.submissionType,
+          deadline:       t.deadline,
+          status:         status ?? null,
+          grade:          mySubmission?.grade ?? null,
+          gradedAt:       mySubmission?.gradedAt ?? null,
+        });
       }
 
       plain.taskSummary = { total: groupTasks.length, done, pending, dueSoon };
+      plain.tasks = taskList;
       return plain;
     });
   },
