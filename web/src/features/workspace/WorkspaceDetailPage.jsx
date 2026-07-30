@@ -804,7 +804,7 @@ function StudentTaskCard({ task, workspaceId }) {
             <p className="text-xs text-ink-500 mt-1 line-clamp-2">{task.description}</p>
           )}
           {task.deadline && (
-            <p className={cn('inline-flex items-center gap-1 text-xs mt-1', deadlineColor(task.deadline))}>
+            <p className={cn('inline-flex items-center gap-1 text-xs mt-1', isLocked ? 'text-ink-400' : deadlineColor(task.deadline))}>
               <Calendar size={11} />
               Due {formatDeadline(task.deadline)}
             </p>

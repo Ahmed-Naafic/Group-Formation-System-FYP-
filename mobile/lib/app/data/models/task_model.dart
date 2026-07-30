@@ -14,6 +14,11 @@ class TaskModel {
   // to resolve which workspace a task belongs to (see NotificationNavigator).
   final String? courseOfferingId;
 
+  // Only set for students (list/detail responses) — whether this student (or,
+  // for group-submission tasks, their group) has already turned this in.
+  // Used to stop showing "Due Soon"/"Overdue" once there's nothing left to do.
+  final bool isSubmittedByMe;
+
   const TaskModel({
     required this.id,
     required this.title,
@@ -26,6 +31,7 @@ class TaskModel {
     this.attachmentMimeType,
     this.attachmentUrl,
     this.courseOfferingId,
+    this.isSubmittedByMe = false,
   });
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
@@ -50,6 +56,7 @@ class TaskModel {
       courseOfferingId:   rawOffering is Map
           ? rawOffering['_id'] as String?
           : rawOffering as String?,
+      isSubmittedByMe:    json['isSubmittedByMe'] as bool? ?? false,
     );
   }
 
@@ -58,10 +65,10 @@ class TaskModel {
   bool get isIndividual  => submissionType == 'individual';
 
   bool get isOverdue =>
-      deadline != null && deadline!.isBefore(DateTime.now()) && isOpen;
+      !isSubmittedByMe && deadline != null && deadline!.isBefore(DateTime.now()) && isOpen;
 
   bool get isDueSoon {
-    if (deadline == null || !isOpen) return false;
+    if (isSubmittedByMe || deadline == null || !isOpen) return false;
     final diff = deadline!.difference(DateTime.now());
     return diff.inDays <= 7 && diff.inSeconds > 0;
   }

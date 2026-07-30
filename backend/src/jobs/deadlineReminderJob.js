@@ -3,8 +3,11 @@ const taskRepository        = require('../modules/task/repositories/taskReposito
 const notificationService   = require('../modules/notification/services/notificationService');
 const groupRepository       = require('../modules/group/repositories/groupRepository');
 const userRepository        = require('../modules/user/repositories/userRepository');
+const Submission             = require('../modules/submission/models/Submission');
 const pushService           = require('../common/services/push/PushService');
 const logger                = require('../common/utils/logger');
+
+const SUBMITTED_STATUSES = ['submitted', 'late', 'reviewed'];
 
 async function runDeadlineReminder() {
   try {
@@ -14,24 +17,35 @@ async function runDeadlineReminder() {
     logger.info(`Deadline reminder job: ${tasks.length} task(s) due within 24 h`);
 
     for (const task of tasks) {
-      let userIds = [];
+      const groups = task.assignedGroups.length > 0
+        ? task.assignedGroups
+        : await groupRepository.findActiveByOffering(task.courseOfferingId);
 
-      if (task.assignedGroups.length > 0) {
-        // Specific groups — members are already populated
-        for (const group of task.assignedGroups) {
-          for (const member of group.memberIds ?? []) {
-            const uid = member.userId?._id ?? member.userId;
-            if (uid) userIds.push(uid);
-          }
+      // Skip anyone who's already turned the task in — group-mode: the
+      // whole group is done once any member submits; individual-mode: only
+      // the specific student who submitted is done.
+      const submissions = await Submission.find({
+        taskId:    task._id,
+        groupId:   { $in: groups.map((g) => g._id) },
+        deletedAt: null,
+        status:    { $in: SUBMITTED_STATUSES },
+      }).select('groupId submittedBy').lean();
+      const submittedGroupIds   = new Set(submissions.map((s) => String(s.groupId)));
+      const submittedStudentIds = new Set(
+        submissions.map((s) => s.submittedBy && String(s.submittedBy)).filter(Boolean),
+      );
+
+      let userIds = [];
+      for (const group of groups) {
+        if (task.submissionType !== 'individual' && submittedGroupIds.has(String(group._id))) {
+          continue; // group-mode task, this group already submitted
         }
-      } else {
-        // Task applies to all groups in the offering — look them up
-        const allGroups = await groupRepository.findActiveByOffering(task.courseOfferingId);
-        for (const g of allGroups) {
-          for (const member of g.memberIds ?? []) {
-            const uid = member.userId?._id ?? member.userId;
-            if (uid) userIds.push(uid);
+        for (const member of group.memberIds ?? []) {
+          if (task.submissionType === 'individual' && submittedStudentIds.has(String(member._id))) {
+            continue; // individual-mode task, this student already submitted
           }
+          const uid = member.userId?._id ?? member.userId;
+          if (uid) userIds.push(uid);
         }
       }
 

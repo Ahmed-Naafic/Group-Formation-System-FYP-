@@ -156,6 +156,9 @@ class _TaskCard extends StatelessWidget {
   }
 
   Widget _statusChip(TaskModel task) {
+    if (task.isSubmittedByMe) {
+      return _Chip(label: 'Submitted', color: const Color(0xFF15803D), bg: const Color(0xFFDCFCE7));
+    }
     if (task.isClosed) {
       return _Chip(label: 'Closed',   color: const Color(0xFF8A92A4), bg: const Color(0xFFF0F1F4));
     }

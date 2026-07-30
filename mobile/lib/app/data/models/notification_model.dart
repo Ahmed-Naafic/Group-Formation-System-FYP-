@@ -50,6 +50,7 @@ class NotificationModel {
     switch (type) {
       case 'GROUP_FORMED':      return Icons.group_add_rounded;
       case 'TASK_ASSIGNED':     return Icons.assignment_rounded;
+      case 'TASK_DEADLINE':     return Icons.schedule_rounded;
       case 'SUBMISSION_GRADED': return Icons.grade_rounded;
       default:                  return Icons.notifications_rounded;
     }
@@ -59,6 +60,7 @@ class NotificationModel {
     switch (type) {
       case 'GROUP_FORMED':      return const Color(0xFF1E3A8A);
       case 'TASK_ASSIGNED':     return const Color(0xFF0D7850);
+      case 'TASK_DEADLINE':     return const Color(0xFFB45309);
       case 'SUBMISSION_GRADED': return const Color(0xFF856404);
       default:                  return const Color(0xFF596070);
     }

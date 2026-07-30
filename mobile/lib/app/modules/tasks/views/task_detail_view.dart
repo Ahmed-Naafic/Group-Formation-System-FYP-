@@ -206,7 +206,9 @@ class _TaskDetailViewState extends State<TaskDetailView> {
   Widget _taskStatusChip(TaskModel task) {
     String label;
     Color color, bg;
-    if (task.isClosed) {
+    if (task.isSubmittedByMe) {
+      label = 'Submitted'; color = const Color(0xFF15803D); bg = const Color(0xFFDCFCE7);
+    } else if (task.isClosed) {
       label = 'Closed';  color = const Color(0xFF8A92A4); bg = const Color(0xFFF0F1F4);
     } else if (task.isOverdue) {
       label = 'Overdue'; color = const Color(0xFFB23A3A); bg = const Color(0xFFFEF2F2);

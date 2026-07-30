@@ -15,10 +15,11 @@ class NotificationNavigator {
   static final _workspaceRepo = WorkspaceRepository();
 
   /// [type] is the notification's `type` (GROUP_FORMED / TASK_ASSIGNED /
-  /// SUBMISSION_GRADED / NEW_MESSAGE). [entityId] is `relatedEntity.id` (in-app
-  /// list) or the FCM payload's `entityId` (group id / task id / submission id
-  /// depending on type). [workspaceId] is only set for NEW_MESSAGE, from the
-  /// FCM payload's `workspaceId` field — chat has no DB notification record.
+  /// TASK_DEADLINE / SUBMISSION_GRADED / NEW_MESSAGE). [entityId] is
+  /// `relatedEntity.id` (in-app list) or the FCM payload's `entityId` (group
+  /// id / task id / submission id depending on type). [workspaceId] is only
+  /// set for NEW_MESSAGE, from the FCM payload's `workspaceId` field — chat
+  /// has no DB notification record.
   static Future<void> open({
     required String type,
     String? entityId,
@@ -41,6 +42,7 @@ class NotificationNavigator {
           break;
 
         case 'TASK_ASSIGNED':
+        case 'TASK_DEADLINE':
           if (entityId == null) return;
           await _openTask(entityId);
           break;

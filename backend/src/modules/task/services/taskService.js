@@ -4,8 +4,11 @@ const courseOfferingService    = require('../../courseOffering/services/courseOf
 const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
 const groupRepository          = require('../../group/repositories/groupRepository');
 const studentRepository        = require('../../student/repositories/studentRepository');
+const Submission               = require('../../submission/models/Submission');
 const StorageService           = require('../../../common/services/storage/StorageService');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../../../common/errors');
+
+const SUBMITTED_STATUSES = ['submitted', 'late', 'reviewed'];
 
 // courseOfferingService.getById(id, context) enforces ownership for instructors
 // and existence for everyone. Admin passes through; instructor throws if not their offering.
@@ -139,7 +142,29 @@ const taskService = {
       if (!studentRecord) return [];
       const groups = await groupRepository.findByOfferingAndMemberId(courseOfferingId, studentRecord._id);
       if (!groups.length) return [];
-      return taskRepository.findForStudent(courseOfferingId, groups.map(g => g._id));
+      const groupIds = groups.map(g => g._id);
+      const tasks    = await taskRepository.findForStudent(courseOfferingId, groupIds);
+      if (!tasks.length) return [];
+
+      // Attach whether *this student* has already turned the task in, so
+      // clients can stop showing "Due Soon"/"Overdue" and the deadline
+      // reminder job (deadlineReminderJob.js) can skip already-submitted
+      // recipients. Group-mode: any group member's submission counts.
+      // Individual-mode: only this student's own submission counts.
+      const submissions = await Submission.find({
+        taskId:    { $in: tasks.map(t => t._id) },
+        groupId:   { $in: groupIds },
+        deletedAt: null,
+      }).select('taskId groupId submittedBy status').lean();
+
+      return tasks.map((task) => {
+        const relevant = submissions.filter(s => String(s.taskId) === String(task._id));
+        const isSubmittedByMe = task.submissionType === 'individual'
+          ? relevant.some(s =>
+              String(s.submittedBy) === String(studentRecord._id) && SUBMITTED_STATUSES.includes(s.status))
+          : relevant.some(s => SUBMITTED_STATUSES.includes(s.status));
+        return { ...task.toObject(), isSubmittedByMe };
+      });
     }
 
     await assertCourseOfferingAccess(courseOfferingId, context);
@@ -162,6 +187,19 @@ const taskService = {
       const assigned    = task.assignedGroups.map(g => String(g._id ?? g));
       const hasAccess   = assigned.length === 0 || assigned.some(gid => memberGroupIds.includes(gid));
       if (!hasAccess) throw new ForbiddenError('This task is not assigned to your group');
+
+      // Same "has this student already submitted" enrichment as list() —
+      // needed here too since notification taps (TASK_ASSIGNED /
+      // SUBMISSION_GRADED) navigate straight to a single-task fetch.
+      const myGroupIds = groups.filter(g => memberGroupIds.includes(String(g._id))).map(g => g._id);
+      const submissions = await Submission.find({
+        taskId: task._id, groupId: { $in: myGroupIds }, deletedAt: null,
+      }).select('submittedBy status').lean();
+      const isSubmittedByMe = task.submissionType === 'individual'
+        ? submissions.some(s =>
+            String(s.submittedBy) === String(studentRecords[0]?._id) && SUBMITTED_STATUSES.includes(s.status))
+        : submissions.some(s => SUBMITTED_STATUSES.includes(s.status));
+      return { ...task.toObject(), isSubmittedByMe };
     } else {
       await assertCourseOfferingAccess(String(task.courseOfferingId?._id ?? task.courseOfferingId), context);
     }
