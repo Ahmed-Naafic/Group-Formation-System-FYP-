@@ -3,6 +3,8 @@ const groupRepository          = require('../../group/repositories/groupReposito
 const studentRepository        = require('../../student/repositories/studentRepository');
 const courseOfferingService    = require('../../courseOffering/services/courseOfferingService');
 const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
+const Workspace                 = require('../models/Workspace');
+const Group                     = require('../../group/models/Group');
 const Task                     = require('../../task/models/Task');
 const Submission               = require('../../submission/models/Submission');
 const { NotFoundError, ForbiddenError } = require('../../../common/errors');
@@ -158,6 +160,41 @@ const workspaceService = {
     }
 
     return workspace;
+  },
+
+  // Same access decision as getById (admin: always; instructor: owns the
+  // offering; student: is a group member) but WITHOUT the deep
+  // group→courseOffering→course/cohort/semester/members populate — getById
+  // was built for the workspace detail page, which actually needs all of
+  // that. Hot paths that only need a yes/no (every chat operation) should
+  // use this instead; it resolves the same decision in far fewer round
+  // trips. Throws, never returns a value — call sites just await it.
+  async assertMembership(workspaceId, context) {
+    if (context.role === 'admin') {
+      const exists = await Workspace.exists({ _id: workspaceId });
+      if (!exists) throw new NotFoundError('Workspace not found');
+      return;
+    }
+
+    const workspace = await Workspace.findById(workspaceId).select('groupId').lean();
+    if (!workspace) throw new NotFoundError('Workspace not found');
+
+    if (context.role === 'instructor') {
+      const group = await Group.findById(workspace.groupId).select('courseOfferingId').lean();
+      if (!group) throw new NotFoundError('Workspace not found');
+      // courseOfferingService.getById enforces instructor-owns-offering access
+      await courseOfferingService.getById(String(group.courseOfferingId), context);
+      return;
+    }
+
+    // student
+    const group = await Group.findById(workspace.groupId).select('memberIds').lean();
+    if (!group) throw new NotFoundError('Workspace not found');
+
+    const studentRecords = await studentRepository.findAll({ userId: context.userId, deletedAt: null });
+    const studentIds     = new Set(studentRecords.map(s => String(s._id)));
+    const isMember        = group.memberIds.some(m => studentIds.has(String(m)));
+    if (!isMember) throw new ForbiddenError('You are not a member of this group');
   },
 };
 

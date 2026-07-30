@@ -43,8 +43,9 @@ const messageSchema = new mongoose.Schema(
 
 messageSchema.plugin(softDelete);
 
-// Compound index for efficient paginated queries
-messageSchema.index({ workspaceId: 1, createdAt: -1 });
+// Compound index for efficient paginated queries — includes deletedAt since
+// the softDelete plugin's query middleware injects that filter on every find.
+messageSchema.index({ workspaceId: 1, deletedAt: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);
 

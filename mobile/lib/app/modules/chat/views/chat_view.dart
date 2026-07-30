@@ -271,6 +271,7 @@ class ChatView extends StatelessWidget {
                   ),
                 );
               }
+              final showLoadingOlder = ctrl.isLoadingOlder.value;
               return RefreshIndicator(
                 onRefresh: ctrl.pullRefresh,
                 color: const Color(0xFF1E3A8A),
@@ -281,8 +282,24 @@ class ChatView extends StatelessWidget {
                     horizontal: 12,
                     vertical: 12,
                   ),
-                  itemCount: ctrl.messages.length,
-                  itemBuilder: (_, i) {
+                  itemCount: ctrl.messages.length + (showLoadingOlder ? 1 : 0),
+                  itemBuilder: (_, rawIndex) {
+                    if (showLoadingOlder && rawIndex == 0) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF1E3A8A),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    final i = showLoadingOlder ? rawIndex - 1 : rawIndex;
                     final msg = ctrl.messages[i];
                     final prev = i > 0 ? ctrl.messages[i - 1] : null;
                     final showSenderName =

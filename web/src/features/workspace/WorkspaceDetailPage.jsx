@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   Loader2, Crown, ArrowLeft, ArrowRight, Send, Paperclip, Download, Trash2,
   File as FileIcon, FileText, FileImage, FileVideo, ClipboardList, Calendar, Eye, EyeOff,
@@ -9,7 +9,7 @@ import {
 import EmojiPicker from 'emoji-picker-react';
 import { toast } from 'sonner';
 import { selectRole, selectCurrentUser, selectCurrentToken } from '@/features/auth/authSlice';
-import { useGetWorkspaceByIdQuery, useGetMessagesQuery } from './workspaceApi';
+import { workspaceApi, useGetWorkspaceByIdQuery, useGetMessagesQuery } from './workspaceApi';
 import { useGetFilesQuery, useUploadFileMutation, useDeleteFileMutation } from './fileApi';
 import { useChatSocket } from './useChatSocket';
 import {
@@ -30,6 +30,26 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
+
+// Reports true once the element has scrolled near the viewport — used to
+// defer media fetches (images/video/voice) until a bubble is actually about
+// to be seen, instead of every message in the loaded page fetching at once.
+function useInView(ref) {
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || inView) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setInView(true);
+      },
+      { rootMargin: '200px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [ref, inView]);
+  return inView;
+}
 
 function formatTime(d) {
   if (!d) return '';
@@ -129,14 +149,20 @@ function StickerPopover({ open, onPick, onClose }) {
 // object URL (the storage bucket is private, so a plain <img src> can't
 // resolve it); anything else shows as a downloadable file chip.
 function AttachmentContent({ attachment, workspaceId, token, isMine }) {
+  const anchorRef = useRef(null);
+  const inView = useInView(anchorRef);
   const [blobUrl, setBlobUrl]   = useState(null);
   const [failed, setFailed]     = useState(false);
   const isImage = attachment.mimeType?.startsWith('image/');
   const isVideo = attachment.mimeType?.startsWith('video/');
   const downloadUrl = `${API_BASE}/api/workspaces/${workspaceId}/files/${attachment._id}/download`;
 
+  // Only image/video need an eager fetch (to render inline) — and only once
+  // this bubble has actually scrolled near the viewport, so opening a chat
+  // with many media messages doesn't fire a burst of fetches for ones the
+  // user hasn't scrolled to yet.
   useEffect(() => {
-    if (!isImage && !isVideo) return undefined;
+    if (!inView || (!isImage && !isVideo)) return undefined;
     let cancelled = false;
     let objectUrl;
     (async () => {
@@ -154,7 +180,7 @@ function AttachmentContent({ attachment, workspaceId, token, isMine }) {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [downloadUrl, isImage, isVideo, token]);
+  }, [downloadUrl, isImage, isVideo, token, inView]);
 
   async function handleDownload() {
     try {
@@ -171,46 +197,55 @@ function AttachmentContent({ attachment, workspaceId, token, isMine }) {
     }
   }
 
+  let content;
   if (isImage) {
-    if (failed) return <div className="w-40 h-28 rounded-lg bg-ink-100 flex items-center justify-center text-xs text-ink-400">Failed to load image</div>;
-    if (!blobUrl) return <div className="w-40 h-28 rounded-lg bg-ink-100 flex items-center justify-center"><Loader2 size={16} className="animate-spin text-ink-300" /></div>;
-    return (
-      <img
-        src={blobUrl}
-        alt={attachment.originalName}
-        className="max-w-[240px] max-h-[240px] rounded-lg object-cover cursor-pointer"
-        onClick={() => window.open(blobUrl, '_blank')}
-      />
+    if (failed) {
+      content = <div className="w-40 h-28 rounded-lg bg-ink-100 flex items-center justify-center text-xs text-ink-400">Failed to load image</div>;
+    } else if (!blobUrl) {
+      content = <div className="w-40 h-28 rounded-lg bg-ink-100 flex items-center justify-center">{inView && <Loader2 size={16} className="animate-spin text-ink-300" />}</div>;
+    } else {
+      content = (
+        <img
+          src={blobUrl}
+          alt={attachment.originalName}
+          className="max-w-[240px] max-h-[240px] rounded-lg object-cover cursor-pointer"
+          onClick={() => window.open(blobUrl, '_blank')}
+        />
+      );
+    }
+  } else if (isVideo) {
+    if (failed) {
+      content = <div className="w-48 h-28 rounded-lg bg-ink-100 flex items-center justify-center text-xs text-ink-400">Failed to load video</div>;
+    } else if (!blobUrl) {
+      content = <div className="w-48 h-28 rounded-lg bg-ink-100 flex items-center justify-center">{inView && <Loader2 size={16} className="animate-spin text-ink-300" />}</div>;
+    } else {
+      content = <video src={blobUrl} controls className="max-w-[260px] max-h-[260px] rounded-lg" />;
+    }
+  } else {
+    content = (
+      <button
+        type="button"
+        onClick={handleDownload}
+        className={cn(
+          'flex items-center gap-2 rounded-lg px-3 py-2 text-left w-56',
+          isMine ? 'bg-just-blue-700' : 'bg-white border border-border',
+        )}
+      >
+        <DocIcon mimeType={attachment.mimeType} className={isMine ? 'text-white shrink-0' : 'text-ink-500 shrink-0'} />
+        <span className="min-w-0 flex-1">
+          <span className={cn('block text-sm font-medium truncate', isMine ? 'text-white' : 'text-ink-800')}>
+            {attachment.originalName}
+          </span>
+          <span className={cn('block text-xs', isMine ? 'text-just-blue-100' : 'text-ink-400')}>
+            {formatBytes(attachment.sizeBytes)}
+          </span>
+        </span>
+        <Download size={14} className={isMine ? 'text-white shrink-0' : 'text-ink-400 shrink-0'} />
+      </button>
     );
   }
 
-  if (isVideo) {
-    if (failed) return <div className="w-48 h-28 rounded-lg bg-ink-100 flex items-center justify-center text-xs text-ink-400">Failed to load video</div>;
-    if (!blobUrl) return <div className="w-48 h-28 rounded-lg bg-ink-100 flex items-center justify-center"><Loader2 size={16} className="animate-spin text-ink-300" /></div>;
-    return <video src={blobUrl} controls className="max-w-[260px] max-h-[260px] rounded-lg" />;
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleDownload}
-      className={cn(
-        'flex items-center gap-2 rounded-lg px-3 py-2 text-left w-56',
-        isMine ? 'bg-just-blue-700' : 'bg-white border border-border',
-      )}
-    >
-      <DocIcon mimeType={attachment.mimeType} className={isMine ? 'text-white shrink-0' : 'text-ink-500 shrink-0'} />
-      <span className="min-w-0 flex-1">
-        <span className={cn('block text-sm font-medium truncate', isMine ? 'text-white' : 'text-ink-800')}>
-          {attachment.originalName}
-        </span>
-        <span className={cn('block text-xs', isMine ? 'text-just-blue-100' : 'text-ink-400')}>
-          {formatBytes(attachment.sizeBytes)}
-        </span>
-      </span>
-      <Download size={14} className={isMine ? 'text-white shrink-0' : 'text-ink-400 shrink-0'} />
-    </button>
-  );
+  return <div ref={anchorRef}>{content}</div>;
 }
 
 // Voice messages: unlike file/image attachments, the backend has no download-
@@ -219,10 +254,13 @@ function AttachmentContent({ attachment, workspaceId, token, isMine }) {
 // object URL) rather than used directly as <audio src>, so playback doesn't
 // break if the user leaves the chat open past the URL's ~5-minute TTL.
 function VoiceMessage({ workspaceId, messageId, duration, token, isMine }) {
+  const anchorRef = useRef(null);
+  const inView = useInView(anchorRef);
   const [audioUrl, setAudioUrl] = useState(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (!inView) return undefined;
     let cancelled = false;
     let objectUrl;
     (async () => {
@@ -245,29 +283,34 @@ function VoiceMessage({ workspaceId, messageId, duration, token, isMine }) {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [workspaceId, messageId, token]);
+  }, [workspaceId, messageId, token, inView]);
 
   const mutedText = isMine ? 'text-just-blue-100' : 'text-ink-400';
 
+  let content;
   if (failed) {
-    return <p className={cn('text-xs', mutedText)}>Failed to load voice message</p>;
-  }
-  if (!audioUrl) {
-    return (
+    content = <p className={cn('text-xs', mutedText)}>Failed to load voice message</p>;
+  } else if (!audioUrl) {
+    content = (
       <div className="flex items-center gap-2 w-56 h-9">
-        <Loader2 size={16} className={cn('animate-spin', mutedText)} />
-        <span className={cn('text-xs', mutedText)}>Loading voice message…</span>
+        {inView && <Loader2 size={16} className={cn('animate-spin', mutedText)} />}
+        <span className={cn('text-xs', mutedText)}>
+          {inView ? 'Loading voice message…' : (duration != null ? formatDuration(duration) : 'Voice message')}
+        </span>
+      </div>
+    );
+  } else {
+    content = (
+      <div className="flex flex-col gap-0.5 w-64 max-w-full">
+        <audio controls src={audioUrl} className="h-9 w-full" />
+        {duration != null && (
+          <span className={cn('text-[10px]', mutedText)}>{formatDuration(duration)}</span>
+        )}
       </div>
     );
   }
-  return (
-    <div className="flex flex-col gap-0.5 w-64 max-w-full">
-      <audio controls src={audioUrl} className="h-9 w-full" />
-      {duration != null && (
-        <span className={cn('text-[10px]', mutedText)}>{formatDuration(duration)}</span>
-      )}
-    </div>
-  );
+
+  return <div ref={anchorRef}>{content}</div>;
 }
 
 function DocIcon({ mimeType, className }) {
@@ -360,20 +403,81 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
   const { data: messages = [], isLoading } = useGetMessagesQuery(workspaceId);
   const { sendMessage } = useChatSocket(workspaceId);
   const token = useSelector(selectCurrentToken);
+  const dispatch = useDispatch();
 
   const [text,       setText]       = useState('');
   const [uploading,  setUploading]  = useState(false);
   const [emojiOpen,  setEmojiOpen]  = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
+  // Tracks the message ids at each end so the layout effect below can tell
+  // "a message landed at the bottom" (follow it) apart from "older messages
+  // were prepended at the top" (restore position instead of jumping down).
+  const edgeIdsRef = useRef({ firstId: null, lastId: null });
+  const pendingOlderScrollRef = useRef(null);
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+  // Runs synchronously after the DOM commits (before paint), so there's no
+  // visible flash of the wrong scroll position either way.
+  useLayoutEffect(() => {
+    const firstId = messages[0]?._id ?? null;
+    const lastId  = messages[messages.length - 1]?._id ?? null;
+    const prev = edgeIdsRef.current;
+    const container = containerRef.current;
+
+    if (pendingOlderScrollRef.current && firstId !== prev.firstId) {
+      const { scrollTop, scrollHeight } = pendingOlderScrollRef.current;
+      if (container) container.scrollTop = scrollTop + (container.scrollHeight - scrollHeight);
+      pendingOlderScrollRef.current = null;
+    } else if (lastId !== prev.lastId) {
+      if (container) container.scrollTop = container.scrollHeight;
     }
+
+    edgeIdsRef.current = { firstId, lastId };
   }, [messages]);
+
+  async function loadOlderMessages() {
+    if (loadingOlder || !hasMoreOlder || messages.length === 0) return;
+    const container = containerRef.current;
+    setLoadingOlder(true);
+    try {
+      const oldestId = messages[0]._id;
+      const res = await fetch(
+        `${API_BASE}/api/workspaces/${workspaceId}/messages?before=${oldestId}&limit=50`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) throw new Error('Failed to load older messages');
+      const body = await res.json();
+      const older = body.data?.messages ?? [];
+      if (older.length < 50) setHasMoreOlder(false);
+      if (older.length > 0) {
+        if (container) {
+          pendingOlderScrollRef.current = {
+            scrollTop: container.scrollTop,
+            scrollHeight: container.scrollHeight,
+          };
+        }
+        dispatch(
+          workspaceApi.util.updateQueryData('getMessages', workspaceId, (draft) => {
+            draft.unshift(...older);
+          }),
+        );
+      }
+    } catch {
+      // Silent — the user can just scroll again to retry, same as any other
+      // background refetch failure elsewhere in this app.
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+
+  function handleScroll() {
+    if (containerRef.current && containerRef.current.scrollTop < 80) {
+      loadOlderMessages();
+    }
+  }
 
   function handleSend() {
     const trimmed = text.trim();
@@ -430,7 +534,7 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
       style={{ height: '520px' }}>
 
       {/* Messages area */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {isLoading ? (
           <div className="flex justify-center py-10">
             <Loader2 size={20} className="animate-spin text-ink-300" />
@@ -441,7 +545,13 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
             {!isAdmin && <p className="text-xs text-ink-300">Be the first to say something!</p>}
           </div>
         ) : (
-          messages.map((msg) => {
+          <>
+            {loadingOlder && (
+              <div className="flex justify-center py-2">
+                <Loader2 size={16} className="animate-spin text-ink-300" />
+              </div>
+            )}
+            {messages.map((msg) => {
             const isMine = myId && String(msg.senderId?._id ?? msg.senderId) === myId;
             const hasAttachment = msg.attachments?.length > 0;
             const hasAudio = !hasAttachment && msg.audioDuration != null;
@@ -506,7 +616,8 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
                 </div>
               </div>
             );
-          })
+            })}
+          </>
         )}
       </div>
 

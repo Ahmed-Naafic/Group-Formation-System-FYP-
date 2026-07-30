@@ -39,6 +39,8 @@ class ChatController extends GetxController {
   final messages = <ChatMessage>[].obs;
   final isLoading = true.obs;
   final isSyncing = false.obs;
+  final isLoadingOlder = false.obs;
+  bool _hasMoreOlder = true;
   final errorMessage = ''.obs;
   final isConnecting = true.obs;
   final isSocketConnected = false.obs;
@@ -133,6 +135,14 @@ class ChatController extends GetxController {
     }
     _connectSocket();
     _listenToPlayback();
+    scrollCtrl.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!scrollCtrl.hasClients) return;
+    if (scrollCtrl.position.pixels <= 80) {
+      _loadOlder();
+    }
   }
 
   void _listenToPlayback() {
@@ -176,6 +186,41 @@ class ChatController extends GetxController {
         errorMessage.value = 'Could not load messages. Pull down to retry.';
         if (!_disposed) isLoading.value = false;
       }
+    }
+  }
+
+  // Scrolled near the top — fetch the next page of older history (cursor
+  // pagination, same `before` param the backend already supports) and
+  // prepend it, preserving the scroll offset so the view doesn't jump.
+  Future<void> _loadOlder() async {
+    final ws = workspace;
+    if (ws == null || _disposed) return;
+    if (isLoadingOlder.value || !_hasMoreOlder || messages.isEmpty) return;
+
+    isLoadingOlder.value = true;
+    final oldestId = messages.first.id;
+    final hadClients = scrollCtrl.hasClients;
+    final oldMaxExtent = hadClients ? scrollCtrl.position.maxScrollExtent : 0.0;
+    final oldPixels = hadClients ? scrollCtrl.position.pixels : 0.0;
+
+    try {
+      final older = await _repo.getHistory(ws.id, before: oldestId);
+      if (_disposed) return;
+      if (older.length < 50) _hasMoreOlder = false;
+      if (older.isNotEmpty) {
+        messages.insertAll(0, older);
+        _cache[ws.id] = List<ChatMessage>.from(messages);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_disposed && hadClients && scrollCtrl.hasClients) {
+            final delta = scrollCtrl.position.maxScrollExtent - oldMaxExtent;
+            scrollCtrl.jumpTo(oldPixels + delta);
+          }
+        });
+      }
+    } catch (_) {
+      // Silent — the user can just scroll again to retry.
+    } finally {
+      if (!_disposed) isLoadingOlder.value = false;
     }
   }
 
@@ -227,6 +272,7 @@ class ChatController extends GetxController {
   Future<void> retry() async {
     _disposed = false;
     errorMessage.value = '';
+    _hasMoreOlder = true;
     _cache.remove(workspace?.id);
     messages.clear();
     await _loadHistory();
@@ -950,6 +996,7 @@ class ChatController extends GetxController {
   @override
   void onClose() {
     _disposed = true;
+    scrollCtrl.removeListener(_onScroll);
     _typingTimer?.cancel();
     _recordingTimer?.cancel();
     _audioRecorder.dispose();

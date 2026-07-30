@@ -28,10 +28,10 @@ const messageService = {
   /**
    * Returns paginated messages for a workspace.
    * `before` is an optional messageId; if provided returns messages older than that message.
-   * Access check is delegated to workspaceService.getById so ownership rules live in one place.
+   * Access check is delegated to workspaceService.assertMembership so ownership rules live in one place.
    */
   async list(workspaceId, { limit, before, after }, context) {
-    await workspaceService.getById(workspaceId, context);
+    await workspaceService.assertMembership(workspaceId, context);
     const messages = await messageRepository.findByWorkspace(workspaceId, { limit, before, after });
     // Return chronological order (oldest first) for the client to render top-to-bottom
     return messages.reverse();
@@ -45,7 +45,7 @@ const messageService = {
     if (context.role === 'admin') {
       throw new ForbiddenError('Admins cannot send chat messages');
     }
-    await workspaceService.getById(workspaceId, context);
+    await workspaceService.assertMembership(workspaceId, context);
     await assertReplyTargetValid(workspaceId, replyToId);
     return messageRepository.create({
       workspaceId,
@@ -68,7 +68,7 @@ const messageService = {
     if (context.role === 'admin') {
       throw new ForbiddenError('Admins cannot send chat messages');
     }
-    await workspaceService.getById(workspaceId, context);
+    await workspaceService.assertMembership(workspaceId, context);
     await assertReplyTargetValid(workspaceId, replyToId);
 
     const { publicId } = await StorageService.save(
@@ -118,7 +118,7 @@ const messageService = {
     if (context.role === 'admin') {
       throw new ForbiddenError('Admins cannot send chat messages');
     }
-    await workspaceService.getById(workspaceId, context);
+    await workspaceService.assertMembership(workspaceId, context);
     await assertReplyTargetValid(workspaceId, replyToId);
 
     const { url, publicId } = await StorageService.save(
@@ -168,7 +168,7 @@ const messageService = {
    * resolved per-request rather than cached at send-time.
    */
   async getAudioPlaybackUrl(workspaceId, messageId, context) {
-    await workspaceService.getById(workspaceId, context);
+    await workspaceService.assertMembership(workspaceId, context);
     const message = await messageRepository.findById(messageId);
     if (!message) throw new NotFoundError('Message not found');
     if (String(message.workspaceId) !== String(workspaceId)) {
@@ -182,7 +182,7 @@ const messageService = {
    * Marks a single message as read by the requesting user.
    */
   async markRead(workspaceId, messageId, context) {
-    await workspaceService.getById(workspaceId, context);
+    await workspaceService.assertMembership(workspaceId, context);
     const msg = await messageRepository.findById(messageId);
     if (!msg) throw new NotFoundError('Message not found');
     if (String(msg.workspaceId) !== String(workspaceId)) {
@@ -195,7 +195,7 @@ const messageService = {
    * Marks ALL messages in a workspace as read — called on workspace-open.
    */
   async markAllRead(workspaceId, context) {
-    await workspaceService.getById(workspaceId, context);
+    await workspaceService.assertMembership(workspaceId, context);
     return messageRepository.markAllRead(workspaceId, context.userId);
   },
 
@@ -206,7 +206,7 @@ const messageService = {
    * audio blob first, same order fileService.remove uses for attachments.
    */
   async remove(workspaceId, messageId, context) {
-    await workspaceService.getById(workspaceId, context);
+    await workspaceService.assertMembership(workspaceId, context);
     const message = await messageRepository.findById(messageId);
     if (!message) throw new NotFoundError('Message not found');
     if (String(message.workspaceId) !== String(workspaceId)) {
@@ -237,7 +237,7 @@ const messageService = {
    * reaction list stays in sync without a separate diffing step.
    */
   async react(workspaceId, messageId, emoji, context) {
-    await workspaceService.getById(workspaceId, context);
+    await workspaceService.assertMembership(workspaceId, context);
     const message = await messageRepository.setReaction(messageId, context.userId, emoji);
     if (!message) throw new NotFoundError('Message not found');
     if (String(message.workspaceId) !== String(workspaceId)) {
