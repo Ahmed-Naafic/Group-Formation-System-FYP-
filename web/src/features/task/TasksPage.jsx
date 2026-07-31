@@ -107,7 +107,7 @@ export default function TasksPage() {
 
   const { data: offering }                           = useGetCourseOfferingByIdQuery(offeringId);
   const { data: tasks = [], isLoading, error }       = useGetTasksQuery(offeringId);
-  const { data: groups = [] }                        = useGetGroupsQuery({ courseOfferingId: offeringId });
+  const { data: groups = [], isLoading: groupsLoading } = useGetGroupsQuery({ courseOfferingId: offeringId });
   const [createTask, { isLoading: creating }]              = useCreateTaskMutation();
   const [createBulkTasks, { isLoading: creatingBulk }]     = useCreateBulkTasksMutation();
   const [updateTask, { isLoading: updating }]              = useUpdateTaskMutation();
@@ -149,6 +149,10 @@ export default function TasksPage() {
   const offeringLabel = offering
     ? [offering.courseId?.name, offering.cohortId?.name].filter(Boolean).join(' — ')
     : '…';
+  // Nothing to assign a task to until groups exist — wait for the groups
+  // query to actually resolve before disabling, so the button doesn't flash
+  // disabled-then-enabled while it's still loading.
+  const noActiveGroups = !groupsLoading && groups.length === 0;
 
   function resetDialog() {
     setNewOpen(false);
@@ -332,7 +336,11 @@ export default function TasksPage() {
           </p>
           <h2 className="text-ink-900">Tasks</h2>
         </div>
-        <Button onClick={() => setNewOpen(true)}>
+        <Button
+          onClick={() => setNewOpen(true)}
+          disabled={noActiveGroups}
+          title={noActiveGroups ? 'This offering has no active groups yet — form groups first' : undefined}
+        >
           <Plus size={15} /> New Task
         </Button>
       </div>
@@ -366,8 +374,16 @@ export default function TasksPage() {
       ) : tasks.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-white py-16 flex flex-col items-center gap-3">
           <ClipboardList size={32} className="text-ink-200" />
-          <p className="text-sm text-ink-400">No tasks yet. Create the first one.</p>
-          <Button variant="outline" size="sm" onClick={() => setNewOpen(true)}>
+          <p className="text-sm text-ink-400">
+            {noActiveGroups ? 'No active groups in this offering yet.' : 'No tasks yet. Create the first one.'}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setNewOpen(true)}
+            disabled={noActiveGroups}
+            title={noActiveGroups ? 'This offering has no active groups yet — form groups first' : undefined}
+          >
             <Plus size={13} /> New Task
           </Button>
         </div>
