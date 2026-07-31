@@ -108,6 +108,48 @@ async function migrateCohortSchema(logger) {
   }
 }
 
+// Faculty.name's old unique index (schema-level `unique: true` — case-
+// sensitive, no deletedAt filter) is migrated to a global case-insensitive
+// constraint that excludes soft-deleted faculties, same reasoning as
+// Cohort's name index. Explicit drop+recreate rather than left to Mongoose's
+// autoIndex, same reasoning as migrateUserIndexes: same key shape, different
+// options, so the sync check alone won't replace it.
+async function migrateFacultySchema(logger) {
+  try {
+    const coll = mongoose.connection.collection('faculties');
+    const indexes = await coll.indexes();
+
+    const stale = indexes.filter(
+      (i) => i.unique === true && i.key?.name === 1 && Object.keys(i.key).length === 1 &&
+        (!i.collation || !('deletedAt' in (i.partialFilterExpression ?? {}))),
+    );
+    for (const idx of stale) {
+      await coll.dropIndex(idx.name);
+      logger.info(`Migration: dropped stale unique name index on faculties (${idx.name})`);
+    }
+
+    const current = await coll.indexes();
+    const hasNewIdx = current.some(
+      (i) => i.unique === true && i.key?.name === 1 && Object.keys(i.key).length === 1 &&
+        i.collation && 'deletedAt' in (i.partialFilterExpression ?? {}),
+    );
+    if (!hasNewIdx) {
+      await coll.createIndex(
+        { name: 1 },
+        { unique: true, collation: { locale: 'en', strength: 2 }, partialFilterExpression: { deletedAt: null } },
+      );
+      logger.info('Migration: created case-insensitive unique name index on faculties');
+    }
+  } catch (e) {
+    // Non-fatal — worst case the DB-level constraint stays absent until this
+    // resolves. Most likely cause: a pre-existing duplicate name needs manual
+    // resolution before the new unique index can be built. The app-level
+    // check in facultyService.create/update still blocks new duplicates
+    // regardless of whether this migration has succeeded yet.
+    if (logger) logger.warn('Faculty schema migration skipped:', e.message);
+  }
+}
+
 // Removes the retired cohortId field from GroupHistory docs (ownership is
 // courseOfferingId alone now — cross-offering pair-avoidance is a query-scope
 // concern handled in GroupGenerationService, not a stored field) and migrates
@@ -162,6 +204,7 @@ function connect() {
       await migrateSubmissionIndex(logger);
       await migrateUserIndexes(logger);
       await migrateCohortSchema(logger);
+      await migrateFacultySchema(logger);
       await migrateGroupHistorySchema(logger);
     })
     .catch((err) => {

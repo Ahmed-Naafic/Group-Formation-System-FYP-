@@ -13,8 +13,11 @@ const facultyRepository = {
     return Faculty.findById(id);
   },
 
+  // Case-insensitive — matches the unique index's collation. Soft-deleted
+  // faculties are excluded by the softDelete plugin's query middleware, so
+  // a deleted faculty's name is free to reuse.
   findByName(name) {
-    return Faculty.findOne({ name: name.trim() });
+    return Faculty.findOne({ name: name.trim() }).collation({ locale: 'en', strength: 2 });
   },
 
   updateById(id, updates) {

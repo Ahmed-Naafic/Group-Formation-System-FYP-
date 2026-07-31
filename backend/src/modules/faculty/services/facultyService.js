@@ -3,7 +3,11 @@ const departmentRepository = require('../../department/repositories/departmentRe
 const { NotFoundError, ConflictError } = require('../../../common/errors');
 
 const facultyService = {
-  create(data) {
+  async create(data) {
+    const duplicate = await facultyRepository.findByName(data.name);
+    if (duplicate) {
+      throw new ConflictError('A faculty with this name already exists.');
+    }
     return facultyRepository.create(data);
   },
 
@@ -19,6 +23,12 @@ const facultyService = {
 
   async update(id, updates) {
     await facultyService.getById(id); // throws if not found
+    if (updates.name) {
+      const duplicate = await facultyRepository.findByName(updates.name);
+      if (duplicate && String(duplicate._id) !== id) {
+        throw new ConflictError('A faculty with this name already exists.');
+      }
+    }
     return facultyRepository.updateById(id, updates);
   },
 
