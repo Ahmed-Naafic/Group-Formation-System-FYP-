@@ -26,7 +26,7 @@ const courseRepository = {
   },
 
   findActiveByNameAndDepartment(name, departmentId) {
-    return Course.findOne({ name, departmentId });
+    return Course.findOne({ name, departmentId }).collation({ locale: 'en', strength: 2 });
   },
 };
 

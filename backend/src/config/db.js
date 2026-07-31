@@ -150,6 +150,142 @@ async function migrateFacultySchema(logger) {
   }
 }
 
+// Department.(facultyId, name)'s old index (no collation, no deletedAt
+// filter) is migrated to case-insensitive + soft-delete-aware, same pattern
+// as Faculty/Cohort's name index.
+async function migrateDepartmentSchema(logger) {
+  try {
+    const coll = mongoose.connection.collection('departments');
+    const indexes = await coll.indexes();
+
+    const stale = indexes.filter(
+      (i) => i.unique === true && i.key?.facultyId === 1 && i.key?.name === 1 &&
+        Object.keys(i.key).length === 2 &&
+        (!i.collation || !('deletedAt' in (i.partialFilterExpression ?? {}))),
+    );
+    for (const idx of stale) {
+      await coll.dropIndex(idx.name);
+      logger.info(`Migration: dropped stale unique (facultyId, name) index on departments (${idx.name})`);
+    }
+
+    const current = await coll.indexes();
+    const hasNewIdx = current.some(
+      (i) => i.unique === true && i.key?.facultyId === 1 && i.key?.name === 1 &&
+        Object.keys(i.key).length === 2 && i.collation && 'deletedAt' in (i.partialFilterExpression ?? {}),
+    );
+    if (!hasNewIdx) {
+      await coll.createIndex(
+        { facultyId: 1, name: 1 },
+        { unique: true, collation: { locale: 'en', strength: 2 }, partialFilterExpression: { deletedAt: null } },
+      );
+      logger.info('Migration: created case-insensitive unique (facultyId, name) index on departments');
+    }
+  } catch (e) {
+    // Non-fatal — most likely cause: a pre-existing duplicate name within the
+    // same faculty needs manual resolution before the new index can build.
+    if (logger) logger.warn('Department schema migration skipped:', e.message);
+  }
+}
+
+// Course.(departmentId, code) gets a deletedAt filter (a deleted course's
+// code shouldn't permanently block reuse); Course.(departmentId, name) gets
+// case-insensitive collation added, same reasoning as the other name indexes.
+async function migrateCourseSchema(logger) {
+  try {
+    const coll = mongoose.connection.collection('courses');
+    const indexes = await coll.indexes();
+
+    const staleCode = indexes.filter(
+      (i) => i.unique === true && i.key?.departmentId === 1 && i.key?.code === 1 &&
+        Object.keys(i.key).length === 2 && !('deletedAt' in (i.partialFilterExpression ?? {})),
+    );
+    for (const idx of staleCode) {
+      await coll.dropIndex(idx.name);
+      logger.info(`Migration: dropped stale unique (departmentId, code) index on courses (${idx.name})`);
+    }
+
+    const staleName = indexes.filter(
+      (i) => i.unique === true && i.key?.departmentId === 1 && i.key?.name === 1 &&
+        Object.keys(i.key).length === 2 && !i.collation,
+    );
+    for (const idx of staleName) {
+      await coll.dropIndex(idx.name);
+      logger.info(`Migration: dropped stale unique (departmentId, name) index on courses (${idx.name})`);
+    }
+
+    const current = await coll.indexes();
+    const hasCodeIdx = current.some(
+      (i) => i.unique === true && i.key?.departmentId === 1 && i.key?.code === 1 &&
+        Object.keys(i.key).length === 2 && 'deletedAt' in (i.partialFilterExpression ?? {}),
+    );
+    if (!hasCodeIdx) {
+      await coll.createIndex(
+        { departmentId: 1, code: 1 },
+        { unique: true, partialFilterExpression: { deletedAt: null } },
+      );
+      logger.info('Migration: created (departmentId, code) index on courses with deletedAt filter');
+    }
+
+    const hasNameIdx = current.some(
+      (i) => i.unique === true && i.key?.departmentId === 1 && i.key?.name === 1 &&
+        Object.keys(i.key).length === 2 && i.collation && 'deletedAt' in (i.partialFilterExpression ?? {}),
+    );
+    if (!hasNameIdx) {
+      await coll.createIndex(
+        { departmentId: 1, name: 1 },
+        { unique: true, collation: { locale: 'en', strength: 2 }, partialFilterExpression: { deletedAt: null } },
+      );
+      logger.info('Migration: created case-insensitive unique (departmentId, name) index on courses');
+    }
+  } catch (e) {
+    // Non-fatal — most likely cause: a pre-existing duplicate code/name
+    // within the same department needs manual resolution first.
+    if (logger) logger.warn('Course schema migration skipped:', e.message);
+  }
+}
+
+// Semester.(name, academicYearId) gets case-insensitive collation added. Also
+// drops the long-retired (name, year) index from before academicYearId
+// existed, if a prior manual cleanup never actually happened.
+async function migrateSemesterSchema(logger) {
+  try {
+    const coll = mongoose.connection.collection('semesters');
+    const indexes = await coll.indexes();
+
+    const oldYearIdx = indexes.find((i) => i.key?.name === 1 && i.key?.year === 1);
+    if (oldYearIdx) {
+      await coll.dropIndex(oldYearIdx.name);
+      logger.info('Migration: dropped retired (name, year) index on semesters');
+    }
+
+    const stale = indexes.filter(
+      (i) => i.unique === true && i.key?.name === 1 && i.key?.academicYearId === 1 &&
+        Object.keys(i.key).length === 2 && !i.collation,
+    );
+    for (const idx of stale) {
+      await coll.dropIndex(idx.name);
+      logger.info(`Migration: dropped stale unique (name, academicYearId) index on semesters (${idx.name})`);
+    }
+
+    const current = await coll.indexes();
+    const hasNewIdx = current.some(
+      (i) => i.unique === true && i.key?.name === 1 && i.key?.academicYearId === 1 &&
+        Object.keys(i.key).length === 2 && i.collation && 'deletedAt' in (i.partialFilterExpression ?? {}),
+    );
+    if (!hasNewIdx) {
+      await coll.createIndex(
+        { name: 1, academicYearId: 1 },
+        { unique: true, collation: { locale: 'en', strength: 2 }, partialFilterExpression: { deletedAt: null } },
+      );
+      logger.info('Migration: created case-insensitive unique (name, academicYearId) index on semesters');
+    }
+  } catch (e) {
+    // Non-fatal — most likely cause: a pre-existing duplicate name within the
+    // same academic year needs manual resolution first.
+    if (logger) logger.warn('Semester schema migration skipped:', e.message);
+  }
+}
+
 // Removes the retired cohortId field from GroupHistory docs (ownership is
 // courseOfferingId alone now — cross-offering pair-avoidance is a query-scope
 // concern handled in GroupGenerationService, not a stored field) and migrates
@@ -205,6 +341,9 @@ function connect() {
       await migrateUserIndexes(logger);
       await migrateCohortSchema(logger);
       await migrateFacultySchema(logger);
+      await migrateDepartmentSchema(logger);
+      await migrateCourseSchema(logger);
+      await migrateSemesterSchema(logger);
       await migrateGroupHistorySchema(logger);
     })
     .catch((err) => {

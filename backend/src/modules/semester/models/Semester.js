@@ -13,11 +13,12 @@ const semesterSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// "Semester 1" can exist in 2025/2026 and again in 2026/2027 — but not twice within the same year.
-// NOTE: drop the old { name, year } index manually before first restart on this schema.
+// "Semester 1" can exist in 2025/2026 and again in 2026/2027 — but not twice
+// within the same year. Case-insensitive ("Semester 1" and "semester 1"
+// collide) and only enforced among active (non-deleted) semesters.
 semesterSchema.index(
   { name: 1, academicYearId: 1 },
-  { unique: true, partialFilterExpression: { deletedAt: null } },
+  { unique: true, collation: { locale: 'en', strength: 2 }, partialFilterExpression: { deletedAt: null } },
 );
 
 semesterSchema.plugin(softDeletePlugin);

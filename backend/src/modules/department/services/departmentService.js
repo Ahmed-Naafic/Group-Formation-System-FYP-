@@ -8,6 +8,10 @@ const departmentService = {
   async create(data) {
     // Enforce hierarchy — faculty must exist
     await facultyService.getById(data.facultyId);
+    const duplicate = await departmentRepository.findByFacultyAndName(data.facultyId, data.name);
+    if (duplicate) {
+      throw new ConflictError(`A department named "${data.name}" already exists in this faculty.`);
+    }
     return departmentRepository.create(data);
   },
 
@@ -25,7 +29,14 @@ const departmentService = {
     if (updates.facultyId) {
       await facultyService.getById(updates.facultyId);
     }
-    await departmentService.getById(id);
+    const department = await departmentService.getById(id);
+    if (updates.name) {
+      const targetFacultyId = updates.facultyId || department.facultyId;
+      const duplicate = await departmentRepository.findByFacultyAndName(targetFacultyId, updates.name);
+      if (duplicate && String(duplicate._id) !== id) {
+        throw new ConflictError(`A department named "${updates.name}" already exists in this faculty.`);
+      }
+    }
     return departmentRepository.updateById(id, updates);
   },
 

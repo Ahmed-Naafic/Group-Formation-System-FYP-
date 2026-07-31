@@ -20,7 +20,7 @@ const semesterRepository = {
   },
 
   findActiveByNameAndAcademicYear(name, academicYearId) {
-    return Semester.findOne({ name, academicYearId, deletedAt: null });
+    return Semester.findOne({ name, academicYearId, deletedAt: null }).collation({ locale: 'en', strength: 2 });
   },
 
   // Used by AcademicYear cascade-delete guard.

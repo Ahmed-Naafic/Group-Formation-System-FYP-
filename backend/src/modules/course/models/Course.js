@@ -12,13 +12,19 @@ const courseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Code is unique within a department, not globally
-courseSchema.index({ departmentId: 1, code: 1 }, { unique: true });
+// Code is unique within a department, not globally — only enforced among
+// active (non-deleted) courses, so a deleted course's code can be reused.
+// (code is already uppercased above, so case-insensitivity isn't needed here.)
+courseSchema.index(
+  { departmentId: 1, code: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
 
-// Name is also unique within a department among active records
+// Name is also unique within a department among active records —
+// case-insensitive ("Data Structures" and "data structures" collide).
 courseSchema.index(
   { departmentId: 1, name: 1 },
-  { unique: true, partialFilterExpression: { deletedAt: null } },
+  { unique: true, collation: { locale: 'en', strength: 2 }, partialFilterExpression: { deletedAt: null } },
 );
 
 courseSchema.plugin(softDeletePlugin);
