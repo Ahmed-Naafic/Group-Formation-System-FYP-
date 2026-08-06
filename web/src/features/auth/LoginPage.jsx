@@ -127,14 +127,14 @@ export default function LoginPage() {
 
               {/* Identifier */}
               <div className="space-y-1.5">
-                <Label htmlFor="identifier">Email or Student ID</Label>
+                <Label htmlFor="identifier">Email</Label>
                 <Input
                   id="identifier"
                   type="text"
                   autoComplete="username"
                   autoFocus
                   placeholder="you@just.edu.so"
-                  {...register('identifier', { required: 'Email or ID is required' })}
+                  {...register('identifier', { required: 'Email is required' })}
                   aria-invalid={!!errors.identifier}
                 />
                 {errors.identifier && (
