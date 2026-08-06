@@ -88,8 +88,8 @@ class AuthController extends GetxController {
       errorMessage.value = 'Passwords do not match.';
       return;
     }
-    if (newPassword.length < 8) {
-      errorMessage.value = 'Password must be at least 8 characters.';
+    if (newPassword.length < 6) {
+      errorMessage.value = 'Password must be at least 6 characters.';
       return;
     }
     if (!RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)').hasMatch(newPassword)) {

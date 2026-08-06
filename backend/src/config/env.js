@@ -11,7 +11,7 @@ const schema = Joi.object({
   JWT_LIMITED_EXPIRES_IN: Joi.string().default('15m'),
 
   ADMIN_EMAIL: Joi.string().email({ tlds: { allow: false } }).required(),
-  ADMIN_PASSWORD: Joi.string().min(8).required(),
+  ADMIN_PASSWORD: Joi.string().min(6).required(),
   ADMIN_FULL_NAME: Joi.string().min(2).required(),
 
 });

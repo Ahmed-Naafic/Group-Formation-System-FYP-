@@ -101,10 +101,10 @@ export default function ChangePasswordPage() {
                   type="password"
                   autoComplete="new-password"
                   autoFocus
-                  placeholder="Minimum 8 characters"
+                  placeholder="Minimum 6 characters"
                   {...register('newPassword', {
                     required: 'New password is required',
-                    minLength: { value: 8, message: 'Must be at least 8 characters' },
+                    minLength: { value: 6, message: 'Must be at least 6 characters' },
                   })}
                   aria-invalid={!!errors.newPassword}
                 />

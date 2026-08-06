@@ -134,7 +134,7 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
                       const SizedBox(height: 10),
                       Text(
-                        'Min 8 characters · uppercase · lowercase · number',
+                        'Min 6 characters · uppercase · lowercase · number',
                         style: TextStyle(color: context.textMuted, fontSize: 11),
                       ),
 
