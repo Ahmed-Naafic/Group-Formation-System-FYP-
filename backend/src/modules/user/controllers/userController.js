@@ -1,6 +1,5 @@
 const asyncHandler = require('../../../common/utils/asyncHandler');
 const { sendSuccess } = require('../../../common/responses/apiResponse');
-const { ConflictError } = require('../../../common/errors');
 const userService = require('../services/userService');
 
 const userController = {
@@ -13,39 +12,41 @@ const userController = {
     return sendSuccess(res, { data: { users } });
   }),
 
-  // POST /api/users  — admin creates an instructor account
+  // POST /api/users — admin creates an admin or instructor account
   create: asyncHandler(async (req, res) => {
-    const { fullName, email, password } = req.body;
-
-    const existing = await userService.findByEmail(email);
-    if (existing) throw new ConflictError('An account with this email already exists');
-
-    const user = await userService.createUser({ fullName, email, role: 'instructor', password });
-    return sendSuccess(res, { status: 201, message: 'Instructor registered', data: { user } });
+    const user = await userService.createStaffUser(req.body, req.context);
+    const label = req.body.role === 'admin' ? 'Admin' : 'Instructor';
+    return sendSuccess(res, { status: 201, message: `${label} registered`, data: { user } });
   }),
 
   // PATCH /api/users/:id
   update: asyncHandler(async (req, res) => {
-    const user = await userService.updateInstructor(req.params.id, req.body);
-    return sendSuccess(res, { message: 'Instructor updated', data: { user } });
+    const user = await userService.updateInstructor(req.params.id, req.body, req.context);
+    return sendSuccess(res, { message: 'Account updated', data: { user } });
   }),
 
   // DELETE /api/users/:id
   remove: asyncHandler(async (req, res) => {
-    await userService.deleteInstructor(req.params.id, req.context.userId);
-    return sendSuccess(res, { message: 'Instructor deleted' });
+    await userService.deleteInstructor(req.params.id, req.context);
+    return sendSuccess(res, { message: 'Account deleted' });
   }),
 
   // PATCH /api/users/:id/activate
   activate: asyncHandler(async (req, res) => {
-    const user = await userService.setActive(req.params.id, true, req.context.userId);
-    return sendSuccess(res, { message: 'Instructor activated', data: { user } });
+    const user = await userService.setActive(req.params.id, true, req.context);
+    return sendSuccess(res, { message: 'Account activated', data: { user } });
   }),
 
   // PATCH /api/users/:id/deactivate
   deactivate: asyncHandler(async (req, res) => {
-    const user = await userService.setActive(req.params.id, false, req.context.userId);
-    return sendSuccess(res, { message: 'Instructor deactivated', data: { user } });
+    const user = await userService.setActive(req.params.id, false, req.context);
+    return sendSuccess(res, { message: 'Account deactivated', data: { user } });
+  }),
+
+  // POST /api/users/:id/reset-password
+  resetPassword: asyncHandler(async (req, res) => {
+    const result = await userService.resetPassword(req.params.id, req.context);
+    return sendSuccess(res, { message: 'Password reset', data: result });
   }),
 };
 

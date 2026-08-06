@@ -31,6 +31,11 @@ export const userApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/api/users/${id}`, method: 'DELETE' }),
       invalidatesTags: ['User'],
     }),
+    resetUserPassword: build.mutation({
+      query: (id) => ({ url: `/api/users/${id}/reset-password`, method: 'POST' }),
+      transformResponse: (res) => res.data,
+      invalidatesTags: ['User'],
+    }),
   }),
   overrideExisting: false,
 });
@@ -42,4 +47,5 @@ export const {
   useActivateInstructorMutation,
   useDeactivateInstructorMutation,
   useDeleteInstructorMutation,
+  useResetUserPasswordMutation,
 } = userApi;

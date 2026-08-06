@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   LayoutDashboard, Building2, Layers, BookOpen,
-  CalendarDays, Calendar, Users, UserCheck, SlidersHorizontal,
+  CalendarDays, Calendar, Users, SlidersHorizontal,
   X, Users2, ShieldAlert, FileBarChart, GraduationCap, BookMarked,
 } from 'lucide-react';
 import { selectRole } from '@/features/auth/authSlice';
@@ -20,7 +20,7 @@ const ADMIN_NAV = [
   { type: 'link',    label: 'Cohorts',            icon: GraduationCap,     to: '/cohorts' },
   { type: 'link',    label: 'Course Offerings',   icon: BookMarked,        to: '/course-offerings' },
   { type: 'section', label: 'Users' },
-  { type: 'link',    label: 'Instructors',        icon: UserCheck,         to: '/instructors' },
+  { type: 'link',    label: 'User Management',    icon: Users,             to: '/users' },
   { type: 'section', label: 'Settings' },
   { type: 'link',    label: 'Performance',        icon: SlidersHorizontal, to: '/settings/performance' },
   { type: 'link',    label: 'Reports',            icon: FileBarChart,      to: '/reports' },

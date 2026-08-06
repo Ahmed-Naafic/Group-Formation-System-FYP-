@@ -19,7 +19,7 @@ import PerformanceSettingsPage from '@/features/performance/PerformanceSettingsP
 import GroupsPage              from '@/features/group/GroupsPage';
 import GroupDetailPage         from '@/features/group/GroupDetailPage';
 import GroupHistoryPage        from '@/features/group/GroupHistoryPage';
-import InstructorsPage         from '@/features/user/InstructorsPage';
+import UserManagementPage      from '@/features/user/UserManagementPage';
 import WorkspaceDetailPage     from '@/features/workspace/WorkspaceDetailPage';
 import TasksPage               from '@/features/task/TasksPage';
 import TaskSubmissionsPage     from '@/features/task/TaskSubmissionsPage';
@@ -163,10 +163,11 @@ export const router = createBrowserRouter([
 
       // ── Users ────────────────────────────────────────────────────────────
       {
-        path: '/instructors',
-        element: <ProtectedRoute roles={['admin']}><InstructorsPage /></ProtectedRoute>,
-        handle: { title: 'Instructors' },
+        path: '/users',
+        element: <ProtectedRoute roles={['admin']}><UserManagementPage /></ProtectedRoute>,
+        handle: { title: 'User Management' },
       },
+      { path: '/instructors', element: <Navigate to="/users" replace /> },
 
       // ── Notifications ─────────────────────────────────────────────────
       {

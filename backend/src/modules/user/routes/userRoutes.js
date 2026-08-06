@@ -12,7 +12,7 @@ router.use(authenticate, requireRole('admin'));
 // GET /api/users?role=instructor  — list users (filterable by role)
 router.get('/', userController.getAll);
 
-// POST /api/users  — register a new instructor account
+// POST /api/users  — register a new admin or instructor account
 router.post('/', validate(createInstructorSchema), userController.create);
 
 // PATCH /api/users/:id  — update name / email / password
@@ -24,5 +24,8 @@ router.delete('/:id', validate(idParamSchema, 'params'), userController.remove);
 // PATCH /api/users/:id/activate|deactivate
 router.patch('/:id/activate',   validate(idParamSchema, 'params'), userController.activate);
 router.patch('/:id/deactivate', validate(idParamSchema, 'params'), userController.deactivate);
+
+// POST /api/users/:id/reset-password
+router.post('/:id/reset-password', validate(idParamSchema, 'params'), userController.resetPassword);
 
 module.exports = router;
