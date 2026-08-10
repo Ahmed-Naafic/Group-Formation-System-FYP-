@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
-import { Loader2, FileSpreadsheet, FileDown } from 'lucide-react';
+import { Loader2, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetCourseOfferingsQuery } from '@/features/courseOffering/courseOfferingApi';
 import { selectCurrentToken } from '@/features/auth/authSlice';
@@ -41,10 +41,6 @@ export default function ReportsPage() {
 
   function downloadFormatted() {
     downloadFile(`/api/reports/groups/formatted?courseOfferingId=${selectedOfferingId}`, 'group_list.xlsx', 'formatted');
-  }
-
-  function downloadDataRich(format) {
-    downloadFile(`/api/reports/groups?courseOfferingId=${selectedOfferingId}&format=${format}`, `group_data.${format}`, `data-${format}`);
   }
 
   return (
@@ -94,36 +90,6 @@ export default function ReportsPage() {
               : <FileSpreadsheet size={14} />}
             Download group list (Excel)
           </Button>
-        </div>
-
-        {/* Data-rich report */}
-        <div className="rounded-lg border border-border bg-white shadow-xs p-5">
-          <p className="text-sm font-medium text-ink-800 mb-1">Data Export (Excel / CSV)</p>
-          <p className="text-xs text-ink-400 mb-4">
-            Full data export with scores, attendance percentage, and performance category
-            per student. Use for grading review and end-of-semester records.
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              onClick={() => downloadDataRich('xlsx')}
-              disabled={!selectedOfferingId || !!downloading}
-            >
-              {downloading === 'data-xlsx'
-                ? <Loader2 size={14} className="animate-spin" />
-                : <FileDown size={14} />}
-              Download Excel
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => downloadDataRich('csv')}
-              disabled={!selectedOfferingId || !!downloading}
-            >
-              {downloading === 'data-csv'
-                ? <Loader2 size={14} className="animate-spin" />
-                : <FileDown size={14} />}
-              Download CSV
-            </Button>
-          </div>
         </div>
 
       </div>
