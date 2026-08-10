@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { Pencil, Trash2, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -29,6 +29,41 @@ function fmtDate(iso) {
 const STATUS_VARIANT = { active: 'success', completed: 'default', archived: 'secondary' };
 const ALL = '__all__';
 
+// Mirrors backend/src/modules/semester/services/semesterRules.js — kept in
+// sync by hand (no shared package between web/backend in this monorepo).
+// The backend is the source of truth; this is purely for immediate UI
+// feedback before the round-trip.
+const MIN_SEMESTER_MONTHS    = 4;
+const MAX_SEMESTER_MONTHS    = 6;
+const MAX_SEMESTERS_PER_YEAR = 12;
+const SEMESTER_NAME_PATTERN  = /^Semester (\d+)$/i;
+
+// Adds `months` calendar months, clamping day-of-month overflow to the last
+// day of the target month (e.g. Jan 31 + 1 month -> Feb 28, not Mar 3).
+function addMonthsUTC(date, months) {
+  const d = new Date(date);
+  const year  = d.getUTCFullYear();
+  const month = d.getUTCMonth() + months;
+  const day   = d.getUTCDate();
+  const result = new Date(Date.UTC(year, month, day));
+  const expectedMonth = ((month % 12) + 12) % 12;
+  if (result.getUTCMonth() !== expectedMonth) result.setUTCDate(0);
+  return result;
+}
+
+// Next unused "Semester N" (1-12) among `existing` — null once all 12 are taken.
+function nextSemesterName(existing) {
+  const used = new Set();
+  for (const s of existing) {
+    const match = SEMESTER_NAME_PATTERN.exec(String(s.name ?? '').trim());
+    if (match) used.add(Number(match[1]));
+  }
+  for (let n = 1; n <= MAX_SEMESTERS_PER_YEAR; n++) {
+    if (!used.has(n)) return `Semester ${n}`;
+  }
+  return null;
+}
+
 export default function SemestersPage() {
   const { data: semesters    = [], isLoading, error } = useGetSemestersQuery();
   const { data: academicYears = [] }                   = useGetAcademicYearsQuery();
@@ -41,7 +76,7 @@ export default function SemestersPage() {
   const [editing, setEditing]           = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, control, getValues, formState: { errors } } = useForm();
 
   const ayMap = Object.fromEntries(academicYears.map((y) => [y._id, y.name]));
 
@@ -51,15 +86,30 @@ export default function SemestersPage() {
 
   useEffect(() => {
     reset(editing ? {
-      name:           editing.name,
       academicYearId: String(editing.academicYearId?._id ?? editing.academicYearId ?? ''),
       startDate:      toDateInput(editing.startDate),
       endDate:        toDateInput(editing.endDate),
       status:         editing.status,
     } : {
-      name: '', academicYearId: '', startDate: '', endDate: '', status: 'active',
+      academicYearId: '', startDate: '', endDate: '', status: 'active',
     });
   }, [editing, reset]);
+
+  // Other active semesters in the selected academic year (excluding the one
+  // being edited) — drives both the auto-name preview and the client-side
+  // overlap check below.
+  const watchedAcademicYearId = useWatch({ control, name: 'academicYearId' });
+  const siblingsInAY = semesters.filter((s) => {
+    const sAyId = String(s.academicYearId?._id ?? s.academicYearId ?? '');
+    if (sAyId !== watchedAcademicYearId) return false;
+    if (editing && String(s._id) === String(editing._id)) return false;
+    return true;
+  });
+  const selectedAY = academicYears.find((y) => y._id === watchedAcademicYearId);
+  const computedName = editing
+    ? editing.name
+    : (watchedAcademicYearId ? nextSemesterName(siblingsInAY) : '');
+  const isFull = !editing && !!watchedAcademicYearId && computedName === null;
 
   function openCreate() { setEditing(null); setDialogOpen(true); }
   function openEdit(s)  { setEditing(s);    setDialogOpen(true); }
@@ -180,18 +230,19 @@ export default function SemestersPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="s-name">Name <span className="text-danger">*</span></Label>
+                <Label htmlFor="s-name">Name</Label>
                 <Input
                   id="s-name"
-                  placeholder="e.g. Semester One"
-                  {...register('name', {
-                    required: 'Name is required',
-                    minLength: { value: 2, message: 'At least 2 characters' },
-                    maxLength: { value: 100, message: 'Max 100 characters' },
-                  })}
-                  aria-invalid={!!errors.name}
+                  disabled
+                  readOnly
+                  value={computedName || ''}
+                  placeholder={editing ? '' : 'Select an academic year first'}
                 />
-                {errors.name && <p className="text-xs text-danger">{errors.name.message}</p>}
+                {isFull && (
+                  <p className="text-xs text-danger">
+                    This academic year already has the maximum of {MAX_SEMESTERS_PER_YEAR} semesters.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Academic Year <span className="text-danger">*</span></Label>
@@ -223,7 +274,45 @@ export default function SemestersPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="s-end">End date <span className="text-danger">*</span></Label>
-                <Input id="s-end" type="date" {...register('endDate', { required: 'Required' })} aria-invalid={!!errors.endDate} />
+                <Input
+                  id="s-end"
+                  type="date"
+                  {...register('endDate', {
+                    required: 'Required',
+                    validate: (endVal) => {
+                      const startVal = getValues('startDate');
+                      if (!startVal || !endVal) return true;
+                      const start = new Date(startVal);
+                      const end   = new Date(endVal);
+                      if (start >= end) return 'End date must be after start date';
+
+                      const minEnd = addMonthsUTC(start, MIN_SEMESTER_MONTHS);
+                      const maxEnd = addMonthsUTC(start, MAX_SEMESTER_MONTHS);
+                      if (end < minEnd) return `A semester must be at least ${MIN_SEMESTER_MONTHS} months long`;
+                      if (end > maxEnd) return `A semester must be at most ${MAX_SEMESTER_MONTHS} months long`;
+
+                      if (selectedAY) {
+                        const ayStart = new Date(selectedAY.startDate);
+                        const ayEnd   = new Date(selectedAY.endDate);
+                        if (start < ayStart || end > ayEnd) {
+                          return `Dates must fall within the academic year (${fmtDate(selectedAY.startDate)} – ${fmtDate(selectedAY.endDate)})`;
+                        }
+                      }
+
+                      const overlap = siblingsInAY.find((s) => {
+                        const sStart = new Date(s.startDate);
+                        const sEnd   = new Date(s.endDate);
+                        return start < sEnd && end > sStart;
+                      });
+                      if (overlap) {
+                        return `Dates overlap with "${overlap.name}" (${fmtDate(overlap.startDate)} – ${fmtDate(overlap.endDate)})`;
+                      }
+
+                      return true;
+                    },
+                  })}
+                  aria-invalid={!!errors.endDate}
+                />
                 {errors.endDate && <p className="text-xs text-danger">{errors.endDate.message}</p>}
               </div>
             </div>
@@ -246,7 +335,7 @@ export default function SemestersPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
-              <Button type="submit" disabled={creating || updating}>
+              <Button type="submit" disabled={creating || updating || isFull}>
                 {(creating || updating) && <Loader2 size={14} className="animate-spin" />}
                 {editing ? 'Save changes' : 'Create'}
               </Button>

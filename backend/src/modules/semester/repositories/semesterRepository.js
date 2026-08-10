@@ -19,8 +19,10 @@ const semesterRepository = {
     return Semester.findByIdAndUpdate(id, updates, { new: true });
   },
 
-  findActiveByNameAndAcademicYear(name, academicYearId) {
-    return Semester.findOne({ name, academicYearId, deletedAt: null }).collation({ locale: 'en', strength: 2 });
+  // Active (non-deleted) semesters in an academic year — used to derive the
+  // next "Semester N" name and to check duration/overlap against siblings.
+  findActiveByAcademicYear(academicYearId) {
+    return Semester.find({ academicYearId }).sort({ startDate: 1 });
   },
 
   // Used by AcademicYear cascade-delete guard.

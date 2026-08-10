@@ -2,34 +2,37 @@ const semesterRepository       = require('../repositories/semesterRepository');
 const academicYearService      = require('../../academicYear/services/academicYearService');
 const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
 const { NotFoundError, BadRequestError, ConflictError } = require('../../../common/errors');
-
-function _assertWithinAY(startDate, endDate, ay) {
-  const semStart = new Date(startDate);
-  const semEnd   = new Date(endDate);
-  const ayStart  = new Date(ay.startDate);
-  const ayEnd    = new Date(ay.endDate);
-  if (semStart < ayStart || semEnd > ayEnd) {
-    const fmt = d => d.toISOString().slice(0, 10);
-    throw new BadRequestError(
-      `Semester dates must fall within the academic year's date range (AY starts ${fmt(ayStart)}, ends ${fmt(ayEnd)}).`,
-    );
-  }
-}
+const {
+  MAX_SEMESTERS_PER_YEAR,
+  assertDuration,
+  assertWithinAcademicYear,
+  assertNoOverlap,
+  nextSemesterName,
+} = require('./semesterRules');
 
 const semesterService = {
+  // `name` is never taken from the request — it's always derived from what
+  // already exists in the academic year (see semesterRules.nextSemesterName),
+  // so it can't be spoofed, mistyped, or duplicated through the API.
   async create(data) {
     if (new Date(data.startDate) >= new Date(data.endDate)) {
       throw new BadRequestError('startDate must be before endDate');
     }
     const ay = await academicYearService.getById(data.academicYearId);
-    _assertWithinAY(data.startDate, data.endDate, ay);
-    const duplicate = await semesterRepository.findActiveByNameAndAcademicYear(
-      data.name, data.academicYearId,
-    );
-    if (duplicate) {
-      throw new ConflictError(`A semester named "${data.name}" already exists in this academic year.`);
+    assertWithinAcademicYear(data.startDate, data.endDate, ay);
+    assertDuration(data.startDate, data.endDate);
+
+    const siblings = await semesterRepository.findActiveByAcademicYear(data.academicYearId);
+    assertNoOverlap(siblings, data.startDate, data.endDate, null);
+
+    const name = nextSemesterName(siblings);
+    if (!name) {
+      throw new ConflictError(
+        `This academic year already has the maximum of ${MAX_SEMESTERS_PER_YEAR} semesters.`,
+      );
     }
-    return semesterRepository.create(data);
+
+    return semesterRepository.create({ ...data, name });
   },
 
   getAll(filter = {}) {
@@ -42,6 +45,8 @@ const semesterService = {
     return semester;
   },
 
+  // `name` is immutable after creation — it's not accepted by the update
+  // schema, so it's never present in `updates` here.
   async update(id, updates) {
     const semester = await semesterService.getById(id);
 
@@ -53,13 +58,22 @@ const semesterService = {
     const targetAYId = updates.academicYearId
       ?? String(semester.academicYearId?._id ?? semester.academicYearId);
     const ay = await academicYearService.getById(targetAYId);
-    _assertWithinAY(start, end, ay);
+    assertWithinAcademicYear(start, end, ay);
+    assertDuration(start, end);
 
-    if (updates.name || updates.academicYearId) {
-      const targetName = updates.name ?? semester.name;
-      const duplicate  = await semesterRepository.findActiveByNameAndAcademicYear(targetName, targetAYId);
-      if (duplicate && String(duplicate._id) !== id) {
-        throw new ConflictError(`A semester named "${targetName}" already exists in this academic year.`);
+    const siblings = await semesterRepository.findActiveByAcademicYear(targetAYId);
+    assertNoOverlap(siblings, start, end, id);
+
+    // Moving to a different academic year that already has this semester's
+    // number (e.g. this is "Semester 3" and the target year already has one)
+    // is the only way a duplicate name can still occur, since names are
+    // otherwise always derived fresh on create.
+    if (updates.academicYearId) {
+      const duplicate = siblings.find(
+        (s) => String(s._id) !== id && s.name.toLowerCase() === semester.name.toLowerCase(),
+      );
+      if (duplicate) {
+        throw new ConflictError(`A semester named "${semester.name}" already exists in this academic year.`);
       }
     }
 
