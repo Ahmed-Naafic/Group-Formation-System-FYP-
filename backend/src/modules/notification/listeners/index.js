@@ -212,9 +212,9 @@ function initListeners(io) {
   });
 
   // ── message.sent ──────────────────────────────────────────────────────────────
-  // Payload: { workspaceId, senderUserId, senderName, preview }
+  // Payload: { workspaceId, messageId, senderUserId, senderName, preview }
   // No DB notification record — just FCM push to group members who are offline/elsewhere.
-  emitter.on('message.sent', async ({ workspaceId, senderUserId, senderName, preview }) => {
+  emitter.on('message.sent', async ({ workspaceId, messageId, senderUserId, senderName, preview }) => {
     try {
       const ws = await Workspace.findById(workspaceId, 'groupId')
         .populate({
@@ -235,6 +235,7 @@ function initListeners(io) {
       await sendFcmBatch(recipientUserIds, senderName, preview, {
         type: 'NEW_MESSAGE',
         workspaceId,
+        messageId,
       });
     } catch (err) {
       logger.error('message.sent listener error', { err: err.message });

@@ -25,6 +25,7 @@ void _handleFcmTap(Map<String, dynamic> data) {
     type: type,
     entityId: data['entityId'] as String?,
     workspaceId: data['workspaceId'] as String?,
+    messageId: data['messageId'] as String?,
   );
 }
 

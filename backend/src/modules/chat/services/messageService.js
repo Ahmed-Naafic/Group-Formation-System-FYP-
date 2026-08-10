@@ -95,6 +95,7 @@ const messageService = {
     emitter.emit('chat.voiceMessage', { workspaceId: String(workspaceId), message });
     emitter.emit('message.sent', {
       workspaceId:  String(workspaceId),
+      messageId:    String(message._id),
       senderUserId: String(context.userId),
       // Pulled from the populated sender, not context.fullName — REST's req.context
       // (built by middleware/auth.js) doesn't carry fullName the way the socket
@@ -154,6 +155,7 @@ const messageService = {
     emitter.emit('chat.attachmentMessage', { workspaceId: String(workspaceId), message });
     emitter.emit('message.sent', {
       workspaceId:  String(workspaceId),
+      messageId:    String(message._id),
       senderUserId: String(context.userId),
       senderName:   message.senderId?.fullName ?? 'Someone',
       preview:      attachmentPreview(multerFile.mimetype, multerFile.originalname),

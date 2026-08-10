@@ -79,6 +79,7 @@ async function handleSendMessage(io, socket, { workspaceId, content, replyToId }
     const trimmed = content.trim();
     emitter.emit('message.sent', {
       workspaceId:  String(workspaceId),
+      messageId:    String(message._id),
       senderUserId: String(socket.context.userId),
       senderName:   socket.context.fullName ?? 'Someone',
       preview:      trimmed.length > 80 ? trimmed.slice(0, 80) + '…' : trimmed,

@@ -2,6 +2,8 @@ import 'package:get/get.dart';
 import '../data/models/workspace_model.dart';
 import '../data/repositories/task_repository.dart';
 import '../data/repositories/workspace_repository.dart';
+import '../modules/auth/controllers/auth_controller.dart';
+import '../modules/chat/controllers/chat_controller.dart';
 import '../routes/app_pages.dart';
 
 /// Resolves a notification (FCM push tap, or a row tapped in the in-app
@@ -17,13 +19,14 @@ class NotificationNavigator {
   /// [type] is the notification's `type` (GROUP_FORMED / TASK_ASSIGNED /
   /// TASK_DEADLINE / SUBMISSION_GRADED / NEW_MESSAGE). [entityId] is
   /// `relatedEntity.id` (in-app list) or the FCM payload's `entityId` (group
-  /// id / task id / submission id depending on type). [workspaceId] is only
-  /// set for NEW_MESSAGE, from the FCM payload's `workspaceId` field — chat
-  /// has no DB notification record.
+  /// id / task id / submission id depending on type). [workspaceId] and
+  /// [messageId] are only set for NEW_MESSAGE, from the FCM payload's
+  /// `workspaceId`/`messageId` fields — chat has no DB notification record.
   static Future<void> open({
     required String type,
     String? entityId,
     String? workspaceId,
+    String? messageId,
   }) async {
     if (!await _waitUntilReady()) return;
 
@@ -32,7 +35,10 @@ class NotificationNavigator {
         case 'NEW_MESSAGE':
           if (workspaceId == null) return;
           final ws = await _workspaceRepo.getById(workspaceId);
-          Get.toNamed(Routes.chat, arguments: ws);
+          Get.toNamed(
+            Routes.chat,
+            arguments: ChatArgs(workspace: ws, targetMessageId: messageId),
+          );
           break;
 
         case 'GROUP_FORMED':
@@ -87,14 +93,23 @@ class NotificationNavigator {
   /// still on splash/login would push onto a dead-end back stack (and the
   /// API calls above would 401 before a session exists anyway). Bounded so a
   /// logged-out cold start just drops the deep link instead of hanging.
+  ///
+  /// A cold-start FCM tap calls this from main() before runApp() has built
+  /// GetMaterialApp — at that point Get.currentRoute is '', which trivially
+  /// satisfies the "past splash/login" check below, so route alone isn't a
+  /// reliable readiness signal on that path. AuthController is only
+  /// registered inside GetMaterialApp's initialBinding, so requiring it too
+  /// guarantees the navigator actually exists before Get.toNamed is called.
   static Future<bool> _waitUntilReady() async {
     const maxAttempts = 20;
     const interval = Duration(milliseconds: 300);
     for (var i = 0; i < maxAttempts; i++) {
       final route = Get.currentRoute;
-      if (route != Routes.splash &&
+      final pastAuthGate = route.isNotEmpty &&
+          route != Routes.splash &&
           route != Routes.login &&
-          route != Routes.changePassword) {
+          route != Routes.changePassword;
+      if (pastAuthGate && Get.isRegistered<AuthController>()) {
         return true;
       }
       await Future.delayed(interval);

@@ -27,6 +27,17 @@ const kMaxVoiceMessageSeconds = 180;
 /// than an intentional recording — discard instead of uploading a blip.
 const _kMinRecordingMs = 400;
 
+/// Route arguments for opening chat with a specific message in mind (e.g.
+/// from a tapped chat notification) — [targetMessageId] is best-effort: once
+/// found, the view scrolls to and briefly highlights it, otherwise the
+/// screen just falls back to opening at the bottom like a normal chat visit.
+class ChatArgs {
+  final WorkspaceModel workspace;
+  final String? targetMessageId;
+
+  const ChatArgs({required this.workspace, this.targetMessageId});
+}
+
 class ChatController extends GetxController {
   final _repo = ChatRepository();
   final _fileRepo = FileRepository();
@@ -63,6 +74,17 @@ class ChatController extends GetxController {
 
   // ── Reply-to (null = not currently composing a reply) ──────────────────────
   final replyTarget = Rxn<ChatMessage>();
+
+  // ── Scroll-to-message (deep link from a chat notification) ─────────────────
+  // Set from ChatArgs.targetMessageId in onInit, consumed (and cleared) by
+  // the first successful load. bubbleKeys lets the view scroll a specific
+  // bubble into view via Scrollable.ensureVisible; highlightedMessageId
+  // drives a brief tint on it, cleared automatically after a couple seconds.
+  String? _pendingTargetMessageId;
+  final bubbleKeys = <String, GlobalKey>{};
+  final highlightedMessageId = RxnString();
+  Timer? _highlightTimer;
+  static const _maxTargetSearchPages = 6;
 
   // ── Attachments ──────────────────────────────────────────────────────────────
   final isUploadingAttachment = false.obs;
@@ -107,13 +129,17 @@ class ChatController extends GetxController {
   void onInit() {
     super.onInit();
     final args = Get.arguments;
-    if (args is! WorkspaceModel) {
+    if (args is ChatArgs) {
+      workspace = args.workspace;
+      _pendingTargetMessageId = args.targetMessageId;
+    } else if (args is WorkspaceModel) {
+      workspace = args;
+    } else {
       errorMessage.value = 'No workspace selected. Please open a group first.';
       isLoading.value = false;
       isConnecting.value = false;
       return;
     }
-    workspace = args;
     _myStudentId = Get.find<AuthController>().userStudentId.value;
     _myFullName = Get.find<AuthController>().userName.value;
     _myUserId = Get.find<AuthController>().userId.value;
@@ -128,7 +154,7 @@ class ChatController extends GetxController {
       // Instant display — no spinner
       messages.assignAll(cached);
       isLoading.value = false;
-      _scrollToBottom(force: true);
+      _scrollToTargetOrBottom();
       _syncNew(); // background: fetch anything missed while the screen was closed
     } else {
       _loadHistory();
@@ -174,7 +200,7 @@ class ChatController extends GetxController {
         messages.assignAll(msgs);
         _cache[ws.id] = List<ChatMessage>.from(msgs);
         isLoading.value = false;
-        _scrollToBottom(force: true);
+        _scrollToTargetOrBottom();
       }
     } catch (_) {
       if (_disposed) return;
@@ -483,6 +509,56 @@ class ChatController extends GetxController {
           curve: Curves.easeOut,
         );
       }
+    });
+  }
+
+  /// Consumes _pendingTargetMessageId (set when chat was opened from a
+  /// notification tap) — scrolls to and briefly highlights that message once
+  /// its bubble exists. If it isn't in the freshly-loaded page, pages in
+  /// older history looking for it (bounded), then gives up gracefully and
+  /// falls back to the normal open-at-bottom behaviour.
+  Future<void> _scrollToTargetOrBottom() async {
+    final targetId = _pendingTargetMessageId;
+    if (targetId == null) {
+      _scrollToBottom(force: true);
+      return;
+    }
+
+    for (var page = 0; page <= _maxTargetSearchPages; page++) {
+      if (_disposed) return;
+      if (messages.any((m) => m.id == targetId)) {
+        _pendingTargetMessageId = null;
+        _highlightMessage(targetId);
+        return;
+      }
+      if (page == _maxTargetSearchPages || !_hasMoreOlder) break;
+      await _loadOlder();
+    }
+
+    // Not found (too old, or since deleted) — fall back silently.
+    _pendingTargetMessageId = null;
+    _scrollToBottom(force: true);
+  }
+
+  void _highlightMessage(String messageId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final key = bubbleKeys[messageId];
+      final targetContext = key?.currentContext;
+      if (targetContext != null) {
+        Scrollable.ensureVisible(
+          targetContext,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          alignment: 0.5,
+        );
+      }
+      highlightedMessageId.value = messageId;
+      _highlightTimer?.cancel();
+      _highlightTimer = Timer(const Duration(seconds: 2), () {
+        if (highlightedMessageId.value == messageId) {
+          highlightedMessageId.value = null;
+        }
+      });
     });
   }
 
@@ -999,6 +1075,7 @@ class ChatController extends GetxController {
     scrollCtrl.removeListener(_onScroll);
     _typingTimer?.cancel();
     _recordingTimer?.cancel();
+    _highlightTimer?.cancel();
     _audioRecorder.dispose();
     _audioPlayer.dispose();
     final wsId = workspace?.id;

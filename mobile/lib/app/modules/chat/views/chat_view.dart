@@ -313,7 +313,7 @@ class ChatView extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (showDateDivider) _DateDivider(msg.createdAt),
-                        _MessageBubble(
+                        _HighlightableBubble(
                           msg: msg,
                           isMe: ctrl.isMyMessage(msg),
                           showSenderName: showSenderName,
@@ -379,6 +379,50 @@ class _DateDivider extends StatelessWidget {
     if (day == today) return 'Today';
     if (day == today.subtract(const Duration(days: 1))) return 'Yesterday';
     return DateFormat('MMM d, y').format(d);
+  }
+}
+
+// ── Highlightable wrapper ────────────────────────────────────────────────────
+// Carries the GlobalKey ChatController scrolls to (via Scrollable.ensureVisible)
+// when chat is opened from a notification tap, and tints the bubble briefly
+// once it's the highlighted one — see ChatController._scrollToTargetOrBottom.
+
+class _HighlightableBubble extends StatelessWidget {
+  final ChatMessage msg;
+  final bool isMe;
+  final bool showSenderName;
+  final ChatController ctrl;
+
+  const _HighlightableBubble({
+    required this.msg,
+    required this.isMe,
+    required this.showSenderName,
+    required this.ctrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final key = ctrl.bubbleKeys.putIfAbsent(msg.id, () => GlobalKey());
+    return Obx(() {
+      final highlighted = ctrl.highlightedMessageId.value == msg.id;
+      return AnimatedContainer(
+        key: key,
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: highlighted
+              ? const Color(0xFFFFD54F).withAlpha(60)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: _MessageBubble(
+          msg: msg,
+          isMe: isMe,
+          showSenderName: showSenderName,
+          ctrl: ctrl,
+        ),
+      );
+    });
   }
 }
 
