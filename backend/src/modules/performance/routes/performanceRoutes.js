@@ -18,7 +18,7 @@ router.get(
 
 router.put(
   '/settings',
-  authenticate, requireRole('admin'),
+  authenticate, requireRole('admin', 'instructor'),
   validate(updateSettingsSchema),
   performanceController.updateSettings,
 );

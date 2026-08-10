@@ -28,9 +28,10 @@ const ADMIN_NAV = [
 ];
 
 const INSTRUCTOR_NAV = [
-  { type: 'link', label: 'Dashboard',       icon: LayoutDashboard, to: '/' },
-  { type: 'link', label: 'My Offerings',    icon: BookMarked,      to: '/course-offerings' },
-  { type: 'link', label: 'Reports',         icon: FileBarChart,    to: '/reports' },
+  { type: 'link', label: 'Dashboard',       icon: LayoutDashboard,   to: '/' },
+  { type: 'link', label: 'My Offerings',    icon: BookMarked,        to: '/course-offerings' },
+  { type: 'link', label: 'Reports',         icon: FileBarChart,      to: '/reports' },
+  { type: 'link', label: 'Performance',     icon: SlidersHorizontal, to: '/settings/performance' },
 ];
 
 const STUDENT_NAV = [

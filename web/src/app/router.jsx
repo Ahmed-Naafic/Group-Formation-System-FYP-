@@ -147,7 +147,7 @@ export const router = createBrowserRouter([
       // ── Settings ────────────────────────────────────────────────────────
       {
         path: '/settings/performance',
-        element: <ProtectedRoute roles={['admin']}><PerformanceSettingsPage /></ProtectedRoute>,
+        element: <ProtectedRoute roles={['admin', 'instructor']}><PerformanceSettingsPage /></ProtectedRoute>,
         handle: { title: 'Performance Settings' },
       },
       {
