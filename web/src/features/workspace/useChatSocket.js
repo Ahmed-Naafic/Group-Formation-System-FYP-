@@ -4,7 +4,13 @@ import { io } from 'socket.io-client';
 import { selectCurrentToken } from '@/features/auth/authSlice';
 import { workspaceApi } from './workspaceApi';
 
-const SOCKET_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000').trim();
+// An empty string (same-origin deployments, where VITE_API_BASE_URL is
+// intentionally blank so REST calls resolve as relative paths) is NOT the
+// same as "unset" to socket.io-client: io('') tries to parse '' as a
+// hostname and builds a broken connection target, whereas io(undefined)
+// correctly defaults to window.location. `|| undefined` normalizes both
+// "unset" and "explicitly blank" to the same safe default.
+const SOCKET_URL = (import.meta.env.VITE_API_BASE_URL ?? '').trim() || undefined;
 
 export function useChatSocket(workspaceId) {
   const token     = useSelector(selectCurrentToken);

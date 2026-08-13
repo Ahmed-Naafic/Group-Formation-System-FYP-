@@ -4,7 +4,11 @@ import { io } from 'socket.io-client';
 import { selectCurrentToken } from '@/features/auth/authSlice';
 import { notificationApi } from './notificationApi';
 
-const SOCKET_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000').trim();
+// See useChatSocket.js for why this can't just be `?? 'http://localhost:5000'`
+// — an empty string (same-origin deployments) must also fall through to
+// socket.io-client's own window.location default, which only triggers on
+// undefined, not on ''.
+const SOCKET_URL = (import.meta.env.VITE_API_BASE_URL ?? '').trim() || undefined;
 
 export function useNotificationSocket() {
   const token    = useSelector(selectCurrentToken);
