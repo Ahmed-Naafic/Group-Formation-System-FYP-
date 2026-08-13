@@ -31,12 +31,13 @@ const authController = {
     // Voluntary change (full token): current password required
     const isForcedChange = scope === TOKEN_SCOPES.CHANGE_PASSWORD;
     if (!isForcedChange && !currentPassword) {
+      const message = 'Current password is required to change your password';
       return res.status(400).json({
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'Validation failed',
-          details: ['currentPassword is required when changing password voluntarily'],
+          message,
+          details: [message],
         },
       });
     }

@@ -37,7 +37,7 @@ function errorHandler(err, req, res, _next) {
       success: false,
       error: {
         code: errorCodes.VALIDATION_ERROR,
-        message: 'Validation failed',
+        message: details.join('; '),
         details,
       },
     });

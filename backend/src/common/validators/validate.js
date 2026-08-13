@@ -12,7 +12,7 @@ function validate(schema, property = 'body') {
     });
     if (error) {
       const details = error.details.map((d) => d.message);
-      return next(new ValidationError('Validation failed', details));
+      return next(new ValidationError(details.join('; '), details));
     }
     req[property] = value;
     return next();
