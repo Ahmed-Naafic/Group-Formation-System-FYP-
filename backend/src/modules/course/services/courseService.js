@@ -1,20 +1,19 @@
 const courseRepository         = require('../repositories/courseRepository');
 const departmentService        = require('../../department/services/departmentService');
 const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
+const { generateCourseCode }   = require('../utils/courseCodeGenerator');
 const { NotFoundError, ConflictError } = require('../../../common/errors');
 
 const courseService = {
   async create(data) {
-    await departmentService.getById(data.departmentId);
+    const department = await departmentService.getById(data.departmentId);
 
-    const [dupCode, dupName] = await Promise.all([
-      courseRepository.findOne({ departmentId: data.departmentId, code: data.code.toUpperCase() }),
-      courseRepository.findActiveByNameAndDepartment(data.name, data.departmentId),
-    ]);
-    if (dupCode) throw new ConflictError('A course with this code already exists in this department.');
+    const dupName = await courseRepository.findActiveByNameAndDepartment(data.name, data.departmentId);
     if (dupName) throw new ConflictError(`A course named "${data.name}" already exists in this department.`);
 
-    return courseRepository.create(data);
+    const code = await generateCourseCode(data.departmentId, department.name);
+
+    return courseRepository.create({ ...data, code });
   },
 
   getAll(filter = {}) {
@@ -35,16 +34,6 @@ const courseService = {
     }
 
     const targetDeptId = updates.departmentId || course.departmentId;
-
-    if (updates.code) {
-      const dupCode = await courseRepository.findOne({
-        departmentId: targetDeptId,
-        code: updates.code.toUpperCase(),
-      });
-      if (dupCode && dupCode._id.toString() !== id) {
-        throw new ConflictError('A course with this code already exists in this department.');
-      }
-    }
 
     if (updates.name) {
       const dupName = await courseRepository.findActiveByNameAndDepartment(updates.name, targetDeptId);

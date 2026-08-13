@@ -45,8 +45,8 @@ export default function CoursesPage() {
 
   useEffect(() => {
     reset(editing
-      ? { departmentId: editing.departmentId, name: editing.name, code: editing.code, description: editing.description ?? '' }
-      : { departmentId: '', name: '', code: '', description: '' }
+      ? { departmentId: editing.departmentId, name: editing.name, description: editing.description ?? '' }
+      : { departmentId: '', name: '', description: '' }
     );
   }, [editing, reset]);
 
@@ -56,7 +56,7 @@ export default function CoursesPage() {
 
   async function onSubmit(data) {
     try {
-      const payload = { ...data, code: data.code.toUpperCase() };
+      const payload = { ...data };
       if (editing) {
         await updateCourse({ id: editing._id, ...payload }).unwrap();
         toast.success('Course updated');
@@ -194,37 +194,29 @@ export default function CoursesPage() {
               />
               {errors.departmentId && <p className="text-xs text-danger">{errors.departmentId.message}</p>}
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="c-code">Code <span className="text-danger">*</span></Label>
-                <Input
-                  id="c-code"
-                  placeholder="e.g. CS101"
-                  className="uppercase"
-                  style={{ textTransform: 'uppercase' }}
-                  {...register('code', {
-                    required: 'Code is required',
-                    minLength: { value: 2, message: 'Min 2 chars' },
-                    maxLength: { value: 20, message: 'Max 20 chars' },
-                  })}
-                  aria-invalid={!!errors.code}
-                />
-                {errors.code && <p className="text-xs text-danger">{errors.code.message}</p>}
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label htmlFor="c-name">Name <span className="text-danger">*</span></Label>
-                <Input
-                  id="c-name"
-                  placeholder="e.g. Introduction to Programming"
-                  {...register('name', {
-                    required: 'Name is required',
-                    minLength: { value: 2, message: 'At least 2 characters' },
-                    maxLength: { value: 150, message: 'Max 150 characters' },
-                  })}
-                  aria-invalid={!!errors.name}
-                />
-                {errors.name && <p className="text-xs text-danger">{errors.name.message}</p>}
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-name">Name <span className="text-danger">*</span></Label>
+              <Input
+                id="c-name"
+                placeholder="e.g. Introduction to Programming"
+                {...register('name', {
+                  required: 'Name is required',
+                  minLength: { value: 2, message: 'At least 2 characters' },
+                  maxLength: { value: 150, message: 'Max 150 characters' },
+                })}
+                aria-invalid={!!errors.name}
+              />
+              {errors.name && <p className="text-xs text-danger">{errors.name.message}</p>}
+              {editing && (
+                <p className="text-xs text-ink-400">
+                  Code:{' '}
+                  <span className="font-mono font-semibold tracking-wide text-ink-600">{editing.code}</span>
+                  {' '}(auto-generated, cannot be changed)
+                </p>
+              )}
+              {!editing && (
+                <p className="text-xs text-ink-400">A course code will be generated automatically.</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="c-desc">Description</Label>
