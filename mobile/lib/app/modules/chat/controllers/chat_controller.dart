@@ -111,7 +111,7 @@ class ChatController extends GetxController {
   static const _delays = [800, 1500, 3000];
 
   bool isMyMessage(ChatMessage msg) =>
-      _myStudentId.isNotEmpty && msg.sender.studentId == _myStudentId;
+      _myUserId.isNotEmpty && msg.sender.id == _myUserId;
 
   String get myUserId => _myUserId;
 
@@ -398,8 +398,8 @@ class ChatController extends GetxController {
         // pending bubbles. Voice messages reconcile via an explicit tempId in
         // stopRecordingAndSend() instead, and fall through to the id-based add below
         // regardless of whether the HTTP response or this socket echo arrives first.
-        if (_myStudentId.isNotEmpty &&
-            msg.sender.studentId == _myStudentId &&
+        if (_myUserId.isNotEmpty &&
+            msg.sender.id == _myUserId &&
             msg.content.isNotEmpty) {
           final pendingIdx = messages.indexWhere(
             (m) => m.isPending && m.content == msg.content,

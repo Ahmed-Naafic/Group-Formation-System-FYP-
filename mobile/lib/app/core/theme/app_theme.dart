@@ -15,6 +15,10 @@ extension AppColorsX on BuildContext {
   Color get inputBarBg     => _dark ? const Color(0xFF242B42) : Colors.white;
   Color get unreadBg       => _dark ? const Color(0xFF1A2235) : const Color(0xFFEFF4FF);
   Color get chatBubbleOther=> _dark ? const Color(0xFF2A3350) : Colors.white;
+  // Distinguishes instructor-sent messages from ordinary "other" bubbles.
+  Color get chatBubbleInstructor       => _dark ? const Color(0xFF4A3B1F) : const Color(0xFFFCEACB);
+  Color get chatBubbleInstructorBorder => _dark ? const Color(0xFF6B5326) : const Color(0xFFEBC475);
+  Color get instructorAccent           => _dark ? const Color(0xFFE8B84B) : const Color(0xFFB07D1A);
 
   // Text
   Color get textPrimary     => _dark ? const Color(0xFFF0F6FC) : const Color(0xFF0E1320);

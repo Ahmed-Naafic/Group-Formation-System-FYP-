@@ -26,17 +26,22 @@ class ChatSender {
   final String id;
   final String fullName;
   final String? studentId;
+  final String? role;
 
   const ChatSender({
     required this.id,
     required this.fullName,
     this.studentId,
+    this.role,
   });
+
+  bool get isInstructor => role == 'instructor';
 
   factory ChatSender.fromJson(Map<String, dynamic> json) => ChatSender(
         id:        json['_id']       as String? ?? '',
         fullName:  json['fullName']  as String? ?? 'Unknown',
         studentId: json['studentId'] as String?,
+        role:      json['role']      as String?,
       );
 }
 

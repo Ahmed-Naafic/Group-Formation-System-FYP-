@@ -814,6 +814,9 @@ class _MessageBubble extends StatelessWidget {
     final tickColor = isSticker
         ? context.textMuted
         : (isMe ? Colors.white.withAlpha(160) : context.textMuted);
+    // Instructor messages get a distinct gold treatment (except the
+    // instructor's own view of their own message — that's still "mine" blue).
+    final isFromInstructor = !isMe && msg.sender.isInstructor;
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -833,11 +836,11 @@ class _MessageBubble extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 3),
                 child: Text(
-                  msg.sender.fullName,
-                  style: const TextStyle(
+                  isFromInstructor ? '${msg.sender.fullName} · Instructor' : msg.sender.fullName,
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1E3A8A),
+                    color: isFromInstructor ? context.instructorAccent : const Color(0xFF1E3A8A),
                   ),
                 ),
               ),
@@ -857,7 +860,12 @@ class _MessageBubble extends StatelessWidget {
                     : BoxDecoration(
                         color: isMe
                             ? const Color(0xFF1E3A8A)
-                            : context.chatBubbleOther,
+                            : isFromInstructor
+                                ? context.chatBubbleInstructor
+                                : context.chatBubbleOther,
+                        border: isFromInstructor
+                            ? Border.all(color: context.chatBubbleInstructorBorder)
+                            : null,
                         borderRadius: BorderRadius.only(
                           topLeft: const Radius.circular(18),
                           topRight: const Radius.circular(18),

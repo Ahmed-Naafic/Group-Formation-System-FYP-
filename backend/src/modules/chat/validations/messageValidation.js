@@ -15,6 +15,7 @@ const messageValidation = {
   listMessages: Joi.object({
     limit:  Joi.number().integer().min(1).max(100).default(50),
     before: objectId,
+    after:  objectId,
   }),
 
   sendMessage: Joi.object({

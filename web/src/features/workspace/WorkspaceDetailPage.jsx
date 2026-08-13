@@ -148,7 +148,7 @@ function StickerPopover({ open, onPick, onClose }) {
 // Renders a chat attachment: image/video load via authenticated fetch → blob
 // object URL (the storage bucket is private, so a plain <img src> can't
 // resolve it); anything else shows as a downloadable file chip.
-function AttachmentContent({ attachment, workspaceId, token, isMine }) {
+function AttachmentContent({ attachment, workspaceId, token, isMine, isInstructor }) {
   const anchorRef = useRef(null);
   const inView = useInView(anchorRef);
   const [blobUrl, setBlobUrl]   = useState(null);
@@ -228,19 +228,23 @@ function AttachmentContent({ attachment, workspaceId, token, isMine }) {
         onClick={handleDownload}
         className={cn(
           'flex items-center gap-2 rounded-lg px-3 py-2 text-left w-56',
-          isMine ? 'bg-just-blue-700' : 'bg-white border border-border',
+          isMine
+            ? 'bg-just-blue-700'
+            : isInstructor
+              ? 'bg-just-gold-100 border border-just-gold-300'
+              : 'bg-white border border-border',
         )}
       >
-        <DocIcon mimeType={attachment.mimeType} className={isMine ? 'text-white shrink-0' : 'text-ink-500 shrink-0'} />
+        <DocIcon mimeType={attachment.mimeType} className={isMine ? 'text-white shrink-0' : isInstructor ? 'text-just-gold-700 shrink-0' : 'text-ink-500 shrink-0'} />
         <span className="min-w-0 flex-1">
-          <span className={cn('block text-sm font-medium truncate', isMine ? 'text-white' : 'text-ink-800')}>
+          <span className={cn('block text-sm font-medium truncate', isMine ? 'text-white' : isInstructor ? 'text-ink-900' : 'text-ink-800')}>
             {attachment.originalName}
           </span>
-          <span className={cn('block text-xs', isMine ? 'text-just-blue-100' : 'text-ink-400')}>
+          <span className={cn('block text-xs', isMine ? 'text-just-blue-100' : isInstructor ? 'text-just-gold-700' : 'text-ink-400')}>
             {formatBytes(attachment.sizeBytes)}
           </span>
         </span>
-        <Download size={14} className={isMine ? 'text-white shrink-0' : 'text-ink-400 shrink-0'} />
+        <Download size={14} className={isMine ? 'text-white shrink-0' : isInstructor ? 'text-just-gold-600 shrink-0' : 'text-ink-400 shrink-0'} />
       </button>
     );
   }
@@ -253,7 +257,7 @@ function AttachmentContent({ attachment, workspaceId, token, isMine }) {
 // short-lived signed URL as JSON instead. Fetched once here (bytes → blob →
 // object URL) rather than used directly as <audio src>, so playback doesn't
 // break if the user leaves the chat open past the URL's ~5-minute TTL.
-function VoiceMessage({ workspaceId, messageId, duration, token, isMine }) {
+function VoiceMessage({ workspaceId, messageId, duration, token, isMine, isInstructor }) {
   const anchorRef = useRef(null);
   const inView = useInView(anchorRef);
   const [audioUrl, setAudioUrl] = useState(null);
@@ -285,7 +289,7 @@ function VoiceMessage({ workspaceId, messageId, duration, token, isMine }) {
     };
   }, [workspaceId, messageId, token, inView]);
 
-  const mutedText = isMine ? 'text-just-blue-100' : 'text-ink-400';
+  const mutedText = isMine ? 'text-just-blue-100' : isInstructor ? 'text-just-gold-700' : 'text-ink-400';
 
   let content;
   if (failed) {
@@ -400,7 +404,7 @@ function MembersTab({ workspace }) {
 // ── Chat tab ───────────────────────────────────────────────────────────────────
 
 function ChatTab({ workspaceId, isAdmin, currentUser }) {
-  const { data: messages = [], isLoading } = useGetMessagesQuery(workspaceId);
+  const { data: messages = [], isLoading, error: messagesError } = useGetMessagesQuery(workspaceId);
   const { sendMessage } = useChatSocket(workspaceId);
   const token = useSelector(selectCurrentToken);
   const dispatch = useDispatch();
@@ -539,6 +543,12 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
           <div className="flex justify-center py-10">
             <Loader2 size={20} className="animate-spin text-ink-300" />
           </div>
+        ) : messagesError ? (
+          <div className="flex flex-col items-center justify-center h-full gap-1">
+            <p className="text-sm text-danger">
+              {messagesError?.data?.error?.message ?? 'Could not load messages.'}
+            </p>
+          </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2">
             <p className="text-sm text-ink-400">No messages yet.</p>
@@ -553,14 +563,29 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
             )}
             {messages.map((msg) => {
             const isMine = myId && String(msg.senderId?._id ?? msg.senderId) === myId;
+            // Instructor messages get a distinct gold treatment (except when
+            // it's the instructor's own view of their own message — that
+            // stays the normal "mine" blue, as with any sender).
+            const isInstructor = !isMine && msg.senderId?.role === 'instructor';
             const hasAttachment = msg.attachments?.length > 0;
             const hasAudio = !hasAttachment && msg.audioDuration != null;
             const sticker = !hasAttachment && !hasAudio && isStickerContent(msg.content);
+            const bubbleClass = cn(
+              'rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words',
+              isMine
+                ? 'bg-just-blue-600 text-white rounded-br-sm'
+                : isInstructor
+                  ? 'bg-just-gold-100 text-ink-900 border border-just-gold-300 rounded-bl-sm'
+                  : 'bg-ink-100 text-ink-800 rounded-bl-sm',
+            );
             return (
               <div key={msg._id} className={cn('flex gap-2', isMine ? 'flex-row-reverse' : 'flex-row')}>
                 {/* Avatar */}
                 {!isMine && (
-                  <div className="shrink-0 h-7 w-7 rounded-full bg-just-blue-100 overflow-hidden flex items-center justify-center text-[10px] font-bold text-just-blue-700 mt-0.5">
+                  <div className={cn(
+                    'shrink-0 h-7 w-7 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-bold mt-0.5',
+                    isInstructor ? 'bg-just-gold-200 text-just-gold-700' : 'bg-just-blue-100 text-just-blue-700',
+                  )}>
                     {msg.senderId?.avatarUrl
                       ? <img src={msg.senderId.avatarUrl} alt={msg.senderId.fullName} className="h-full w-full object-cover" />
                       : (msg.senderId?.fullName ?? '?').charAt(0).toUpperCase()
@@ -569,8 +594,11 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
                 )}
                 <div className={cn('max-w-[72%]', isMine ? 'items-end' : 'items-start', 'flex flex-col gap-0.5')}>
                   {!isMine && (
-                    <span className="text-[11px] text-ink-400 font-medium ml-1">
-                      {msg.senderId?.fullName ?? '—'}
+                    <span className={cn(
+                      'text-[11px] font-medium ml-1',
+                      isInstructor ? 'text-just-gold-700' : 'text-ink-400',
+                    )}>
+                      {msg.senderId?.fullName ?? '—'}{isInstructor ? ' · Instructor' : ''}
                     </span>
                   )}
                   {hasAttachment ? (
@@ -580,14 +608,10 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
                         workspaceId={workspaceId}
                         token={token}
                         isMine={isMine}
+                        isInstructor={isInstructor}
                       />
                       {msg.content && (
-                        <div className={cn(
-                          'rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words',
-                          isMine
-                            ? 'bg-just-blue-600 text-white rounded-br-sm'
-                            : 'bg-ink-100 text-ink-800 rounded-bl-sm',
-                        )}>
+                        <div className={bubbleClass}>
                           {msg.content}
                         </div>
                       )}
@@ -599,16 +623,12 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
                       duration={msg.audioDuration}
                       token={token}
                       isMine={isMine}
+                      isInstructor={isInstructor}
                     />
                   ) : sticker ? (
                     <div className="text-5xl leading-none px-1">{msg.content}</div>
                   ) : (
-                    <div className={cn(
-                      'rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words',
-                      isMine
-                        ? 'bg-just-blue-600 text-white rounded-br-sm'
-                        : 'bg-ink-100 text-ink-800 rounded-bl-sm',
-                    )}>
+                    <div className={bubbleClass}>
                       {msg.content}
                     </div>
                   )}
