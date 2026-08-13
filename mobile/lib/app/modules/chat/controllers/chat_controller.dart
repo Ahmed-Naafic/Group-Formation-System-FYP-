@@ -615,13 +615,18 @@ class ChatController extends GetxController {
     _cache[ws.id] = List<ChatMessage>.from(messages);
     _scrollToBottom(force: true);
 
-    if (isSocketConnected.value) {
-      _socket!.emit('send-message', {
-        'workspaceId': ws.id,
-        'content': text,
-        if (replyingTo != null) 'replyToId': replyingTo.id,
-      });
-    }
+    // Always emit, even mid-reconnect — socket_io_client buffers packets
+    // sent while disconnected and flushes them once the connection is back,
+    // so the message still reaches the server. Gating this on
+    // isSocketConnected used to silently drop the send with no retry and no
+    // error, leaving nothing but a permanently-pending 1-tick local bubble —
+    // unlike voice/attachment sends, which go over REST and don't depend on
+    // this flag at all.
+    _socket?.emit('send-message', {
+      'workspaceId': ws.id,
+      'content': text,
+      if (replyingTo != null) 'replyToId': replyingTo.id,
+    });
   }
 
   /// Sends a single sticker emoji immediately — reuses sendMessage()'s
