@@ -602,7 +602,7 @@ class ChatController extends GetxController {
       id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
       workspaceId: ws.id,
       sender: ChatSender(
-        id: '',
+        id: _myUserId,
         fullName: _myFullName,
         studentId: _myStudentId,
       ),
@@ -727,7 +727,7 @@ class ChatController extends GetxController {
     final pending = ChatMessage(
       id: tempId,
       workspaceId: ws.id,
-      sender: ChatSender(id: '', fullName: _myFullName, studentId: _myStudentId),
+      sender: ChatSender(id: _myUserId, fullName: _myFullName, studentId: _myStudentId),
       content: caption,
       createdAt: DateTime.now(),
       isPending: true,
@@ -913,7 +913,7 @@ class ChatController extends GetxController {
       id: tempId,
       workspaceId: ws.id,
       sender: ChatSender(
-        id: '',
+        id: _myUserId,
         fullName: _myFullName,
         studentId: _myStudentId,
       ),
