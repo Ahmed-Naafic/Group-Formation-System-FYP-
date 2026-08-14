@@ -6,6 +6,9 @@ const rawBaseQuery = fetchBaseQuery({
   prepareHeaders: (headers, { getState }) => {
     const token = getState().auth?.token;
     if (token) headers.set('Authorization', `Bearer ${token}`);
+    // Lets the backend restrict which roles may log in from which app —
+    // students use the mobile app, admins/instructors use this one.
+    headers.set('X-Client-Platform', 'web');
     return headers;
   },
 });

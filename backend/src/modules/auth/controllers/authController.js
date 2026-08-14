@@ -7,7 +7,8 @@ const asyncHandler = require('../../../common/utils/asyncHandler');
 const authController = {
   login: asyncHandler(async (req, res) => {
     const { identifier, password } = req.body;
-    const result = await authService.login({ identifier, password });
+    const platform = req.headers['x-client-platform'];
+    const result = await authService.login({ identifier, password, platform });
 
     if (result.mustChangePassword) {
       return sendSuccess(res, {

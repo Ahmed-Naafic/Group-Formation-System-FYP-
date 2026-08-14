@@ -10,13 +10,28 @@ const TOKEN_SCOPES = {
   CHANGE_PASSWORD: 'change_password',
 };
 
+// Students use the mobile app; admins/instructors use the web app. Enforced
+// via the X-Client-Platform header each app sends on every request — if a
+// client doesn't send it (e.g. API tooling, tests), the restriction simply
+// doesn't apply, since this is a UX guard rather than the sole authorization
+// boundary (every endpoint still enforces its own role checks regardless).
+function assertAllowedPlatform(user, platform) {
+  if (platform === 'web' && user.role === 'student') {
+    throw new ForbiddenError('Students must use the mobile app to log in.');
+  }
+  if (platform === 'mobile' && user.role !== 'student') {
+    throw new ForbiddenError('Admins and instructors must use the web app to log in.');
+  }
+}
+
 const authService = {
-  async login({ identifier, password }) {
+  async login({ identifier, password, platform }) {
     const user = await userService.findByIdentifier(identifier.trim());
 
     // Deliberate vague message — don't reveal whether the identifier exists
     if (!user) throw new UnauthorizedError('Invalid credentials');
     if (!user.isActive) throw new ForbiddenError('Account is deactivated');
+    assertAllowedPlatform(user, platform);
 
     const passwordMatch = await userService.verifyPassword(password, user.passwordHash);
     if (!passwordMatch) throw new UnauthorizedError('Invalid credentials');

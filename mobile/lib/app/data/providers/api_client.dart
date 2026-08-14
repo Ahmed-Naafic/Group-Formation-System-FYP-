@@ -22,7 +22,10 @@ class ApiClient {
       // than a fast connection to even finish the TLS handshake.
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 30),
-      headers: {'Content-Type': 'application/json'},
+      // X-Client-Platform lets the backend restrict which roles may log in
+      // from which app — only students use this app; admins/instructors use
+      // the web app.
+      headers: {'Content-Type': 'application/json', 'X-Client-Platform': 'mobile'},
     ));
 
     dio.interceptors.add(_RetryOnConnectionFailureInterceptor(dio));
