@@ -159,11 +159,16 @@ class _LoginViewState extends State<LoginView> {
                         ),
                       ),
 
-                      // Error banner
+                      // Error banner — while locked out, the seconds tick
+                      // live even though errorMessage itself was only set once.
                       Obx(() {
-                        if (_controller.errorMessage.isEmpty) {
+                        final locked = _controller.lockoutSeconds.value > 0;
+                        if (_controller.errorMessage.isEmpty && !locked) {
                           return const SizedBox(height: 20);
                         }
+                        final text = locked
+                            ? 'Too many failed attempts. Try again in ${_controller.lockoutSeconds.value}s.'
+                            : _controller.errorMessage.value;
                         return Container(
                           margin: const EdgeInsets.only(top: 14),
                           padding: const EdgeInsets.symmetric(
@@ -180,7 +185,7 @@ class _LoginViewState extends State<LoginView> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  _controller.errorMessage.value,
+                                  text,
                                   style: const TextStyle(
                                       color: Color(0xFFB23A3A), fontSize: 13),
                                 ),
@@ -194,43 +199,48 @@ class _LoginViewState extends State<LoginView> {
 
                       // Sign-in button
                       Obx(
-                        () => SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: ElevatedButton(
-                            onPressed: _controller.isLoading.value
-                                ? null
-                                : () => _controller.login(
-                                      _identifierCtrl.text,
-                                      _passwordCtrl.text,
-                                    ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E3A8A),
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  const Color(0xFF1E3A8A).withAlpha(120),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                        () {
+                          final locked = _controller.lockoutSeconds.value > 0;
+                          return SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: ElevatedButton(
+                              onPressed: (_controller.isLoading.value || locked)
+                                  ? null
+                                  : () => _controller.login(
+                                        _identifierCtrl.text,
+                                        _passwordCtrl.text,
+                                      ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1E3A8A),
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor:
+                                    const Color(0xFF1E3A8A).withAlpha(120),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                elevation: 0,
                               ),
-                              elevation: 0,
-                            ),
-                            child: _controller.isLoading.value
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2.5,
+                              child: _controller.isLoading.value
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2.5,
+                                      ),
+                                    )
+                                  : Text(
+                                      locked
+                                          ? 'Try again in ${_controller.lockoutSeconds.value}s'
+                                          : 'Sign In',
+                                      style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600),
                                     ),
-                                  )
-                                : const Text(
-                                    'Sign In',
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),

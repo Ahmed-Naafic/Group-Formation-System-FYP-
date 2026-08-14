@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000').trim();
 import { useLoginMutation } from './authApi';
@@ -22,6 +22,8 @@ export default function LoginPage() {
   const [login, { isLoading }] = useLoginMutation();
   const [wakingUp, setWakingUp] = useState(false);
   const [elapsed, setElapsed]   = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
 
   // Tick a seconds counter while login is in-flight so the user can see progress
   useEffect(() => {
@@ -29,6 +31,13 @@ export default function LoginPage() {
     const id = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [isLoading]);
+
+  // Count the lockout down from whatever the server reported to 0, live.
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const id = setInterval(() => setLockoutSeconds((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [lockoutSeconds]);
 
   const from = location.state?.from?.pathname ?? '/';
 
@@ -69,6 +78,10 @@ export default function LoginPage() {
       if (err?.status === 'FETCH_ERROR') {
         setWakingUp(true);
         setError('root', { message: 'Server took too long to respond. Please try again.' });
+      } else if (err?.data?.error?.code === 'TOO_MANY_ATTEMPTS') {
+        setWakingUp(false);
+        setLockoutSeconds(err?.data?.data?.retryAfterSeconds ?? 30);
+        setError('root', { message: err.data.error.message });
       } else {
         setWakingUp(false);
         setError('root', { message: err?.data?.error?.message ?? 'Invalid credentials' });
@@ -120,7 +133,9 @@ export default function LoginPage() {
                   <p className="text-sm text-red-700">
                     {wakingUp
                       ? 'Server is slow to start (free hosting). Please try again.'
-                      : errors.root.message}
+                      : lockoutSeconds > 0
+                        ? `Too many failed attempts. Try again in ${lockoutSeconds}s.`
+                        : errors.root.message}
                   </p>
                 </div>
               )}
@@ -145,24 +160,36 @@ export default function LoginPage() {
               {/* Password */}
               <div className="space-y-1.5">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  {...register('password', {
-                    required: 'Password is required',
-                  })}
-                  aria-invalid={!!errors.password}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    className="pr-9"
+                    {...register('password', {
+                      required: 'Password is required',
+                    })}
+                    aria-invalid={!!errors.password}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700 transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
                 {errors.password && (
                   <p className="text-xs text-danger">{errors.password.message}</p>
                 )}
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading || lockoutSeconds > 0}>
                 {isLoading && <Loader2 size={16} className="animate-spin" />}
-                Sign in
+                {lockoutSeconds > 0 ? `Try again in ${lockoutSeconds}s` : 'Sign in'}
               </Button>
             </form>
           </CardContent>

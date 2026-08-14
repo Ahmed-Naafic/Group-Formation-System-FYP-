@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:get/get.dart' hide FormData, MultipartFile;
@@ -12,6 +13,11 @@ class AuthController extends GetxController {
   // UI state
   final isLoading     = false.obs;
   final errorMessage  = ''.obs;
+
+  // Login lockout — ticks down to 0 once the server locks the account out
+  // after too many wrong passwords in a row.
+  final lockoutSeconds = 0.obs;
+  Timer? _lockoutTimer;
 
   // Logged-in user state (populated after login / restored on auto-login)
   final userId        = ''.obs;
@@ -47,6 +53,8 @@ class AuthController extends GetxController {
   // ── Login ────────────────────────────────────────────────────────────────────
 
   Future<void> login(String identifier, String password) async {
+    if (lockoutSeconds.value > 0) return;
+
     if (identifier.trim().isEmpty || password.isEmpty) {
       errorMessage.value = 'Please enter your Student ID and password.';
       return;
@@ -74,11 +82,36 @@ class AuthController extends GetxController {
       Get.offAllNamed(Routes.main);
     } on DioException catch (e) {
       errorMessage.value = _loginError(e);
+      final retryAfter = e.response?.data is Map
+          ? (e.response?.data['data']?['retryAfterSeconds'] as num?)?.toInt()
+          : null;
+      if (retryAfter != null) {
+        _startLockoutCountdown(retryAfter);
+      }
     } catch (_) {
       errorMessage.value = 'Something went wrong. Please try again.';
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void _startLockoutCountdown(int seconds) {
+    _lockoutTimer?.cancel();
+    lockoutSeconds.value = seconds;
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (lockoutSeconds.value <= 1) {
+        lockoutSeconds.value = 0;
+        timer.cancel();
+      } else {
+        lockoutSeconds.value--;
+      }
+    });
+  }
+
+  @override
+  void onClose() {
+    _lockoutTimer?.cancel();
+    super.onClose();
   }
 
   // ── Change password (forced — limited token already stored) ──────────────────
@@ -204,11 +237,17 @@ class AuthController extends GetxController {
 
     final status  = e.response?.statusCode;
     final message = e.response?.data?['error']?['message'] as String?;
+    final code    = e.response?.data?['error']?['code'] as String?;
 
     if (status == 400 || status == 401) return 'Incorrect Student ID or password.';
     if (status == 403) return 'Your account has been deactivated. Contact your instructor.';
     if (status == 404) return 'No account found with that Student ID.';
-    if (status == 429) return 'Too many attempts. Please wait a moment and try again.';
+    // Account lockout (3 wrong attempts) carries its own specific, countdown-
+    // accurate message — only fall back to the generic one for the coarser
+    // IP-based rate limiter, which doesn't.
+    if (status == 429) return code == 'TOO_MANY_ATTEMPTS'
+        ? (message ?? 'Too many attempts. Please wait a moment and try again.')
+        : 'Too many attempts. Please wait a moment and try again.';
     if (status != null && status >= 500) return 'Server error. Please try again later.';
     return message ?? 'Login failed. Please try again.';
   }

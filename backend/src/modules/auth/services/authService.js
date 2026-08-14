@@ -3,7 +3,10 @@ const { JWT_SECRET, JWT_EXPIRES_IN, JWT_LIMITED_EXPIRES_IN } = require('../../..
 const userService    = require('../../user/services/userService');
 const userRepository = require('../../user/repositories/userRepository');
 const StorageService = require('../../../common/services/storage/StorageService');
-const { UnauthorizedError, ForbiddenError } = require('../../../common/errors');
+const { UnauthorizedError, ForbiddenError, TooManyAttemptsError } = require('../../../common/errors');
+
+const LOCKOUT_THRESHOLD = 3;
+const LOCKOUT_SECONDS = 30;
 
 const TOKEN_SCOPES = {
   FULL: 'full',
@@ -33,8 +36,24 @@ const authService = {
     if (!user.isActive) throw new ForbiddenError('Account is deactivated');
     assertAllowedPlatform(user, platform);
 
+    // Already locked out from a prior burst of wrong attempts — re-report
+    // the remaining time rather than checking the password again, so
+    // retrying during the lockout can't reset or extend it.
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000));
+      throw new TooManyAttemptsError(retryAfterSeconds);
+    }
+
     const passwordMatch = await userService.verifyPassword(password, user.passwordHash);
-    if (!passwordMatch) throw new UnauthorizedError('Invalid credentials');
+    if (!passwordMatch) {
+      const updated = await userRepository.incrementFailedAttempts(user._id);
+      if (updated.failedLoginAttempts >= LOCKOUT_THRESHOLD) {
+        await userRepository.lockAccount(user._id, new Date(Date.now() + LOCKOUT_SECONDS * 1000));
+        throw new TooManyAttemptsError(LOCKOUT_SECONDS);
+      }
+      throw new UnauthorizedError('Invalid credentials');
+    }
+    await userRepository.resetLoginAttempts(user._id);
 
     await userService.updateLastLogin(user._id);
 

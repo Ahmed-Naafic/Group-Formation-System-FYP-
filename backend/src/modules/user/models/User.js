@@ -41,6 +41,14 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockedUntil: {
+      type: Date,
+      default: null,
+    },
     fcmToken: {
       type: String,
       default: null,

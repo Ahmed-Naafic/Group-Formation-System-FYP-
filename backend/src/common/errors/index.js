@@ -55,6 +55,20 @@ class BadGatewayError extends AppError {
   }
 }
 
+// Thrown when an account is locked out after too many failed login
+// attempts. Carries responseData so the client can drive a live countdown
+// instead of just showing the message once.
+class TooManyAttemptsError extends AppError {
+  constructor(retryAfterSeconds = 30) {
+    super(
+      `Too many failed attempts. Try again in ${retryAfterSeconds} second${retryAfterSeconds !== 1 ? 's' : ''}.`,
+      429,
+      E.TOO_MANY_ATTEMPTS,
+    );
+    this.responseData = { retryAfterSeconds };
+  }
+}
+
 // Thrown when a bulk upload would silently move students between classes.
 // Carries responseData so the error handler can include a top-level `data`
 // field in the 409 response with the list of would-be transfers.
@@ -81,4 +95,5 @@ module.exports = {
   ServiceUnavailableError,
   BadGatewayError,
   TransferConfirmationError,
+  TooManyAttemptsError,
 };

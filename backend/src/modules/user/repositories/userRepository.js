@@ -72,6 +72,21 @@ const userRepository = {
     return result.modifiedCount;
   },
 
+  // Login lockout — three consecutive wrong passwords locks the account for
+  // 30 seconds. incrementFailedAttempts returns the doc so the caller can
+  // read the post-increment count without a second round trip.
+  incrementFailedAttempts(id) {
+    return User.findByIdAndUpdate(id, { $inc: { failedLoginAttempts: 1 } }, { new: true });
+  },
+
+  lockAccount(id, until) {
+    return User.findByIdAndUpdate(id, { failedLoginAttempts: 0, lockedUntil: until }, { new: true });
+  },
+
+  resetLoginAttempts(id) {
+    return User.findByIdAndUpdate(id, { failedLoginAttempts: 0, lockedUntil: null }, { new: true });
+  },
+
   saveFcmToken(id, token) {
     return User.findByIdAndUpdate(id, { fcmToken: token ?? null }, { new: true });
   },
