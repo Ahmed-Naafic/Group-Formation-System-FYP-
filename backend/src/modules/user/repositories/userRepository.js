@@ -27,6 +27,14 @@ const userRepository = {
     return User.findOne({ studentId });
   },
 
+  // Includes a soft-deleted (removed) account — used before creating a new
+  // account for a studentId, so re-enrollment can't silently fork a removed
+  // student's identity into a second, unrelated account. See
+  // studentService.create / enrollmentService.bulkUpload.
+  findByStudentIdIncludingDeleted(studentId) {
+    return User.findOne({ studentId }).includeSoftDeleted();
+  },
+
   findByStudentIdWithPassword(studentId) {
     return User.findOne({ studentId }).select('+passwordHash');
   },

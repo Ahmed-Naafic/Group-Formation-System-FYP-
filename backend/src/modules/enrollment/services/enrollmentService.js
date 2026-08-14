@@ -108,6 +108,19 @@ const enrollmentService = {
         let tempPassword = null;
 
         if (!user) {
+          // A removed student's account is invisible to findByStudentId
+          // (soft-delete excludes it) — check separately so a re-upload
+          // can't silently fork their identity into a second, unrelated
+          // account. Reported as a per-row failure, not an aborted batch.
+          const removedUser = await userService.findByStudentIdIncludingDeleted(studentId);
+          if (removedUser && removedUser.deletedAt) {
+            failed.push({
+              row: rowNum,
+              reason: `Student ID ${studentId} belongs to a removed student — restore them from the ` +
+                'trash bin in User Management instead of re-uploading',
+            });
+            continue;
+          }
           tempPassword = passwordGenerator.generate();
           user = await userService.createUser({
             studentId,

@@ -49,6 +49,16 @@ const studentService = {
     let tempPassword = null;
 
     if (!user) {
+      // A removed student's account is invisible to findByStudentId (soft-
+      // delete excludes it) — check separately so this can't silently fork
+      // their identity into a second, unrelated account.
+      const removedUser = await userService.findByStudentIdIncludingDeleted(studentId);
+      if (removedUser && removedUser.deletedAt) {
+        throw new ConflictError(
+          `Student ID ${studentId} belongs to a removed student. Restore them from the trash bin in ` +
+          'User Management instead of creating a new record.',
+        );
+      }
       tempPassword = passwordGenerator.generate();
       user = await userService.createUser({
         studentId,

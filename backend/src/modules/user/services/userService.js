@@ -86,6 +86,13 @@ const userService = {
     return userRepository.findByStudentId(studentId);
   },
 
+  // Also finds a removed (soft-deleted) account — used to stop enrollment
+  // from silently creating a duplicate identity for a studentId that
+  // belongs to a removed student.
+  findByStudentIdIncludingDeleted(studentId) {
+    return userRepository.findByStudentIdIncludingDeleted(studentId);
+  },
+
   // Used by password-reset flows — hashes new password and forces re-login
   async resetToTempPassword(userId, newPassword) {
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
