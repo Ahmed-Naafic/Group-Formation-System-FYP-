@@ -5,6 +5,12 @@ const userRepository = {
     return User.findById(id);
   },
 
+  // Soft-deleted users are excluded from findById by default (softDelete
+  // plugin) — needed to locate them for restore.
+  findByIdIncludingDeleted(id) {
+    return User.findById(id).includeSoftDeleted();
+  },
+
   findByIdWithPassword(id) {
     return User.findById(id).select('+passwordHash');
   },
@@ -39,6 +45,20 @@ const userRepository = {
 
   existsWithRole(role) {
     return User.exists({ role });
+  },
+
+  // Bulk-deactivates a set of accounts — used by studentService.clearByCohort
+  // so a whole-cohort roster clear can't leave any of those accounts
+  // login-capable. Mirrors studentRepository.softDeleteAllByCohort: the
+  // plugin's pre-hook doesn't run on updateMany, so { deletedAt: null } is
+  // filtered explicitly to only touch accounts not already deactivated.
+  async softDeleteManyByIds(userIds, deletedBy) {
+    const now = new Date();
+    const result = await User.updateMany(
+      { _id: { $in: userIds }, deletedAt: null },
+      { $set: { deletedAt: now, deletedBy } },
+    );
+    return result.modifiedCount;
   },
 
   saveFcmToken(id, token) {

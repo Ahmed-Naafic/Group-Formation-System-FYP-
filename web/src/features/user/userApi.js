@@ -31,6 +31,18 @@ export const userApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/api/users/${id}`, method: 'DELETE' }),
       invalidatesTags: ['User'],
     }),
+    // Same endpoint as deleteInstructor — the backend dispatches by the
+    // target account's role. Separate hook name only for readability at the
+    // Students-tab call site.
+    deactivateStudentAccount: build.mutation({
+      query: (id) => ({ url: `/api/users/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['User', 'Student'],
+    }),
+    restoreUser: build.mutation({
+      query: (id) => ({ url: `/api/users/${id}/restore`, method: 'PATCH' }),
+      transformResponse: (res) => res.data.user,
+      invalidatesTags: ['User', 'Student'],
+    }),
     resetUserPassword: build.mutation({
       query: (id) => ({ url: `/api/users/${id}/reset-password`, method: 'POST' }),
       transformResponse: (res) => res.data,
@@ -48,4 +60,6 @@ export const {
   useDeactivateInstructorMutation,
   useDeleteInstructorMutation,
   useResetUserPasswordMutation,
+  useDeactivateStudentAccountMutation,
+  useRestoreUserMutation,
 } = userApi;

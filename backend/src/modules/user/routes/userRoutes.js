@@ -25,6 +25,9 @@ router.delete('/:id', validate(idParamSchema, 'params'), userController.remove);
 router.patch('/:id/activate',   validate(idParamSchema, 'params'), userController.activate);
 router.patch('/:id/deactivate', validate(idParamSchema, 'params'), userController.deactivate);
 
+// PATCH /api/users/:id/restore — reactivates a soft-deleted account (student or staff)
+router.patch('/:id/restore', validate(idParamSchema, 'params'), userController.restore);
+
 // POST /api/users/:id/reset-password
 router.post('/:id/reset-password', validate(idParamSchema, 'params'), userController.resetPassword);
 

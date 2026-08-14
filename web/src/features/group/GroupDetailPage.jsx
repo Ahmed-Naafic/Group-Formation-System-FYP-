@@ -53,7 +53,9 @@ export default function GroupDetailPage() {
   const leaderId = group ? String(group.leaderId?._id ?? group.leaderId) : null;
 
   const takenIds = new Set();
-  allGroups.forEach((g) => g.memberIds?.forEach((m) => takenIds.add(String(m._id))));
+  // A removed member populates as null (soft-deleted students are excluded
+  // from the lookup) — skip those slots rather than crash on `m._id`.
+  allGroups.forEach((g) => g.memberIds?.forEach((m) => m && takenIds.add(String(m._id))));
   const available = allStudents.filter((s) => !takenIds.has(String(s._id)));
 
   const filteredAvailable = (() => {
@@ -135,7 +137,9 @@ export default function GroupDetailPage() {
     );
   }
 
-  const memberCount = group.memberIds?.length ?? 0;
+  // Removed members populate as null — don't count them as active.
+  const activeMembers = group.memberIds?.filter(Boolean) ?? [];
+  const memberCount = activeMembers.length;
 
   return (
     <div className="max-w-2xl">
@@ -188,7 +192,7 @@ export default function GroupDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {group.memberIds?.map((m) => {
+              {activeMembers.map((m) => {
                 const isLeader = String(m._id) === leaderId;
                 return (
                   <TableRow key={m._id}>

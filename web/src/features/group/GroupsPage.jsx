@@ -103,7 +103,10 @@ function GenerateFields({ control, register }) {
 function BalanceSummary({ groups }) {
   const counts = useMemo(() => {
     const c = { HIGH: 0, MEDIUM: 0, LOW: 0, UNGRADED: 0 };
+    // A removed member populates as null (soft-deleted students are excluded
+    // from the lookup) — skip those slots rather than crash on `m.performanceCategory`.
     groups.forEach((g) => g.memberIds?.forEach((m) => {
+      if (!m) return;
       const cat = m.performanceCategory ?? 'UNGRADED';
       c[cat] = (c[cat] || 0) + 1;
     }));
@@ -168,7 +171,8 @@ function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading, showCat
       </CardHeader>
       <CardContent className="pt-0 flex-1">
         <div className="divide-y divide-border">
-          {group.memberIds?.map((m) => {
+          {/* Removed members populate as null — don't render/count them as active. */}
+          {group.memberIds?.filter(Boolean).map((m) => {
             const isLeader = String(m._id) === leaderId;
             return (
               <div key={m._id} className="flex items-center gap-2 py-2 text-sm">

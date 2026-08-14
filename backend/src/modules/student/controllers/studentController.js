@@ -45,6 +45,24 @@ const studentController = {
     return sendSuccess(res, { message: 'Student deleted', data: null });
   }),
 
+  // GET /api/students/trash?cohortId=
+  getTrash: asyncHandler(async (req, res) => {
+    const students = await studentService.getTrash(req.query.cohortId, req.context);
+    return sendSuccess(res, { data: { students } });
+  }),
+
+  // POST /api/students/:id/restore
+  restore: asyncHandler(async (req, res) => {
+    const student = await studentService.restore(req.params.id, req.context);
+    return sendSuccess(res, { message: 'Student restored', data: { student } });
+  }),
+
+  // DELETE /api/students/:id/permanent
+  permanentDelete: asyncHandler(async (req, res) => {
+    await studentService.permanentDelete(req.params.id, req.context);
+    return sendSuccess(res, { message: 'Student permanently deleted', data: null });
+  }),
+
   // POST /api/students/:id/reset-password
   resetPassword: asyncHandler(async (req, res) => {
     const result = await studentService.resetPassword(req.params.id, req.context);

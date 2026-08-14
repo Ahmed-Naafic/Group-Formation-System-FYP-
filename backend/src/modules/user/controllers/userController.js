@@ -27,8 +27,14 @@ const userController = {
 
   // DELETE /api/users/:id
   remove: asyncHandler(async (req, res) => {
-    await userService.deleteInstructor(req.params.id, req.context);
+    await userService.remove(req.params.id, req.context);
     return sendSuccess(res, { message: 'Account deleted' });
+  }),
+
+  // PATCH /api/users/:id/restore
+  restore: asyncHandler(async (req, res) => {
+    const user = await userService.restoreUser(req.params.id, req.context);
+    return sendSuccess(res, { message: 'Account restored', data: { user } });
   }),
 
   // PATCH /api/users/:id/activate

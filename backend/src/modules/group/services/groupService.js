@@ -198,8 +198,10 @@ const groupService = {
       const studentRecord = await studentRepository.findOne({ userId: context.userId, cohortId, deletedAt: null });
       if (!studentRecord) throw new ForbiddenError('You are not enrolled in this cohort');
 
+      // A removed member's slot populates as null (softDelete excludes them
+      // from the lookup) — guard against it rather than crash on `null._id`.
       const memberId = studentRecord._id.toString();
-      const isMember = group.memberIds.some(m => (m._id ?? m).toString() === memberId);
+      const isMember = group.memberIds.some(m => m && (m._id ?? m).toString() === memberId);
       if (!isMember) throw new ForbiddenError('You are not a member of this group');
       return group;
     }
@@ -216,8 +218,12 @@ const groupService = {
     const offeringId = String(group.courseOfferingId?._id ?? group.courseOfferingId);
     await assertCourseOfferingAccess(offeringId, context);
 
-    const currentMemberIds = group.memberIds.map(m => (m._id ?? m).toString());
-    const currentLeaderId  = (group.leaderId?._id ?? group.leaderId).toString();
+    // Raw (unpopulated) fetch — a removed member populates as null on `group`
+    // above, which would both crash the .map() below and, worse, permanently
+    // drop that student's id from memberIds the moment this save happens.
+    const raw = await groupRepository.findByIdRaw(id);
+    const currentMemberIds = raw.memberIds.map(m => m.toString());
+    const currentLeaderId  = raw.leaderId.toString();
     let newMemberIds       = [...currentMemberIds];
 
     for (const sid of removeMemberIds) {

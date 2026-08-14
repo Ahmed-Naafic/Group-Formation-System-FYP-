@@ -43,6 +43,13 @@ const groupHistoryRepository = {
   deleteByGenerationId(generationId) {
     return GroupHistory.deleteMany({ generationId });
   },
+
+  // Used by studentService.permanentDelete — true if this student appears
+  // anywhere in group-formation history (as a member or as the leader),
+  // even for offerings/generations with no currently-active Group.
+  existsWithStudent(studentId) {
+    return GroupHistory.exists({ $or: [{ memberIds: studentId }, { leaderId: studentId }] });
+  },
 };
 
 module.exports = groupHistoryRepository;

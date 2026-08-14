@@ -45,6 +45,23 @@ export const studentApi = baseApi.injectEndpoints({
       invalidatesTags: ['Student'],
     }),
 
+    getStudentTrash: build.query({
+      query: (cohortId) => ({ url: '/api/students/trash', params: { cohortId } }),
+      transformResponse: (res) => res.data.students,
+      providesTags: ['Student'],
+    }),
+
+    restoreStudent: build.mutation({
+      query: (id) => ({ url: `/api/students/${id}/restore`, method: 'POST' }),
+      transformResponse: (res) => res.data.student,
+      invalidatesTags: ['Student'],
+    }),
+
+    permanentDeleteStudent: build.mutation({
+      query: (id) => ({ url: `/api/students/${id}/permanent`, method: 'DELETE' }),
+      invalidatesTags: ['Student'],
+    }),
+
     bulkUploadStudents: build.mutation({
       query: ({ cohortId, file, confirmTransfers = false }) => {
         const formData = new FormData();
@@ -68,4 +85,7 @@ export const {
   useResetStudentPasswordMutation,
   useBulkUploadStudentsMutation,
   useClearRosterMutation,
+  useGetStudentTrashQuery,
+  useRestoreStudentMutation,
+  usePermanentDeleteStudentMutation,
 } = studentApi;

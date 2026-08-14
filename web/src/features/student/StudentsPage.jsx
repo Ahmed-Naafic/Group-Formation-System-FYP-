@@ -365,16 +365,27 @@ export default function StudentsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Student</AlertDialogTitle>
-            <AlertDialogDescription>
-              Remove <span className="font-semibold text-ink-800">{deleteTarget?.fullName}</span> from this cohort? Their user account is preserved.
-            </AlertDialogDescription>
+            {deleteTarget && !deleteTarget.userId?.deletedAt ? (
+              <AlertDialogDescription>
+                <span className="font-semibold text-ink-800">{deleteTarget.fullName}</span>'s user account
+                is still active. Deactivate it first from <span className="font-medium">User Management</span> — once
+                the account is deactivated, the student can be removed here.
+              </AlertDialogDescription>
+            ) : (
+              <AlertDialogDescription>
+                Remove <span className="font-semibold text-ink-800">{deleteTarget?.fullName}</span> from this cohort?
+                Their history is preserved.
+              </AlertDialogDescription>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} disabled={deleting}>
-              {deleting && <Loader2 size={14} className="animate-spin" />}
-              Remove
-            </AlertDialogAction>
+            <AlertDialogCancel>{deleteTarget && !deleteTarget.userId?.deletedAt ? 'Close' : 'Cancel'}</AlertDialogCancel>
+            {deleteTarget && !deleteTarget.userId?.deletedAt ? null : (
+              <AlertDialogAction onClick={confirmDelete} disabled={deleting}>
+                {deleting && <Loader2 size={14} className="animate-spin" />}
+                Remove
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -426,7 +437,7 @@ export default function StudentsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Clear Entire Roster</AlertDialogTitle>
             <AlertDialogDescription>
-              Remove all <span className="font-semibold text-ink-800">{students.length} student{students.length !== 1 ? 's' : ''}</span> from <span className="font-semibold text-ink-800">{cohortName}</span>? Student accounts are preserved.
+              Remove all <span className="font-semibold text-ink-800">{students.length} student{students.length !== 1 ? 's' : ''}</span> from <span className="font-semibold text-ink-800">{cohortName}</span>? Their accounts will be deactivated and can no longer log in — history is preserved and everything can be restored from the trash bin in User Management.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

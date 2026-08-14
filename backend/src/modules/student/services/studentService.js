@@ -1,6 +1,10 @@
 const studentRepository       = require('../repositories/studentRepository');
+const userRepository          = require('../../user/repositories/userRepository');
 const userService             = require('../../user/services/userService');
 const cohortService           = require('../../cohort/services/cohortService');
+const groupRepository         = require('../../group/repositories/groupRepository');
+const groupHistoryRepository  = require('../../grouping/repositories/groupHistoryRepository');
+const auditLogService         = require('../../auditLog/services/auditLogService');
 const passwordGenerator       = require('../../../common/utils/passwordGenerator');
 const instructorAssignmentService = require('../../instructorAssignment/services/instructorAssignmentService');
 const { NotFoundError, ForbiddenError, ConflictError, BadRequestError } = require('../../../common/errors');
@@ -95,9 +99,98 @@ const studentService = {
   },
 
   // ── Soft delete ───────────────────────────────────────────────────────────
+  // The linked User must already be deactivated (soft-deleted) from User
+  // Management before the Student profile itself can be removed — otherwise
+  // a "removed" student would keep a fully working login. userService.findById
+  // returns null for a soft-deleted account, so "found" means "still active".
   async softDelete(id, userId, context) {
     const student = await studentService.getById(id, context);
-    return student.softDelete(userId);
+    const linkedUserId = student.userId?._id ?? student.userId;
+    const activeUser = await userService.findById(linkedUserId);
+    if (activeUser) {
+      throw new ConflictError(
+        "This student's user account is still active. Deactivate it first from User Management, then remove the student.",
+      );
+    }
+
+    const result = await student.softDelete(userId);
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'STUDENT_DELETED',
+      entityKind: 'Student', entityId: id,
+      changes: { fullName: student.fullName, cohortId: student.cohortId },
+    });
+    return result;
+  },
+
+  // ── Restore from trash ───────────────────────────────────────────────────
+  // Symmetric with softDelete's ordering rule: the linked User must already
+  // be restored (active) before the Student can come back, so a restore can
+  // never land the system in "Student active, User still deactivated".
+  async restore(id, context) {
+    const student = await studentRepository.findByIdIncludingDeleted(id);
+    if (!student) throw new NotFoundError('Student not found');
+    if (!student.deletedAt) throw new ConflictError('This student is not deleted');
+    await assertCohortAccess(student.cohortId?._id ?? student.cohortId, context);
+
+    const linkedUserId = student.userId?._id ?? student.userId;
+    const activeUser = await userService.findById(linkedUserId);
+    if (!activeUser) {
+      throw new ConflictError(
+        "This student's user account is still deactivated. Restore it first from User Management, then restore the student.",
+      );
+    }
+
+    const result = await student.restore();
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'STUDENT_RESTORED',
+      entityKind: 'Student', entityId: id,
+      changes: { fullName: student.fullName },
+    });
+    return result;
+  },
+
+  // ── Permanent delete from trash ──────────────────────────────────────────
+  // Only allowed when the student has no group-formation footprint at all —
+  // current OR archived Groups, and GroupHistory (which has no soft-delete of
+  // its own; it's an immutable record by design). Checking only *active*
+  // membership would let this quietly destroy data the grouping algorithm's
+  // pair-avoidance and audit trail still rely on.
+  async permanentDelete(id, context) {
+    const student = await studentRepository.findByIdIncludingDeleted(id);
+    if (!student) throw new NotFoundError('Student not found');
+    if (!student.deletedAt) {
+      throw new ConflictError('Only a removed student can be permanently deleted — remove them first.');
+    }
+    await assertCohortAccess(student.cohortId?._id ?? student.cohortId, context);
+
+    const [inGroups, inHistory] = await Promise.all([
+      groupRepository.existsWithMember(id),
+      groupHistoryRepository.existsWithStudent(id),
+    ]);
+    if (inGroups || inHistory) {
+      throw new ConflictError('This student cannot be permanently deleted because they have group formation history.');
+    }
+
+    await studentRepository.permanentlyDelete(id);
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'STUDENT_PERMANENTLY_DELETED',
+      entityKind: 'Student', entityId: id,
+      changes: { fullName: student.fullName },
+    });
+    return { deleted: true };
+  },
+
+  // ── Trash bin ─────────────────────────────────────────────────────────────
+  async getTrash(cohortId, context) {
+    if (!cohortId) throw new BadRequestError('cohortId query parameter is required');
+    await assertCohortAccess(cohortId, context);
+    return studentRepository.findDeletedByCohort(cohortId);
   },
 
   // ── Internal — called by the grouping engine ─────────────────────────────
@@ -110,9 +203,29 @@ const studentService = {
   },
 
   // Soft-deletes every active Student in the cohort in a single updateMany.
+  // Admin-only bulk action — the per-student "deactivate the User first"
+  // ordering rule (see softDelete) would be unworkable at roster-clear scale,
+  // so this cascades the same outcome automatically: every linked User is
+  // deactivated in the same operation, so no cleared student is left with a
+  // working login.
   async clearByCohort(cohortId, context) {
     await assertCohortAccess(cohortId, context);
-    return studentRepository.softDeleteAllByCohort(cohortId, context.userId);
+    const students = await studentRepository.findAll({ cohortId, deletedAt: null });
+    const userIds  = students.map((s) => s.userId?._id ?? s.userId);
+
+    const removed = await studentRepository.softDeleteAllByCohort(cohortId, context.userId);
+    if (userIds.length > 0) {
+      await userRepository.softDeleteManyByIds(userIds, context.userId);
+    }
+
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'COHORT_ROSTER_CLEARED',
+      entityKind: 'Cohort', entityId: cohortId,
+      changes: { studentsRemoved: removed },
+    });
+    return removed;
   },
 
   // Internal — called by enrollmentService to detect cross-cohort transfers.

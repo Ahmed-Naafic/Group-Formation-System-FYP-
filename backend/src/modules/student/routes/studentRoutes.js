@@ -9,6 +9,7 @@ const {
   updateStudentSchema,
   bulkUploadSchema,
   clearByCohortSchema,
+  trashQuerySchema,
 } = require('../validations/studentValidation');
 const studentController = require('../controllers/studentController');
 
@@ -41,11 +42,17 @@ router.post(
 
 router.post('/',   requireRole('admin'), validate(createStudentSchema), studentController.create);
 router.get('/',    studentController.getAll);
+
+// Must come before GET /:id — otherwise "trash" is parsed as an :id value.
+router.get('/trash', validate(trashQuerySchema, 'query'), studentController.getTrash);
+
 router.get('/:id', studentController.getById);
 router.patch('/:id', validate(updateStudentSchema), studentController.update);
 router.delete('/', requireRole('admin'), validate(clearByCohortSchema, 'query'), studentController.clearByCohort);
 router.delete('/:id', studentController.remove);
 
 router.post('/:id/reset-password', studentController.resetPassword);
+router.post('/:id/restore',        studentController.restore);
+router.delete('/:id/permanent',    requireRole('admin'), studentController.permanentDelete);
 
 module.exports = router;

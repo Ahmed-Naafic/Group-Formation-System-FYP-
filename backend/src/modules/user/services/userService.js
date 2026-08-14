@@ -141,6 +141,18 @@ const userService = {
     return updated;
   },
 
+  // DELETE /api/users/:id dispatches here first — routes to the right
+  // lifecycle depending on the target account's role, so there's a single
+  // "remove this account" entry point rather than two conflicting ones.
+  async remove(id, context) {
+    const user = await userRepository.findById(id);
+    if (!user) throw new NotFoundError('User not found');
+    if (user.role === 'student') {
+      return userService.deleteStudentAccount(id, context);
+    }
+    return userService.deleteInstructor(id, context);
+  },
+
   async deleteInstructor(id, context) {
     const requestingUserId = context.userId;
     if (String(id) === String(requestingUserId)) {
@@ -176,6 +188,50 @@ const userService = {
       action: `${user.role.toUpperCase()}_DELETED`,
       entityKind: 'User', entityId: id,
       changes: { fullName: user.fullName, email: user.email },
+    });
+    return result;
+  },
+
+  // Deactivates a student's linked User account (soft-delete, same mechanism
+  // as deleteInstructor) — required before the Student record itself can be
+  // removed from Student Management. Unlike deleteInstructor, there's no
+  // "historical data" block here: soft-delete is non-destructive and is
+  // exactly the step that unlocks Student removal, so it should never itself
+  // be blocked by the student's own academic history.
+  async deleteStudentAccount(id, context) {
+    const user = await userRepository.findById(id);
+    if (!user) throw new NotFoundError('User not found');
+    if (user.role !== 'student') {
+      throw new ForbiddenError('This action is only for student accounts');
+    }
+    const result = await user.softDelete(context.userId);
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'STUDENT_USER_DEACTIVATED',
+      entityKind: 'User', entityId: id,
+      changes: { fullName: user.fullName, studentId: user.studentId },
+    });
+    return result;
+  },
+
+  // Generic restore for any soft-deleted account (student or staff) — the
+  // softDelete plugin already provides doc.restore(), this just exposes it
+  // through the service/audit-log layer the same way every other mutation
+  // here does. Does not touch anything beyond the User record itself —
+  // callers (e.g. studentService.restore) are responsible for any ordering
+  // rules around what else must be true before this is safe to call.
+  async restoreUser(id, context) {
+    const user = await userRepository.findByIdIncludingDeleted(id);
+    if (!user) throw new NotFoundError('User not found');
+    if (!user.deletedAt) throw new ConflictError('This account is not deleted');
+    const result = await user.restore();
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: `${user.role.toUpperCase()}_USER_RESTORED`,
+      entityKind: 'User', entityId: id,
+      changes: { fullName: user.fullName },
     });
     return result;
   },

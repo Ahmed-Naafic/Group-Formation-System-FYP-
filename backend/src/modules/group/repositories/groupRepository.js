@@ -19,6 +19,14 @@ const groupRepository = {
     return withMembers(Group.findById(id));
   },
 
+  // Unpopulated — memberIds/leaderId stay as raw ObjectIds even when a
+  // referenced Student has been soft-deleted (populate() would otherwise
+  // silently turn that array slot into null, losing the id). Used wherever
+  // code needs to reliably diff/preserve the actual membership list.
+  findByIdRaw(id) {
+    return Group.findById(id);
+  },
+
   // Lightweight — used by AI variation generation and bulk task creation,
   // which only need identity/name/offering, not full member rosters.
   findByIds(ids) {
@@ -79,6 +87,17 @@ const groupRepository = {
   findActiveByOffering(courseOfferingId) {
     return Group.find({ courseOfferingId, status: 'active' }, 'memberIds')
       .populate({ path: 'memberIds', select: 'userId' });
+  },
+
+  // Used by studentService.permanentDelete — true if this student appears in
+  // ANY group (active, archived, or soft-deleted) as a member or as the
+  // leader. includeSoftDeleted() is defensive: nothing soft-deletes a Group
+  // today, but a permanent-delete guard should not silently miss one if that
+  // ever changes.
+  async existsWithMember(studentId) {
+    const found = await Group.exists({ $or: [{ memberIds: studentId }, { leaderId: studentId }] })
+      .includeSoftDeleted();
+    return !!found;
   },
 };
 

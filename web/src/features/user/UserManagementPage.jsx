@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   Loader2, UserCheck, UserPlus, Pencil, ShieldOff, ShieldCheck, Search, Trash2,
-  KeyRound, Copy, Check,
+  KeyRound, Copy, Check, Undo2, Trash,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -13,6 +13,8 @@ import {
   useDeactivateInstructorMutation,
   useDeleteInstructorMutation,
   useResetUserPasswordMutation,
+  useDeactivateStudentAccountMutation,
+  useRestoreUserMutation,
 } from './userApi';
 import { useGetCohortsQuery } from '@/features/cohort/cohortApi';
 import {
@@ -20,6 +22,9 @@ import {
   useUpdateStudentMutation,
   useDeleteStudentMutation,
   useResetStudentPasswordMutation,
+  useGetStudentTrashQuery,
+  useRestoreStudentMutation,
+  usePermanentDeleteStudentMutation,
 } from '@/features/student/studentApi';
 import { useUpdateScoresMutation } from '@/features/performance/performanceApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -462,16 +467,24 @@ function StudentsTab() {
   const [cohortId, setCohortId] = useState('');
 
   const { data: students = [], isLoading: loadingStudents } = useGetStudentsQuery(cohortId, { skip: !cohortId });
+  const { data: trash = [], isLoading: loadingTrash } = useGetStudentTrashQuery(cohortId, { skip: !cohortId });
   const [updateStudent, { isLoading: updating }]  = useUpdateStudentMutation();
   const [deleteStudent, { isLoading: deleting }]  = useDeleteStudentMutation();
   const [resetPassword, { isLoading: resetting }] = useResetStudentPasswordMutation();
   const [updateScores]                            = useUpdateScoresMutation();
+  const [deactivateAccount, { isLoading: deactivating }] = useDeactivateStudentAccountMutation();
+  const [restoreAccount,    { isLoading: restoringAccount }] = useRestoreUserMutation();
+  const [restoreStudent,    { isLoading: restoringStudent }] = useRestoreStudentMutation();
+  const [permanentDelete,   { isLoading: permanentDeleting }] = usePermanentDeleteStudentMutation();
 
-  const [query,        setQuery]        = useState('');
-  const [editing,      setEditing]      = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [resetTarget,  setResetTarget]  = useState(null);
-  const [resetResult,  setResetResult]  = useState(null);
+  const [query,            setQuery]            = useState('');
+  const [editing,          setEditing]          = useState(null);
+  const [deleteTarget,     setDeleteTarget]     = useState(null);
+  const [resetTarget,      setResetTarget]      = useState(null);
+  const [resetResult,      setResetResult]      = useState(null);
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [permanentTarget,  setPermanentTarget]  = useState(null);
+  const [showTrash,        setShowTrash]        = useState(false);
 
   const filtered = (() => {
     const q = query.trim().toLowerCase();
@@ -527,6 +540,48 @@ function StudentsTab() {
     }
   }
 
+  async function onDeactivateConfirmed() {
+    if (!deactivateTarget) return;
+    try {
+      await deactivateAccount(deactivateTarget.userId._id).unwrap();
+      toast.success(`${deactivateTarget.fullName}'s account deactivated — they can no longer log in`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to deactivate account');
+    } finally {
+      setDeactivateTarget(null);
+    }
+  }
+
+  async function onRestoreAccount(student) {
+    try {
+      await restoreAccount(student.userId._id).unwrap();
+      toast.success(`${student.fullName}'s account restored`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to restore account');
+    }
+  }
+
+  async function onRestoreStudent(student) {
+    try {
+      await restoreStudent(student._id).unwrap();
+      toast.success(`${student.fullName} restored`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to restore student');
+    }
+  }
+
+  async function onPermanentDeleteConfirmed() {
+    if (!permanentTarget) return;
+    try {
+      await permanentDelete(permanentTarget._id).unwrap();
+      toast.success(`${permanentTarget.fullName} permanently deleted`);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to permanently delete student');
+    } finally {
+      setPermanentTarget(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <Card>
@@ -572,18 +627,32 @@ function StudentsTab() {
                     <TableHead>Student ID</TableHead>
                     <TableHead>Full Name</TableHead>
                     <TableHead className="w-28 text-right">Avg Score</TableHead>
-                    <TableHead className="w-32" />
+                    <TableHead className="w-28">Account</TableHead>
+                    <TableHead className="w-44" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
-                  ) : filtered.map((s) => (
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
+                  ) : filtered.map((s) => {
+                    const accountActive = !!s.userId && !s.userId.deletedAt;
+                    return (
                     <TableRow key={s._id}>
                       <TableCell className="font-mono text-xs text-ink-500">{s.userId?.studentId ?? '—'}</TableCell>
                       <TableCell className="font-medium text-ink-800">{s.fullName}</TableCell>
                       <TableCell className="text-right text-ink-500">
                         {s.averageScore != null ? s.averageScore.toFixed(1) : <span className="text-ink-300">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        {accountActive ? (
+                          <Badge variant="success" className="gap-1">
+                            <ShieldCheck size={11} /> Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="gap-1">
+                            <ShieldOff size={11} /> Deactivated
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
@@ -592,23 +661,116 @@ function StudentsTab() {
                             <Pencil size={13} />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700"
-                            onClick={() => setResetTarget(s)} title="Reset password">
+                            onClick={() => setResetTarget(s)} title="Reset password" disabled={!accountActive}>
                             <KeyRound size={13} />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-danger"
-                            onClick={() => setDeleteTarget(s)} title="Remove">
+                          {accountActive ? (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-danger hover:text-danger"
+                              onClick={() => setDeactivateTarget(s)} title="Deactivate account" disabled={deactivating}>
+                              <ShieldOff size={13} />
+                            </Button>
+                          ) : (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-success hover:text-success"
+                              onClick={() => onRestoreAccount(s)} title="Restore account" disabled={restoringAccount}>
+                              <ShieldCheck size={13} />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost" size="icon" className="h-7 w-7 hover:text-danger"
+                            onClick={() => setDeleteTarget(s)}
+                            title={accountActive ? 'Deactivate the account first' : 'Remove'}
+                          >
                             <Trash2 size={13} />
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Trash bin — removed students for the selected cohort */}
+      {cohortId && (
+        <Card>
+          <CardHeader className="pb-3">
+            <button
+              type="button"
+              className="flex items-center justify-between w-full text-left"
+              onClick={() => setShowTrash((v) => !v)}
+            >
+              <CardTitle className="text-sm text-ink-500 uppercase tracking-wide font-semibold flex items-center gap-2">
+                <Trash size={14} />
+                Trash Bin {trash.length > 0 && `(${trash.length})`}
+              </CardTitle>
+              <span className="text-xs text-ink-400">{showTrash ? 'Hide' : 'Show'}</span>
+            </button>
+          </CardHeader>
+          {showTrash && (
+            <CardContent className="p-0">
+              {loadingTrash ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 size={18} className="animate-spin text-ink-300" />
+                </div>
+              ) : trash.length === 0 ? (
+                <p className="text-sm text-ink-400 py-6 text-center">No removed students in this cohort.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student ID</TableHead>
+                      <TableHead>Full Name</TableHead>
+                      <TableHead>Account</TableHead>
+                      <TableHead className="w-40" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {trash.map((s) => {
+                      const accountActive = !!s.userId && !s.userId.deletedAt;
+                      return (
+                        <TableRow key={s._id}>
+                          <TableCell className="font-mono text-xs text-ink-500">{s.userId?.studentId ?? '—'}</TableCell>
+                          <TableCell className="font-medium text-ink-800">{s.fullName}</TableCell>
+                          <TableCell>
+                            {accountActive ? (
+                              <Badge variant="success" className="gap-1"><ShieldCheck size={11} /> Active</Badge>
+                            ) : (
+                              <Badge variant="destructive" className="gap-1"><ShieldOff size={11} /> Deactivated</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost" size="sm" className="h-7 text-xs gap-1 text-success hover:text-success hover:bg-success/10"
+                                onClick={() => onRestoreStudent(s)}
+                                disabled={restoringStudent || !accountActive}
+                                title={accountActive ? 'Restore student' : "Restore the account first, from the row's shield icon"}
+                              >
+                                <Undo2 size={12} /> Restore
+                              </Button>
+                              <Button
+                                variant="ghost" size="icon" className="h-7 w-7 hover:text-danger"
+                                onClick={() => setPermanentTarget(s)}
+                                title="Permanently delete"
+                              >
+                                <Trash2 size={13} />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
 
       {/* Edit dialog */}
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
@@ -645,15 +807,50 @@ function StudentsTab() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Student</AlertDialogTitle>
+            {deleteTarget && !deleteTarget.userId?.deletedAt ? (
+              <AlertDialogDescription>
+                <span className="font-semibold text-ink-800">{deleteTarget.fullName}</span>'s account is
+                still active. Deactivate it first (the shield icon in this row), then remove the student.
+              </AlertDialogDescription>
+            ) : (
+              <AlertDialogDescription>
+                Remove <span className="font-semibold text-ink-800">{deleteTarget?.fullName}</span> from this cohort?
+                Their history is preserved and this can be undone from the trash bin below.
+              </AlertDialogDescription>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{deleteTarget && !deleteTarget.userId?.deletedAt ? 'Close' : 'Cancel'}</AlertDialogCancel>
+            {deleteTarget && !deleteTarget.userId?.deletedAt ? null : (
+              <AlertDialogAction onClick={onDeleteConfirmed} disabled={deleting}>
+                {deleting && <Loader2 size={14} className="animate-spin" />}
+                Remove
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Deactivate account confirm */}
+      <AlertDialog open={!!deactivateTarget} onOpenChange={(v) => !v && setDeactivateTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate Account</AlertDialogTitle>
             <AlertDialogDescription>
-              Remove <span className="font-semibold text-ink-800">{deleteTarget?.fullName}</span> from this cohort? Their user account is preserved.
+              <span className="font-semibold text-ink-800">{deactivateTarget?.fullName}</span> will
+              no longer be able to log in. This unlocks removing them from the cohort — restoring the
+              account later does not automatically restore the student record.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onDeleteConfirmed} disabled={deleting}>
-              {deleting && <Loader2 size={14} className="animate-spin" />}
-              Remove
+            <AlertDialogAction
+              className="bg-danger hover:bg-danger/90 text-white"
+              onClick={onDeactivateConfirmed}
+              disabled={deactivating}
+            >
+              {deactivating && <Loader2 size={14} className="animate-spin" />}
+              Deactivate
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -699,6 +896,31 @@ function StudentsTab() {
           <DialogFooter><Button onClick={() => setResetResult(null)}>Done — I've saved the password</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Permanent delete confirm */}
+      <AlertDialog open={!!permanentTarget} onOpenChange={(v) => !v && setPermanentTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently Delete Student</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete <span className="font-semibold text-ink-800">{permanentTarget?.fullName}</span>?
+              This cannot be undone. Students with any group-formation history (current or past) can't be
+              permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger hover:bg-danger/90 text-white"
+              onClick={onPermanentDeleteConfirmed}
+              disabled={permanentDeleting}
+            >
+              {permanentDeleting && <Loader2 size={14} className="animate-spin" />}
+              Permanently Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
