@@ -43,6 +43,16 @@ export const userApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data.user,
       invalidatesTags: ['User', 'Student'],
     }),
+    deactivateAccountsByCohort: build.mutation({
+      query: (cohortId) => ({ url: '/api/users/deactivate-by-cohort', method: 'PATCH', params: { cohortId } }),
+      transformResponse: (res) => res.data,
+      invalidatesTags: ['User', 'Student'],
+    }),
+    restoreAccountsByCohort: build.mutation({
+      query: (cohortId) => ({ url: '/api/users/restore-by-cohort', method: 'PATCH', params: { cohortId } }),
+      transformResponse: (res) => res.data,
+      invalidatesTags: ['User', 'Student'],
+    }),
     resetUserPassword: build.mutation({
       query: (id) => ({ url: `/api/users/${id}/reset-password`, method: 'POST' }),
       transformResponse: (res) => res.data,
@@ -62,4 +72,6 @@ export const {
   useResetUserPasswordMutation,
   useDeactivateStudentAccountMutation,
   useRestoreUserMutation,
+  useDeactivateAccountsByCohortMutation,
+  useRestoreAccountsByCohortMutation,
 } = userApi;

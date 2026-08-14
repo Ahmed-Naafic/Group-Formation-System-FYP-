@@ -79,6 +79,16 @@ const studentRepository = {
     return result.modifiedCount;
   },
 
+  // Mirror of softDeleteAllByCohort for the restore direction — used by
+  // studentService.restoreByCohort.
+  async restoreManyByCohort(cohortId) {
+    const result = await Student.updateMany(
+      { cohortId, deletedAt: { $ne: null } },
+      { $set: { deletedAt: null, deletedBy: null } },
+    );
+    return result.modifiedCount;
+  },
+
   // Returns the single active Student record for this user in any cohort
   // OTHER than excludeCohortId. Used by the transfer-detection logic.
   findActiveByUserId(userId, excludeCohortId) {

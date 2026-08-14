@@ -51,6 +51,10 @@ router.patch('/:id', validate(updateStudentSchema), studentController.update);
 router.delete('/', requireRole('admin'), validate(clearByCohortSchema, 'query'), studentController.clearByCohort);
 router.delete('/:id', studentController.remove);
 
+// Must come before POST /:id/restore's neighbors matter less (different
+// segment shape), but kept alongside clearByCohort/getTrash for clarity.
+router.post('/restore-by-cohort', requireRole('admin'), validate(clearByCohortSchema, 'query'), studentController.restoreByCohort);
+
 router.post('/:id/reset-password', studentController.resetPassword);
 router.post('/:id/restore',        studentController.restore);
 router.delete('/:id/permanent',    requireRole('admin'), studentController.permanentDelete);

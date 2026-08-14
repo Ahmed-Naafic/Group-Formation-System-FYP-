@@ -29,4 +29,10 @@ const updateInstructorSchema = Joi.object({
   'object.min': 'At least one field must be provided to update',
 });
 
-module.exports = { createInstructorSchema, idParamSchema, updateInstructorSchema };
+const cohortQuerySchema = Joi.object({
+  cohortId: objectId.required().messages({
+    'any.required': 'cohortId is required as a query parameter',
+  }),
+});
+
+module.exports = { createInstructorSchema, idParamSchema, updateInstructorSchema, cohortQuerySchema };

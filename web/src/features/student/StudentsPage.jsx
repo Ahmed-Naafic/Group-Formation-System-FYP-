@@ -71,6 +71,8 @@ export default function StudentsPage() {
     );
   })();
 
+  const activeAccountCount = students.filter((s) => s.userId && !s.userId.deletedAt).length;
+
   const [createOpen, setCreateOpen]       = useState(false);
   const [editing, setEditing]             = useState(null);
   const [deleteTarget, setDeleteTarget]   = useState(null);
@@ -436,16 +438,27 @@ export default function StudentsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Clear Entire Roster</AlertDialogTitle>
-            <AlertDialogDescription>
-              Remove all <span className="font-semibold text-ink-800">{students.length} student{students.length !== 1 ? 's' : ''}</span> from <span className="font-semibold text-ink-800">{cohortName}</span>? Their accounts will be deactivated and can no longer log in — history is preserved and everything can be restored from the trash bin in User Management.
-            </AlertDialogDescription>
+            {activeAccountCount > 0 ? (
+              <AlertDialogDescription>
+                <span className="font-semibold text-ink-800">{activeAccountCount}</span> of these students still
+                {activeAccountCount !== 1 ? ' have' : ' has'} an active user account. Deactivate all accounts first
+                from <span className="font-medium">User Management</span> ("Deactivate All Accounts" on this cohort),
+                then clear the roster here.
+              </AlertDialogDescription>
+            ) : (
+              <AlertDialogDescription>
+                Remove all <span className="font-semibold text-ink-800">{students.length} student{students.length !== 1 ? 's' : ''}</span> from <span className="font-semibold text-ink-800">{cohortName}</span>? History is preserved and this can be undone from the trash bin in User Management.
+              </AlertDialogDescription>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-danger hover:bg-danger/90 text-white" onClick={confirmClearRoster} disabled={clearing}>
-              {clearing && <Loader2 size={14} className="animate-spin" />}
-              Remove All Students
-            </AlertDialogAction>
+            <AlertDialogCancel>{activeAccountCount > 0 ? 'Close' : 'Cancel'}</AlertDialogCancel>
+            {activeAccountCount > 0 ? null : (
+              <AlertDialogAction className="bg-danger hover:bg-danger/90 text-white" onClick={confirmClearRoster} disabled={clearing}>
+                {clearing && <Loader2 size={14} className="animate-spin" />}
+                Remove All Students
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

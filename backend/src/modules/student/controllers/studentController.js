@@ -57,6 +57,15 @@ const studentController = {
     return sendSuccess(res, { message: 'Student restored', data: { student } });
   }),
 
+  // POST /api/students/restore-by-cohort?cohortId=
+  restoreByCohort: asyncHandler(async (req, res) => {
+    const count = await studentService.restoreByCohort(req.query.cohortId, req.context);
+    return sendSuccess(res, {
+      message: `${count} student${count !== 1 ? 's' : ''} restored`,
+      data: { restored: count },
+    });
+  }),
+
   // DELETE /api/students/:id/permanent
   permanentDelete: asyncHandler(async (req, res) => {
     await studentService.permanentDelete(req.params.id, req.context);

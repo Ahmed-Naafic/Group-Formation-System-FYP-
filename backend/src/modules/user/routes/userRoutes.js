@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { authenticate } = require('../../../middleware/auth');
 const { requireRole } = require('../../../middleware/rbac');
 const validate = require('../../../common/validators/validate');
-const { createInstructorSchema, idParamSchema, updateInstructorSchema } = require('../validations/userValidation');
+const { createInstructorSchema, idParamSchema, updateInstructorSchema, cohortQuerySchema } = require('../validations/userValidation');
 const userController = require('../controllers/userController');
 
 const router = Router();
@@ -14,6 +14,11 @@ router.get('/', userController.getAll);
 
 // POST /api/users  — register a new admin or instructor account
 router.post('/', validate(createInstructorSchema), userController.create);
+
+// PATCH /api/users/deactivate-by-cohort and /restore-by-cohort — must come
+// before PATCH /:id, otherwise they'd be parsed as an :id value.
+router.patch('/deactivate-by-cohort', validate(cohortQuerySchema, 'query'), userController.deactivateByCohort);
+router.patch('/restore-by-cohort',    validate(cohortQuerySchema, 'query'), userController.restoreByCohort);
 
 // PATCH /api/users/:id  — update name / email / password
 router.patch('/:id', validate(idParamSchema, 'params'), validate(updateInstructorSchema), userController.update);

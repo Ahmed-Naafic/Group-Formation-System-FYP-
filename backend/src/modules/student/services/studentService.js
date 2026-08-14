@@ -1,5 +1,4 @@
 const studentRepository       = require('../repositories/studentRepository');
-const userRepository          = require('../../user/repositories/userRepository');
 const userService             = require('../../user/services/userService');
 const cohortService           = require('../../cohort/services/cohortService');
 const groupRepository         = require('../../group/repositories/groupRepository');
@@ -193,6 +192,37 @@ const studentService = {
     return studentRepository.findDeletedByCohort(cohortId);
   },
 
+  // Restores every removed student in a cohort in one shot — the restore
+  // mirror of clearByCohort, same ordering rule: every one of them must
+  // already have an active (restored) account, or this refuses to run.
+  // userService.restoreStudentAccountsByCohort is the bulk way to get there.
+  async restoreByCohort(cohortId, context) {
+    await assertCohortAccess(cohortId, context);
+    const deleted = await studentRepository.findDeletedByCohort(cohortId);
+    if (deleted.length === 0) {
+      throw new ConflictError('No removed students to restore in this cohort');
+    }
+
+    const stillDeactivated = deleted.filter((s) => !s.userId || s.userId.deletedAt);
+    if (stillDeactivated.length > 0) {
+      throw new ConflictError(
+        `${stillDeactivated.length} student${stillDeactivated.length !== 1 ? 's' : ''} in the trash still ` +
+        `${stillDeactivated.length !== 1 ? 'have' : 'has'} a deactivated account. Restore all accounts ` +
+        'first from User Management, then restore the roster.',
+      );
+    }
+
+    const restored = await studentRepository.restoreManyByCohort(cohortId);
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'COHORT_ROSTER_RESTORED',
+      entityKind: 'Cohort', entityId: cohortId,
+      changes: { studentsRestored: restored },
+    });
+    return restored;
+  },
+
   // ── Internal — called by the grouping engine ─────────────────────────────
   getStudentsByCohort(cohortId) {
     return studentRepository.findAll({ cohortId, deletedAt: null });
@@ -203,21 +233,24 @@ const studentService = {
   },
 
   // Soft-deletes every active Student in the cohort in a single updateMany.
-  // Admin-only bulk action — the per-student "deactivate the User first"
-  // ordering rule (see softDelete) would be unworkable at roster-clear scale,
-  // so this cascades the same outcome automatically: every linked User is
-  // deactivated in the same operation, so no cleared student is left with a
-  // working login.
+  // Same ordering rule as softDelete, enforced for the whole cohort at once:
+  // every student's linked User must already be deactivated (see
+  // userService.deactivateStudentAccountsByCohort for the bulk way to get
+  // there) — this refuses to run rather than cascading around the rule.
   async clearByCohort(cohortId, context) {
     await assertCohortAccess(cohortId, context);
     const students = await studentRepository.findAll({ cohortId, deletedAt: null });
-    const userIds  = students.map((s) => s.userId?._id ?? s.userId);
 
-    const removed = await studentRepository.softDeleteAllByCohort(cohortId, context.userId);
-    if (userIds.length > 0) {
-      await userRepository.softDeleteManyByIds(userIds, context.userId);
+    const stillActive = students.filter((s) => s.userId && !s.userId.deletedAt);
+    if (stillActive.length > 0) {
+      throw new ConflictError(
+        `${stillActive.length} student${stillActive.length !== 1 ? 's' : ''} in this cohort still ` +
+        `${stillActive.length !== 1 ? 'have' : 'has'} an active user account. Deactivate all accounts ` +
+        'first from User Management, then clear the roster.',
+      );
     }
 
+    const removed = await studentRepository.softDeleteAllByCohort(cohortId, context.userId);
     await auditLogService.log({
       actorId: context.userId, actorRole: context.role,
       ipAddress: context.ipAddress, userAgent: context.userAgent,

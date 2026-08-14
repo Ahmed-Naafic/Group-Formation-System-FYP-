@@ -37,6 +37,24 @@ const userController = {
     return sendSuccess(res, { message: 'Account restored', data: { user } });
   }),
 
+  // PATCH /api/users/deactivate-by-cohort?cohortId=
+  deactivateByCohort: asyncHandler(async (req, res) => {
+    const count = await userService.deactivateStudentAccountsByCohort(req.query.cohortId, req.context);
+    return sendSuccess(res, {
+      message: `${count} account${count !== 1 ? 's' : ''} deactivated`,
+      data: { deactivated: count },
+    });
+  }),
+
+  // PATCH /api/users/restore-by-cohort?cohortId=
+  restoreByCohort: asyncHandler(async (req, res) => {
+    const count = await userService.restoreStudentAccountsByCohort(req.query.cohortId, req.context);
+    return sendSuccess(res, {
+      message: `${count} account${count !== 1 ? 's' : ''} restored`,
+      data: { restored: count },
+    });
+  }),
+
   // PATCH /api/users/:id/activate
   activate: asyncHandler(async (req, res) => {
     const user = await userService.setActive(req.params.id, true, req.context);

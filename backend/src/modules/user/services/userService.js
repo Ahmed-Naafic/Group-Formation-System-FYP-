@@ -2,6 +2,8 @@ const bcrypt = require('bcryptjs');
 const userRepository = require('../repositories/userRepository');
 const { NotFoundError, ForbiddenError, ConflictError } = require('../../../common/errors');
 const instructorAssignmentRepository = require('../../instructorAssignment/repositories/instructorAssignmentRepository');
+const studentRepository = require('../../student/repositories/studentRepository');
+const cohortService = require('../../cohort/services/cohortService');
 const AuditLog = require('../../auditLog/models/AuditLog');
 const auditLogService = require('../../auditLog/services/auditLogService');
 const passwordGenerator = require('../../../common/utils/passwordGenerator');
@@ -213,6 +215,59 @@ const userService = {
       changes: { fullName: user.fullName, studentId: user.studentId },
     });
     return result;
+  },
+
+  // Bulk-deactivates every active student account in a cohort in one shot —
+  // the counterpart to studentService.clearByCohort, which now refuses to
+  // clear a roster while any of its students still has a working login.
+  // Doing this per-student one at a time would make a full-cohort clear
+  // impractical, so this is the legitimate way to satisfy that precondition
+  // at scale rather than bypassing it.
+  async deactivateStudentAccountsByCohort(cohortId, context) {
+    await cohortService.getById(cohortId);
+    const students = await studentRepository.findAll({ cohortId, deletedAt: null });
+    const userIds = students
+      .map((s) => s.userId?._id ?? s.userId)
+      .filter(Boolean);
+
+    const count = userIds.length > 0
+      ? await userRepository.softDeleteManyByIds(userIds, context.userId)
+      : 0;
+
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'COHORT_ACCOUNTS_DEACTIVATED',
+      entityKind: 'Cohort', entityId: cohortId,
+      changes: { accountsDeactivated: count },
+    });
+    return count;
+  },
+
+  // Bulk-restores every deactivated account belonging to a student currently
+  // in the cohort's trash bin — the counterpart to
+  // deactivateStudentAccountsByCohort, and the bulk way to satisfy
+  // studentService.restoreByCohort's precondition that every student's
+  // account is already active again.
+  async restoreStudentAccountsByCohort(cohortId, context) {
+    await cohortService.getById(cohortId);
+    const deletedStudents = await studentRepository.findDeletedByCohort(cohortId);
+    const userIds = deletedStudents
+      .map((s) => s.userId?._id ?? s.userId)
+      .filter(Boolean);
+
+    const count = userIds.length > 0
+      ? await userRepository.restoreManyByIds(userIds)
+      : 0;
+
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'COHORT_ACCOUNTS_RESTORED',
+      entityKind: 'Cohort', entityId: cohortId,
+      changes: { accountsRestored: count },
+    });
+    return count;
   },
 
   // Generic restore for any soft-deleted account (student or staff) — the
