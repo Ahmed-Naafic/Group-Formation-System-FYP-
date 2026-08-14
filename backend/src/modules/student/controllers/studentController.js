@@ -72,6 +72,17 @@ const studentController = {
     return sendSuccess(res, { message: 'Student permanently deleted', data: null });
   }),
 
+  // DELETE /api/students/permanent-by-cohort?cohortId=
+  permanentDeleteByCohort: asyncHandler(async (req, res) => {
+    const { deleted, blocked } = await studentService.permanentDeleteByCohort(req.query.cohortId, req.context);
+    return sendSuccess(res, {
+      message: blocked > 0
+        ? `${deleted} student${deleted !== 1 ? 's' : ''} permanently deleted, ${blocked} kept (has group formation history)`
+        : `${deleted} student${deleted !== 1 ? 's' : ''} permanently deleted`,
+      data: { deleted, blocked },
+    });
+  }),
+
   // POST /api/students/:id/reset-password
   resetPassword: asyncHandler(async (req, res) => {
     const result = await studentService.resetPassword(req.params.id, req.context);

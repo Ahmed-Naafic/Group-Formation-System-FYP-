@@ -195,6 +195,47 @@ const studentService = {
     return { deleted: true };
   },
 
+  // Permanently deletes every removed student in a cohort that has no
+  // group-formation footprint — the bulk mirror of permanentDelete, same
+  // per-student check. Students with group history are silently skipped
+  // (not blocking) rather than failing the whole batch, since "empty the
+  // trash of everything that's safe to remove" is the actual intent — the
+  // ones with history simply stay in the trash, same as if you'd clicked
+  // Permanent Delete on each one individually and some got rejected.
+  async permanentDeleteByCohort(cohortId, context) {
+    await assertCohortAccess(cohortId, context);
+    const deleted = await studentRepository.findDeletedByCohort(cohortId);
+    if (deleted.length === 0) {
+      throw new ConflictError('No removed students to permanently delete in this cohort');
+    }
+
+    let deletedCount = 0;
+    let blockedCount = 0;
+    for (const student of deleted) {
+      // eslint-disable-next-line no-await-in-loop
+      const [inGroups, inHistory] = await Promise.all([
+        groupRepository.existsWithMember(student._id),
+        groupHistoryRepository.existsWithStudent(student._id),
+      ]);
+      if (inGroups || inHistory) {
+        blockedCount++;
+        continue;
+      }
+      // eslint-disable-next-line no-await-in-loop
+      await studentRepository.permanentlyDelete(student._id);
+      deletedCount++;
+    }
+
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'COHORT_TRASH_PERMANENTLY_DELETED',
+      entityKind: 'Cohort', entityId: cohortId,
+      changes: { deleted: deletedCount, blockedByGroupHistory: blockedCount },
+    });
+    return { deleted: deletedCount, blocked: blockedCount };
+  },
+
   // ── Trash bin ─────────────────────────────────────────────────────────────
   async getTrash(cohortId, context) {
     if (!cohortId) throw new BadRequestError('cohortId query parameter is required');

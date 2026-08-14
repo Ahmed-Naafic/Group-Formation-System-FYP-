@@ -28,6 +28,7 @@ import {
   useRestoreStudentMutation,
   usePermanentDeleteStudentMutation,
   useRestoreRosterMutation,
+  usePermanentDeleteRosterMutation,
 } from '@/features/student/studentApi';
 import { useUpdateScoresMutation } from '@/features/performance/performanceApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -482,6 +483,7 @@ function StudentsTab() {
   const [deactivateAllAccounts, { isLoading: deactivatingAll }] = useDeactivateAccountsByCohortMutation();
   const [restoreAllAccounts,    { isLoading: restoringAllAccounts }] = useRestoreAccountsByCohortMutation();
   const [restoreRoster,         { isLoading: restoringRoster }]      = useRestoreRosterMutation();
+  const [permanentDeleteRoster, { isLoading: permanentDeletingRoster }] = usePermanentDeleteRosterMutation();
 
   const [query,            setQuery]            = useState('');
   const [editing,          setEditing]          = useState(null);
@@ -494,6 +496,7 @@ function StudentsTab() {
   const [deactivateAllConfirm, setDeactivateAllConfirm] = useState(false);
   const [restoreAllAccountsConfirm, setRestoreAllAccountsConfirm] = useState(false);
   const [restoreRosterConfirm,      setRestoreRosterConfirm]      = useState(false);
+  const [permanentDeleteRosterConfirm, setPermanentDeleteRosterConfirm] = useState(false);
 
   const activeAccountCount = students.filter((s) => s.userId && !s.userId.deletedAt).length;
   const deactivatedInTrashCount = trash.filter((s) => s.userId?.deletedAt).length;
@@ -625,6 +628,21 @@ function StudentsTab() {
       toast.error(err?.data?.error?.message ?? 'Failed to restore roster');
     } finally {
       setRestoreRosterConfirm(false);
+    }
+  }
+
+  async function onPermanentDeleteRosterConfirmed() {
+    try {
+      const result = await permanentDeleteRoster(cohortId).unwrap();
+      toast.success(
+        result.blocked > 0
+          ? `${result.deleted} permanently deleted, ${result.blocked} kept (has group formation history)`
+          : `${result.deleted} permanently deleted`,
+      );
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to permanently delete trash');
+    } finally {
+      setPermanentDeleteRosterConfirm(false);
     }
   }
 
@@ -790,6 +808,16 @@ function StudentsTab() {
                 >
                   <Undo2 size={13} />
                   Restore All ({restorableInTrashCount})
+                </Button>
+              )}
+              {trash.length > 0 && (
+                <Button
+                  variant="outline" size="sm"
+                  className="text-danger hover:text-danger hover:bg-danger/10 border-danger/30 shrink-0"
+                  onClick={() => setPermanentDeleteRosterConfirm(true)}
+                >
+                  <Trash2 size={13} />
+                  Permanently Delete All ({trash.length})
                 </Button>
               )}
             </div>
@@ -978,6 +1006,31 @@ function StudentsTab() {
             <AlertDialogAction onClick={onRestoreRosterConfirmed} disabled={restoringRoster}>
               {restoringRoster && <Loader2 size={14} className="animate-spin" />}
               Restore All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Permanently delete roster (cohort) confirm */}
+      <AlertDialog open={permanentDeleteRosterConfirm} onOpenChange={(v) => !v && setPermanentDeleteRosterConfirm(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently Delete All</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete all <span className="font-semibold text-ink-800">{trash.length}</span> student{trash.length !== 1 ? 's' : ''} in
+              this cohort's trash bin? This cannot be undone. Any student with group-formation history (current
+              or past) is automatically kept in the trash instead of being deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger hover:bg-danger/90 text-white"
+              onClick={onPermanentDeleteRosterConfirmed}
+              disabled={permanentDeletingRoster}
+            >
+              {permanentDeletingRoster && <Loader2 size={14} className="animate-spin" />}
+              Permanently Delete All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

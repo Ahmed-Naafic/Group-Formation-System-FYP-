@@ -49,6 +49,10 @@ router.get('/trash', validate(trashQuerySchema, 'query'), studentController.getT
 router.get('/:id', studentController.getById);
 router.patch('/:id', validate(updateStudentSchema), studentController.update);
 router.delete('/', requireRole('admin'), validate(clearByCohortSchema, 'query'), studentController.clearByCohort);
+
+// Must come before DELETE /:id — otherwise "permanent-by-cohort" is parsed as an :id value.
+router.delete('/permanent-by-cohort', requireRole('admin'), validate(clearByCohortSchema, 'query'), studentController.permanentDeleteByCohort);
+
 router.delete('/:id', studentController.remove);
 
 // Must come before POST /:id/restore's neighbors matter less (different
