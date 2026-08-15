@@ -1,6 +1,22 @@
 const asyncHandler    = require('../../../common/utils/asyncHandler');
 const reportService   = require('../services/reportService');
+const { getAnalyticsReport } = require('../services/reportAnalyticsService');
+const { buildAnalyticsExcel } = require('../services/reportExcelExport');
+const { buildAnalyticsPdf }   = require('../services/reportPdfExport');
+const { sendSuccess } = require('../../../common/responses/apiResponse');
 const { BadRequestError } = require('../../../common/errors');
+
+function analyticsParams(req) {
+  return {
+    reportType:       req.query.reportType,
+    date:             req.query.date,
+    weekStart:        req.query.weekStart,
+    year:             req.query.year,
+    month:            req.query.month,
+    courseOfferingId: req.query.courseOfferingId,
+    cohortId:         req.query.cohortId,
+  };
+}
 
 function toCsv(rows) {
   if (!rows.length) return '';
@@ -62,6 +78,33 @@ const reportController = {
     res.setHeader('Content-Disposition', 'attachment; filename="grades.xlsx"');
     await wb.xlsx.write(res);
     res.end();
+  }),
+
+  // GET /api/reports/analytics?reportType=daily|weekly|monthly&...
+  // The one calculation reused by the web view, PDF, and Excel exports below.
+  getAnalytics: asyncHandler(async (req, res) => {
+    const report = await getAnalyticsReport(analyticsParams(req), req.context);
+    return sendSuccess(res, { data: { report } });
+  }),
+
+  // GET /api/reports/analytics/excel?reportType=...
+  exportAnalyticsExcel: asyncHandler(async (req, res) => {
+    const report = await getAnalyticsReport(analyticsParams(req), req.context);
+    const wb = buildAnalyticsExcel(report);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="report-${report.meta.reportType}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  }),
+
+  // GET /api/reports/analytics/pdf?reportType=...
+  exportAnalyticsPdf: asyncHandler(async (req, res) => {
+    const report = await getAnalyticsReport(analyticsParams(req), req.context);
+    const doc = buildAnalyticsPdf(report);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="report-${report.meta.reportType}.pdf"`);
+    doc.pipe(res);
+    doc.end();
   }),
 };
 
