@@ -10,12 +10,12 @@ const cohortController = {
 
   getAll: asyncHandler(async (req, res) => {
     const filter = req.query.departmentId ? { departmentId: req.query.departmentId } : {};
-    const cohorts = await cohortService.getAll(filter);
+    const cohorts = await cohortService.getAll(filter, req.context);
     return sendSuccess(res, { data: { cohorts } });
   }),
 
   getById: asyncHandler(async (req, res) => {
-    const cohort = await cohortService.getById(req.params.id);
+    const cohort = await cohortService.getByIdForRole(req.params.id, req.context);
     return sendSuccess(res, { data: { cohort } });
   }),
 

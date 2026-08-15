@@ -1,16 +1,61 @@
 const cohortRepository          = require('../repositories/cohortRepository');
 const departmentService          = require('../../department/services/departmentService');
 const courseOfferingRepository   = require('../../courseOffering/repositories/courseOfferingRepository');
-const { NotFoundError, ConflictError } = require('../../../common/errors');
+// The repository, not instructorAssignmentService — that service imports
+// userService, which already imports this module, and going through the
+// service here would create a require cycle (cohortService ->
+// instructorAssignmentService -> userService -> cohortService), leaving
+// userService's cached cohortService reference incomplete.
+const instructorAssignmentRepository = require('../../instructorAssignment/repositories/instructorAssignmentRepository');
+const { NotFoundError, ForbiddenError, ConflictError } = require('../../../common/errors');
 
 const cohortService = {
-  getAll(filter = {}) {
-    return cohortRepository.findAll(filter);
+  // Admin sees every cohort (optionally scoped by departmentId, as before).
+  // Instructor sees only cohorts that have an active course offering they're
+  // currently assigned to — previously this returned every cohort in the
+  // system regardless of role, which is the "instructor can see cohorts
+  // they're not assigned to" bug.
+  async getAll(filter = {}, context) {
+    if (context?.role !== 'instructor') {
+      return cohortRepository.findAll(filter);
+    }
+
+    const offeringIds = await instructorAssignmentRepository.findActiveOfferingIdsForInstructor(context.userId);
+    if (offeringIds.length === 0) return [];
+
+    const offerings = await courseOfferingRepository.findAll({
+      _id: { $in: offeringIds },
+      status: 'active',
+    });
+    const cohortIds = [...new Set(offerings.map((o) => String(o.cohortId?._id ?? o.cohortId)))];
+    if (cohortIds.length === 0) return [];
+
+    return cohortRepository.findAll({ ...filter, _id: { $in: cohortIds } });
   },
 
   async getById(id) {
     const cohort = await cohortRepository.findById(id);
     if (!cohort) throw new NotFoundError('Cohort not found');
+    return cohort;
+  },
+
+  // Same scoping as getAll, applied to a single cohort — used by the direct
+  // GET /:id route so an instructor can't view a cohort's detail just by
+  // knowing/guessing its id. Kept separate from getById itself: that method
+  // is called internally by several already-guarded flows (transfers,
+  // offering creation, etc.) that intentionally fetch a cohort without an
+  // access check of their own, and adding one here would break them.
+  async getByIdForRole(id, context) {
+    const cohort = await cohortService.getById(id);
+    if (context?.role === 'instructor') {
+      const offeringIds = await instructorAssignmentRepository.findActiveOfferingIdsForInstructor(context.userId);
+      const hasAccess = offeringIds.length > 0 && await courseOfferingRepository.findAll({
+        _id: { $in: offeringIds },
+        cohortId: id,
+        status: 'active',
+      }).then((offerings) => offerings.length > 0);
+      if (!hasAccess) throw new ForbiddenError('You do not have access to this cohort');
+    }
     return cohort;
   },
 
