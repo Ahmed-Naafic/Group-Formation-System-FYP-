@@ -84,6 +84,16 @@
 
   .text-balance { text-wrap: balance; }
   .text-pretty  { text-wrap: pretty; }
+
+  /* Hides the scrollbar track/thumb while leaving the element scrollable
+     (wheel, touch, keyboard, and drag-to-scroll all keep working). */
+  .no-scrollbar {
+    scrollbar-width: none;     /* Firefox */
+    -ms-overflow-style: none;  /* legacy Edge/IE */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;             /* Chrome, Safari, modern Edge */
+  }
 }
 
 /* ── bg-white surfaces use the elevated card token in dark mode ─────────

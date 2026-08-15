@@ -84,7 +84,7 @@ export default function Sidebar({ isOpen, onClose }) {
         </div>
 
         {/* ── Nav ─────────────────────────────────────────── */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
+        <nav className="flex-1 overflow-y-auto no-scrollbar py-4 px-3">
           {nav.map((item, i) => {
             if (item.type === 'section') {
               return (
