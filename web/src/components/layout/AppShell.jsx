@@ -34,6 +34,9 @@ export default function AppShell() {
           title={title}
           onMenuClick={() => setSidebarOpen(true)}
         />
+        {/* Topbar is now `fixed` (removed from flow) — this reserves its
+            height so main content doesn't render underneath it. */}
+        <div className="h-14 shrink-0" aria-hidden="true" />
 
         <main className="flex-1 min-w-0 p-4 sm:p-6 bg-ink-50">
           <Outlet />

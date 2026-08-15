@@ -26,7 +26,7 @@ export default function Topbar({ title, onMenuClick }) {
 
   return (
     <header
-      className="sticky top-0 z-10 flex h-14 items-center gap-4 px-6"
+      className="fixed top-0 left-0 right-0 lg:left-60 z-10 flex h-14 items-center gap-4 px-6"
       style={{
         background:   'var(--topbar-bg)',
         borderBottom: '1px solid var(--topbar-border)',
