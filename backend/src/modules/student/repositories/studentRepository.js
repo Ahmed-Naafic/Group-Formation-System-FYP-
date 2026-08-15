@@ -51,6 +51,16 @@ const studentRepository = {
     return Student.findOne(filter);
   },
 
+  // Used before creating a new enrollment — if this exact (user, cohort)
+  // pair already has a removed record, re-enrolling should restore it
+  // instead of creating a second Student under the same user in the same
+  // cohort. .includeSoftDeleted() is required here: without it the plugin's
+  // own `deletedAt: null` filter would silently override the `$ne: null`
+  // below and this would never find anything.
+  findTrashedForUserInCohort(userId, cohortId) {
+    return Student.findOne({ userId, cohortId, deletedAt: { $ne: null } }).includeSoftDeleted();
+  },
+
   updateById(id, updates) {
     return Student.findByIdAndUpdate(id, updates, { new: true }).populate(USER_POPULATE);
   },

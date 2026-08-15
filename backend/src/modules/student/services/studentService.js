@@ -69,6 +69,18 @@ const studentService = {
       });
     } else if (user.role !== 'student') {
       throw new BadRequestError('A non-student account already exists with that Student ID');
+    } else {
+      // The account is active, but they may already have a removed
+      // enrollment record for THIS exact cohort — re-adding them would
+      // create a second Student under the same user in the same cohort
+      // instead of just restoring the one that's already there.
+      const trashedHere = await studentRepository.findTrashedForUserInCohort(user._id, cohortId);
+      if (trashedHere) {
+        throw new ConflictError(
+          `Student ID ${studentId} already has a removed record in this cohort. Restore it from the ` +
+          'trash bin instead of creating a new one.',
+        );
+      }
     }
 
     const raw = await studentRepository.create({
@@ -315,6 +327,13 @@ const studentService = {
   // Internal — called by enrollmentService to detect cross-cohort transfers.
   findActiveInOtherCohort(userId, excludeCohortId) {
     return studentRepository.findActiveByUserId(userId, excludeCohortId);
+  },
+
+  // Internal — called by enrollmentService to detect a removed record for
+  // the SAME cohort, so re-enrollment doesn't create a duplicate Student
+  // under a user who already has a trashed one right there.
+  findTrashedInCohort(userId, cohortId) {
+    return studentRepository.findTrashedForUserInCohort(userId, cohortId);
   },
 
   // Internal — called by enrollmentService to archive the old record on transfer.

@@ -150,6 +150,19 @@ const enrollmentService = {
             fromCohortName: fromCohort.name,
           });
         } else {
+          // Not a cross-cohort transfer — but this user may already have a
+          // removed record for THIS exact cohort, in which case re-adding
+          // them would create a second Student under the same user in the
+          // same cohort instead of just restoring the one already there.
+          const trashedHere = await studentService.findTrashedInCohort(user._id, cohortId);
+          if (trashedHere) {
+            failed.push({
+              row: rowNum,
+              reason: `Student ID ${studentId} already has a removed record in this cohort — restore it ` +
+                'from the trash bin instead of re-uploading',
+            });
+            continue;
+          }
           await studentService.createRecord({
             userId: user._id,
             cohortId,
