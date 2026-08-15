@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetCourseOfferingsQuery } from '@/features/courseOffering/courseOfferingApi';
-import { useGetCohortsQuery } from '@/features/cohort/cohortApi';
 import { useLazyGetAnalyticsReportQuery } from './reportApi';
 import { selectCurrentToken } from '@/features/auth/authSlice';
 import { Button } from '@/components/ui/button';
@@ -43,6 +42,10 @@ function addDays(dateStr, days) {
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function cohortIdOf(offering) {
+  return String(offering.cohortId?._id ?? offering.cohortId ?? '');
 }
 
 // ── Shared presentational bits ───────────────────────────────────────────────
@@ -95,8 +98,8 @@ function GroupCallout({ label, group, tone }) {
 
 function ReportFilters({
   reportType, setReportType, date, setDate, weekStart, setWeekStart,
-  year, setYear, month, setMonth, courseOfferingId, setCourseOfferingId,
-  cohortId, setCohortId, offerings, cohorts, onGenerate, isFetching,
+  year, setYear, month, setMonth, courseOfferingId, onCourseOfferingChange,
+  cohortId, onCohortChange, offeringOptions, cohortOptions, onGenerate, isFetching,
   downloading, onExport, hasReport,
 }) {
   return (
@@ -152,11 +155,11 @@ function ReportFilters({
 
         <div className="space-y-1.5">
           <Label>Course Offering</Label>
-          <Select value={courseOfferingId || ALL} onValueChange={(v) => setCourseOfferingId(v === ALL ? '' : v)}>
+          <Select value={courseOfferingId || ALL} onValueChange={(v) => onCourseOfferingChange(v === ALL ? '' : v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All authorized offerings</SelectItem>
-              {offerings.map((o) => (
+              {offeringOptions.map((o) => (
                 <SelectItem key={o._id} value={String(o._id)}>
                   {o.courseId?.name ?? '—'} — {o.cohortId?.name ?? '—'}
                 </SelectItem>
@@ -167,11 +170,11 @@ function ReportFilters({
 
         <div className="space-y-1.5">
           <Label>Cohort</Label>
-          <Select value={cohortId || ALL} onValueChange={(v) => setCohortId(v === ALL ? '' : v)}>
+          <Select value={cohortId || ALL} onValueChange={(v) => onCohortChange(v === ALL ? '' : v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All authorized cohorts</SelectItem>
-              {cohorts.map((c) => (
+              {cohortOptions.map((c) => (
                 <SelectItem key={c._id} value={String(c._id)}>{c.name}</SelectItem>
               ))}
             </SelectContent>
@@ -384,7 +387,6 @@ export default function ReportsPage() {
   const token = useSelector(selectCurrentToken);
 
   const { data: offerings = [] } = useGetCourseOfferingsQuery();
-  const { data: cohorts   = [] } = useGetCohortsQuery();
 
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
@@ -398,11 +400,37 @@ export default function ReportsPage() {
   const [cohortId, setCohortId]                 = useState('');
   const [downloading, setDownloading]           = useState(null);
 
-  // Excel export card (existing feature, untouched)
-  const [selectedOfferingId, setSelectedOfferingId] = useState('');
-  const [downloadingGroupList, setDownloadingGroupList] = useState(false);
-
   const [trigger, { data: report, isFetching, error }] = useLazyGetAnalyticsReportQuery();
+
+  // Derived from `offerings` (already scoped to what this user is authorized
+  // to see) so the two filters can never be steered into a combination that
+  // trips the backend's "you do not have access" guard — that guard exists
+  // to stop URL/API manipulation, not to be reachable from normal UI use.
+  const cohortOptions = [...new Map(
+    offerings.map((o) => [cohortIdOf(o), o.cohortId]),
+  ).entries()]
+    .filter(([id]) => id)
+    .map(([id, cohort]) => ({ _id: id, name: cohort?.name ?? '—' }));
+
+  const offeringOptions = cohortId
+    ? offerings.filter((o) => cohortIdOf(o) === cohortId)
+    : offerings;
+
+  function handleCourseOfferingChange(nextId) {
+    setCourseOfferingId(nextId);
+    if (nextId) {
+      const offering = offerings.find((o) => String(o._id) === nextId);
+      if (offering) setCohortId(cohortIdOf(offering));
+    }
+  }
+
+  function handleCohortChange(nextId) {
+    setCohortId(nextId);
+    if (nextId && courseOfferingId) {
+      const offering = offerings.find((o) => String(o._id) === courseOfferingId);
+      if (offering && cohortIdOf(offering) !== nextId) setCourseOfferingId('');
+    }
+  }
 
   function buildParams() {
     const params = { reportType };
@@ -442,29 +470,6 @@ export default function ReportsPage() {
     }
   }
 
-  async function downloadGroupList() {
-    setDownloadingGroupList(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/reports/groups/formatted?courseOfferingId=${selectedOfferingId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => null);
-        throw new Error(json?.error?.message ?? 'Download failed');
-      }
-      const blob = await res.blob();
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'group_list.xlsx';
-      link.click();
-      URL.revokeObjectURL(link.href);
-    } catch (err) {
-      toast.error(err.message ?? 'Download failed');
-    } finally {
-      setDownloadingGroupList(false);
-    }
-  }
-
   return (
     <div>
       <div className="mb-6">
@@ -480,9 +485,9 @@ export default function ReportsPage() {
         date={date} setDate={setDate}
         weekStart={weekStart} setWeekStart={setWeekStart}
         year={year} setYear={setYear} month={month} setMonth={setMonth}
-        courseOfferingId={courseOfferingId} setCourseOfferingId={setCourseOfferingId}
-        cohortId={cohortId} setCohortId={setCohortId}
-        offerings={offerings} cohorts={cohorts}
+        courseOfferingId={courseOfferingId} onCourseOfferingChange={handleCourseOfferingChange}
+        cohortId={cohortId} onCohortChange={handleCohortChange}
+        offeringOptions={offeringOptions} cohortOptions={cohortOptions}
         onGenerate={handleGenerate} isFetching={isFetching}
         downloading={downloading} onExport={handleExport}
         hasReport={!!report}
@@ -508,36 +513,6 @@ export default function ReportsPage() {
           <p className="text-sm text-ink-400">Choose a report type and period, then click "Generate Report".</p>
         </div>
       )}
-
-      {/* ── Existing group-list export (unrelated feature, unchanged) ──────── */}
-      <div className="rounded-lg border border-border bg-white shadow-xs p-5 max-w-lg">
-        <p className="text-sm font-medium text-ink-800 mb-1">Group List (Excel)</p>
-        <p className="text-xs text-ink-400 mb-4">
-          Styled export with one sheet per group: coloured headers, leader highlighted,
-          alternating rows. Names and roles only — no scores or attendance.
-        </p>
-        <div className="space-y-3">
-          <Select value={selectedOfferingId} onValueChange={setSelectedOfferingId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select an offering…" />
-            </SelectTrigger>
-            <SelectContent>
-              {offerings.map((o) => (
-                <SelectItem key={o._id} value={String(o._id)}>
-                  {o.courseId?.name ?? '—'}
-                  {' — '}
-                  {o.cohortId?.name ?? '—'}
-                  {o.semesterId?.name ? ` (${o.semesterId.name})` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={downloadGroupList} disabled={!selectedOfferingId || downloadingGroupList}>
-            {downloadingGroupList ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
-            Download group list (Excel)
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }
