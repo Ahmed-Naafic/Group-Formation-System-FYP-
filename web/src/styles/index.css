@@ -51,10 +51,22 @@
     @apply border-border;
   }
 
+  /* overflow-x lives here (the true scrolling root), not on inner wrapper
+     divs — pairing overflow-x:hidden with an inner div's default
+     overflow-y:visible computes overflow-y to `auto` per the CSS overflow
+     spec, turning that div into its own scroll container and breaking
+     `position: sticky` for anything inside it. Clipping horizontal bleed
+     at html/body avoids that entirely: the document stays the one and only
+     scrolling element everywhere below it. */
+  html {
+    overflow-x: hidden;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-size: var(--fs-body);
     line-height: var(--lh-normal);
+    overflow-x: hidden;
   }
 
   h1, h2 {
