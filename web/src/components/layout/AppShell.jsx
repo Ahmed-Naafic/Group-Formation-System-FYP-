@@ -18,7 +18,13 @@ export default function AppShell() {
     ?? 'Dashboard';
 
   return (
-    <div className="flex min-h-screen w-full overflow-x-hidden bg-background">
+    // overflow-y is pinned to `visible` alongside overflow-x-hidden: setting
+    // only overflow-x per the CSS spec silently computes overflow-y to
+    // `auto`, which would make this div (or `main` below) its own scroll
+    // container and break the topbar's `sticky top-0` against real page
+    // scroll. Keeping overflow-y visible keeps the document/body as the one
+    // and only scrolling element, same as before.
+    <div className="flex min-h-screen w-full overflow-x-hidden overflow-y-visible bg-background">
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -31,7 +37,7 @@ export default function AppShell() {
           onMenuClick={() => setSidebarOpen(true)}
         />
 
-        <main className="flex-1 min-w-0 p-4 sm:p-6 bg-ink-50 overflow-x-hidden">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 bg-ink-50 overflow-x-hidden overflow-y-visible">
           <Outlet />
         </main>
       </div>
