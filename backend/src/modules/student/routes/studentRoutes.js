@@ -10,6 +10,7 @@ const {
   bulkUploadSchema,
   clearByCohortSchema,
   trashQuerySchema,
+  transferStudentSchema,
 } = require('../validations/studentValidation');
 const studentController = require('../controllers/studentController');
 
@@ -61,6 +62,7 @@ router.post('/restore-by-cohort', requireRole('admin'), validate(clearByCohortSc
 
 router.post('/:id/reset-password', studentController.resetPassword);
 router.post('/:id/restore',        studentController.restore);
+router.post('/:id/transfer',       requireRole('admin'), validate(transferStudentSchema), studentController.transfer);
 router.delete('/:id/permanent',    requireRole('admin'), studentController.permanentDelete);
 
 module.exports = router;

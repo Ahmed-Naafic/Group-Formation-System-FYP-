@@ -87,6 +87,12 @@ const studentController = {
     });
   }),
 
+  // POST /api/students/:id/transfer
+  transfer: asyncHandler(async (req, res) => {
+    const student = await studentService.transfer(req.params.id, req.body.targetCohortId, req.context);
+    return sendSuccess(res, { message: 'Student transferred', data: { student } });
+  }),
+
   // POST /api/students/:id/reset-password
   resetPassword: asyncHandler(async (req, res) => {
     const result = await studentService.resetPassword(req.params.id, req.context);

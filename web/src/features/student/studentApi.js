@@ -74,6 +74,12 @@ export const studentApi = baseApi.injectEndpoints({
       invalidatesTags: ['Student'],
     }),
 
+    transferStudent: build.mutation({
+      query: ({ id, targetCohortId }) => ({ url: `/api/students/${id}/transfer`, method: 'POST', body: { targetCohortId } }),
+      transformResponse: (res) => res.data.student,
+      invalidatesTags: ['Student'],
+    }),
+
     bulkUploadStudents: build.mutation({
       query: ({ cohortId, file, confirmTransfers = false }) => {
         const formData = new FormData();
@@ -102,4 +108,5 @@ export const {
   usePermanentDeleteStudentMutation,
   useRestoreRosterMutation,
   usePermanentDeleteRosterMutation,
+  useTransferStudentMutation,
 } = studentApi;

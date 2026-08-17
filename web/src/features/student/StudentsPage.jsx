@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, Copy, Check, BarChart2, Users2, UserX, Search } from 'lucide-react';
+import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, Copy, Check, BarChart2, Users2, UserX, Search, ArrowLeftRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
 import {
@@ -11,8 +11,9 @@ import {
   useDeleteStudentMutation,
   useResetStudentPasswordMutation,
   useClearRosterMutation,
+  useTransferStudentMutation,
 } from './studentApi';
-import { useGetCohortByIdQuery } from '@/features/cohort/cohortApi';
+import { useGetCohortByIdQuery, useGetCohortsQuery } from '@/features/cohort/cohortApi';
 import { useUpdateScoresMutation } from '@/features/performance/performanceApi';
 import { selectRole } from '@/features/auth/authSlice';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -21,6 +22,7 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from '@/components/ui/alert-dialog';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,11 +46,13 @@ export default function StudentsPage() {
 
   const { data: cohort, isLoading: loadingCohort } = useGetCohortByIdQuery(cohortId);
   const { data: students = [], isLoading, error }   = useGetStudentsQuery(cohortId);
+  const { data: cohorts = [] }                     = useGetCohortsQuery(undefined, { skip: !isAdmin });
   const [createStudent, { isLoading: creating }]   = useCreateStudentMutation();
   const [updateStudent, { isLoading: updating }]   = useUpdateStudentMutation();
   const [deleteStudent, { isLoading: deleting }]   = useDeleteStudentMutation();
   const [resetPassword, { isLoading: resetting }]  = useResetStudentPasswordMutation();
   const [clearRoster,   { isLoading: clearing }]   = useClearRosterMutation();
+  const [transferStudent, { isLoading: transferring }] = useTransferStudentMutation();
   const [updateScores]                             = useUpdateScoresMutation();
 
   const [query, setQuery] = useState('');
@@ -71,6 +75,8 @@ export default function StudentsPage() {
   const [createdResult, setCreatedResult] = useState(null);
   const [resetResult, setResetResult]     = useState(null);
   const [clearConfirm, setClearConfirm]   = useState(false);
+  const [transferTarget, setTransferTarget]   = useState(null);
+  const [transferCohortId, setTransferCohortId] = useState('');
 
   const { register: regCreate, handleSubmit: submitCreate, reset: resetCreate, formState: { errors: errCreate } } = useForm({
     defaultValues: { averageScore: '' },
@@ -145,6 +151,24 @@ export default function StudentsPage() {
       toast.error(err?.data?.error?.message ?? 'Failed to clear roster');
     }
   }
+
+  function openTransfer(student) {
+    setTransferTarget(student);
+    setTransferCohortId('');
+  }
+
+  async function confirmTransfer() {
+    if (!transferTarget || !transferCohortId) return;
+    try {
+      await transferStudent({ id: transferTarget._id, targetCohortId: transferCohortId }).unwrap();
+      toast.success(`${transferTarget.fullName} transferred`);
+      setTransferTarget(null);
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to transfer student');
+    }
+  }
+
+  const otherCohorts = cohorts.filter((c) => c._id !== cohortId);
 
   const cohortName = cohort?.name ?? (loadingCohort ? '…' : 'Cohort');
 
@@ -265,6 +289,12 @@ export default function StudentsPage() {
                         onClick={() => setResetTarget(s)} aria-label="Reset password">
                         <KeyRound size={14} />
                       </Button>
+                      {isAdmin && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-just-blue-600 hover:text-just-blue-700"
+                          onClick={() => openTransfer(s)} aria-label="Transfer to another cohort">
+                          <ArrowLeftRight size={14} />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-danger"
                         onClick={() => setDeleteTarget(s)} aria-label="Remove">
                         <Trash2 size={14} />
@@ -376,6 +406,38 @@ export default function StudentsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Transfer to another cohort */}
+      <Dialog open={!!transferTarget} onOpenChange={(v) => !v && setTransferTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transfer Student</DialogTitle>
+            <DialogDescription>
+              Move <span className="font-semibold text-ink-800">{transferTarget?.fullName}</span> to a different
+              cohort. This is the same student and account — their login, group history, and academic records stay
+              intact; they just move cohorts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5 py-1">
+            <Label>Destination Cohort</Label>
+            <Select value={transferCohortId} onValueChange={setTransferCohortId}>
+              <SelectTrigger><SelectValue placeholder="Select a cohort…" /></SelectTrigger>
+              <SelectContent>
+                {otherCohorts.map((c) => (
+                  <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setTransferTarget(null)}>Cancel</Button>
+            <Button onClick={confirmTransfer} disabled={!transferCohortId || transferring}>
+              {transferring && <Loader2 size={14} className="animate-spin" />}
+              Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reset password confirm */}
       <AlertDialog open={!!resetTarget} onOpenChange={(v) => !v && setResetTarget(null)}>

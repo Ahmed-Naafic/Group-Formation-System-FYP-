@@ -433,6 +433,56 @@ const studentService = {
     return studentRepository.findActiveByUserId(userId, excludeCohortId);
   },
 
+  // ── Transfer to another cohort ───────────────────────────────────────────
+  // TRANSFER IS NOT DELETE. This is the SAME Student document — same _id,
+  // same linked User, same login credentials, same cumulative stats
+  // (averageScore/performanceCategory/hasBeenLeader/leaderCount carry over
+  // unchanged). Nothing is soft-deleted, nothing new is created. Group
+  // history (GroupHistory, archived Groups) is never touched and never
+  // blocks this — that's the whole point of Transfer existing as a distinct
+  // operation from Permanent Delete, which those things DO block.
+  //
+  // The one thing that DOES block is being a member/leader of a CURRENTLY
+  // ACTIVE group: that's a live construct scoped to the old cohort's
+  // offering, and silently ripping a member out of it is a different,
+  // riskier decision than this endpoint should make on its own — the admin
+  // resolves that on the Groups page first (remove them, or let the
+  // grouping run archive naturally), same "require the precondition, don't
+  // cascade around it" pattern as softDelete/clearByCohort elsewhere here.
+  async transfer(id, targetCohortId, context) {
+    const student = await studentService.getById(id, context);
+    const currentCohortId = String(student.cohortId?._id ?? student.cohortId);
+
+    if (currentCohortId === String(targetCohortId)) {
+      throw new BadRequestError('Student is already in this cohort');
+    }
+    const targetCohort = await assertCohortAccess(targetCohortId, context);
+
+    const inActiveGroup = await groupRepository.existsInActiveGroup(id);
+    if (inActiveGroup) {
+      throw new ConflictError(
+        'This student is currently a member of an active group. Remove them from the group on the ' +
+        'Groups page before transferring — their group history will be preserved either way.',
+      );
+    }
+
+    const fromCohort = await cohortService.getById(currentCohortId);
+    const updated = await studentRepository.updateById(id, { cohortId: targetCohortId });
+
+    await auditLogService.log({
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
+      action: 'STUDENT_TRANSFERRED',
+      entityKind: 'Student', entityId: id,
+      changes: {
+        fullName: student.fullName,
+        fromCohortId: currentCohortId, fromCohortName: fromCohort.name,
+        toCohortId: targetCohortId, toCohortName: targetCohort.name,
+      },
+    });
+    return updated;
+  },
+
   // Internal — called by enrollmentService to detect a removed record for
   // the SAME cohort, so re-enrollment doesn't create a duplicate Student
   // under a user who already has a trashed one right there.

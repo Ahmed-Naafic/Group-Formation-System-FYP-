@@ -99,6 +99,19 @@ const groupRepository = {
       .includeSoftDeleted();
     return !!found;
   },
+
+  // Used by studentService.transfer — true only if this student is a member
+  // or leader of a CURRENTLY ACTIVE group (unlike existsWithMember, archived
+  // groups don't count). An active group is a live, in-progress academic
+  // construct in one specific cohort's offering; transferring its member out
+  // from under it would leave a dangling reference, so transfer blocks on
+  // this and asks the admin to resolve it on the Groups page first — it does
+  // not silently mutate someone else's live group.
+  async existsInActiveGroup(studentId) {
+    const found = await Group.exists({ status: 'active', $or: [{ memberIds: studentId }, { leaderId: studentId }] })
+      .includeSoftDeleted();
+    return !!found;
+  },
 };
 
 module.exports = groupRepository;

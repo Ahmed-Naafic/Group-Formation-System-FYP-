@@ -33,6 +33,13 @@ const trashQuerySchema = Joi.object({
   cohortId: objectId,
 });
 
+const transferStudentSchema = Joi.object({
+  targetCohortId: objectId.required().messages({
+    'any.required': 'targetCohortId is required',
+  }),
+});
+
 module.exports = {
   createStudentSchema, updateStudentSchema, bulkUploadSchema, clearByCohortSchema, trashQuerySchema,
+  transferStudentSchema,
 };
