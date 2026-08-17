@@ -101,6 +101,8 @@ async function getAnalyticsReport(params, context) {
   const { start, end, reportType } = period;
 
   const scope = await resolveReportScope(context, {
+    academicYearId:   params.academicYearId,
+    semesterId:       params.semesterId,
     courseOfferingId: params.courseOfferingId,
     cohortId:         params.cohortId,
   });

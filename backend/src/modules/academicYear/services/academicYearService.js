@@ -1,5 +1,5 @@
 const academicYearRepository = require('../repositories/academicYearRepository');
-const semesterRepository     = require('../../semester/repositories/semesterRepository');
+const semesterService        = require('../../semester/services/semesterService');
 const { NotFoundError, BadRequestError, ConflictError } = require('../../../common/errors');
 const {
   deriveName,
@@ -46,12 +46,19 @@ const academicYearService = {
     const duplicate = await academicYearRepository.findActiveByName(name);
     if (duplicate) throw new ConflictError(`An academic year named "${name}" already exists.`);
 
-    return academicYearRepository.create({
+    const ay = await academicYearRepository.create({
       startDate: start,
       endDate:   end,
       name,
       createdBy: data.createdBy,
     });
+
+    // Every academic year has exactly 10 Course Offering semesters (1-10),
+    // auto-created here — there is no admin-facing way to create or delete
+    // them (see semesterService.createDefaultSemesters).
+    await semesterService.createDefaultSemesters(ay._id, data.createdBy);
+
+    return ay;
   },
 
   // Only startDate/endDate are ever accepted (see validation schema) — name
@@ -62,11 +69,13 @@ const academicYearService = {
     const ay = await academicYearService.getById(id);
 
     // The update schema only accepts startDate/endDate (min 1 required), so
-    // at least one of them is always present here.
-    const semesterCount = await semesterRepository.countByAcademicYear(id);
-    if (semesterCount > 0) {
+    // at least one of them is always present here. Every academic year always
+    // has its 10 default semesters, so "has semesters" no longer signals
+    // historical data — check course offerings under them instead.
+    const offeringCount = await semesterService.countCourseOfferings(id);
+    if (offeringCount > 0) {
       throw new ConflictError(
-        `Cannot change the dates of this academic year — it has ${semesterCount} semester(s) `
+        `Cannot change the dates of this academic year — it has ${offeringCount} course offering(s) `
         + `that depend on its current range. Remove them first.`,
       );
     }
@@ -96,10 +105,10 @@ const academicYearService = {
 
   async softDelete(id, userId) {
     const ay = await academicYearService.getById(id);
-    const semesterCount = await semesterRepository.countByAcademicYear(id);
-    if (semesterCount > 0) {
+    const offeringCount = await semesterService.countCourseOfferings(id);
+    if (offeringCount > 0) {
       throw new ConflictError(
-        `Cannot delete academic year — it has ${semesterCount} semester(s). Delete them first.`,
+        `Cannot delete academic year — it has ${offeringCount} course offering(s). Remove them first.`,
       );
     }
     return ay.softDelete(userId);

@@ -14,6 +14,7 @@ import {
 import { useGetCoursesQuery }     from '@/features/course/courseApi';
 import { useGetCohortsQuery }     from '@/features/cohort/cohortApi';
 import { useGetSemestersQuery }   from '@/features/semester/semesterApi';
+import { useGetAcademicYearsQuery } from '@/features/academicYear/academicYearApi';
 import { useGetUsersQuery }       from '@/features/user/userApi';
 import { selectRole }             from '@/features/auth/authSlice';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -31,6 +32,33 @@ import { Label } from '@/components/ui/label';
 const STATUS_VARIANT = { active: 'success', completed: 'default', cancelled: 'destructive' };
 const ALL = '__all__';
 
+// Hoisted out of the page component (rather than defined inline in render)
+// so it isn't recreated — and its Select's internal state reset — on every
+// render; control/errors come from the page's useForm() instance as props.
+function SelectField({ control, errors, name, label, options, required, disabled, onValueChange, placeholder }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}{required && <span className="text-danger"> *</span>}</Label>
+      <Controller
+        control={control}
+        name={name}
+        rules={required ? { required: `${label} is required` } : {}}
+        render={({ field }) => (
+          <Select value={field.value} onValueChange={onValueChange ?? field.onChange} disabled={disabled}>
+            <SelectTrigger aria-invalid={!!errors[name]}><SelectValue placeholder={placeholder ?? 'Select…'} /></SelectTrigger>
+            <SelectContent>
+              {options.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      />
+      {errors[name] && <p className="text-xs text-danger">{errors[name].message}</p>}
+    </div>
+  );
+}
+
 export default function CourseOfferingsPage() {
   const role = useSelector(selectRole);
   const isAdmin = role === 'admin';
@@ -39,6 +67,7 @@ export default function CourseOfferingsPage() {
   const { data: courses    = [] } = useGetCoursesQuery();
   const { data: cohorts    = [] } = useGetCohortsQuery();
   const { data: semesters  = [] } = useGetSemestersQuery();
+  const { data: academicYears = [] } = useGetAcademicYearsQuery();
   // Deactivated instructors must not be assignable to offerings.
   const { data: activeInstructors = [] } = useGetUsersQuery({ role: 'instructor', isActive: true });
 
@@ -54,7 +83,7 @@ export default function CourseOfferingsPage() {
   const [deleteTarget,   setDeleteTarget]   = useState(null);
   const [historyTarget,  setHistoryTarget]  = useState(null);
 
-  const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, control, setValue, formState: { errors } } = useForm();
 
   // The offering being edited might currently be taught by an instructor who
   // has since been deactivated — keep them selectable (as the current value)
@@ -70,11 +99,33 @@ export default function CourseOfferingsPage() {
   const originalInstructorId = String(editing?.instructorId?._id ?? editing?.instructorId ?? '');
   const isReassigning = !!editing && !!watchedInstructorId && watchedInstructorId !== originalInstructorId;
 
+  // Academic Year -> Semester cascade (create form only — semester is fixed
+  // once an offering exists). Selecting a year loads only its 10 semesters;
+  // changing it resets the semester field so a stale cross-year selection
+  // can never be submitted.
+  const watchedAcademicYearId = useWatch({ control, name: 'academicYearId' });
+  const semestersForSelectedAY = watchedAcademicYearId
+    ? semesters.filter((s) => String(s.academicYearId?._id ?? s.academicYearId ?? '') === watchedAcademicYearId)
+    : [];
+  function handleAcademicYearChange(nextId) {
+    setValue('academicYearId', nextId, { shouldValidate: true });
+    setValue('semesterId', '', { shouldValidate: false });
+  }
+
   // Build lookup maps
   const courseMap   = Object.fromEntries(courses.map((c)    => [c._id, `${c.name} (${c.code})`]));
   const cohortMap   = Object.fromEntries(cohorts.map((c)    => [c._id, c.name]));
-  const semMap      = Object.fromEntries(semesters.map((s)  => [s._id, s.name]));
-  const instrMap    = Object.fromEntries(instructors.map((u) => [u._id, u.fullName]));
+  const ayNameById  = Object.fromEntries(academicYears.map((y) => [y._id, y.name]));
+  // "Semester 1" alone is ambiguous once every academic year has its own —
+  // disambiguate everywhere a semester name is shown standalone (filter
+  // dropdown, table cell).
+  function semesterLabel(s) {
+    const ayId = String(s.academicYearId?._id ?? s.academicYearId ?? '');
+    const ayName = s.academicYearId?.name ?? ayNameById[ayId] ?? '—';
+    return `${ayName} — ${s.name}`;
+  }
+  const semMap       = Object.fromEntries(semesters.map((s) => [s._id, semesterLabel(s)]));
+  const instrMap     = Object.fromEntries(instructors.map((u) => [u._id, u.fullName]));
 
   const visible = offerings.filter((o) => {
     const cid = String(o.cohortId?._id   ?? o.cohortId ?? '');
@@ -91,12 +142,13 @@ export default function CourseOfferingsPage() {
 
   useEffect(() => {
     if (!editing) {
-      reset({ courseId: '', cohortId: '', semesterId: '', instructorId: '', maxStudents: '', status: 'active', reason: '' });
+      reset({ courseId: '', cohortId: '', academicYearId: '', semesterId: '', instructorId: '', maxStudents: '', status: 'active', reason: '' });
       return;
     }
     reset({
       courseId:     String(editing.courseId?._id     ?? editing.courseId     ?? ''),
       cohortId:     String(editing.cohortId?._id     ?? editing.cohortId     ?? ''),
+      academicYearId: String(editing.semesterId?.academicYearId?._id ?? editing.semesterId?.academicYearId ?? ''),
       semesterId:   String(editing.semesterId?._id   ?? editing.semesterId   ?? ''),
       instructorId: String(editing.instructorId?._id ?? editing.instructorId ?? ''),
       maxStudents:  editing.maxStudents ?? '',
@@ -142,28 +194,6 @@ export default function CourseOfferingsPage() {
     }
   }
 
-  const SelectField = ({ name, label, options, required, disabled }) => (
-    <div className="space-y-1.5">
-      <Label>{label}{required && <span className="text-danger"> *</span>}</Label>
-      <Controller
-        control={control}
-        name={name}
-        rules={required ? { required: `${label} is required` } : {}}
-        render={({ field }) => (
-          <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
-            <SelectTrigger aria-invalid={!!errors[name]}><SelectValue placeholder="Select…" /></SelectTrigger>
-            <SelectContent>
-              {options.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      />
-      {errors[name] && <p className="text-xs text-danger">{errors[name].message}</p>}
-    </div>
-  );
-
   return (
     <div>
       <div className="flex items-start justify-between mb-6">
@@ -201,10 +231,10 @@ export default function CourseOfferingsPage() {
           </SelectContent>
         </Select>
         <Select value={semesterFilter} onValueChange={setSemesterFilter}>
-          <SelectTrigger className="w-48 h-8 text-xs"><SelectValue placeholder="All semesters" /></SelectTrigger>
+          <SelectTrigger className="w-56 h-8 text-xs"><SelectValue placeholder="All semesters" /></SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>All semesters</SelectItem>
-            {semesters.map((s) => <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>)}
+            {semesters.map((s) => <SelectItem key={s._id} value={s._id}>{semesterLabel(s)}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -245,7 +275,7 @@ export default function CourseOfferingsPage() {
                       {o.courseId?.code && <span className="ml-1.5 text-xs text-ink-400">({o.courseId.code})</span>}
                     </TableCell>
                     <TableCell className="text-ink-500">{o.cohortId?.name ?? cohortMap[cohortId] ?? '—'}</TableCell>
-                    <TableCell className="text-ink-500">{o.semesterId?.name ?? semMap[semId] ?? '—'}</TableCell>
+                    <TableCell className="text-ink-500">{o.semesterId ? semesterLabel(o.semesterId) : (semMap[semId] ?? '—')}</TableCell>
                     <TableCell className="text-ink-500">{o.instructorId?.fullName ?? instrMap[instrId] ?? '—'}</TableCell>
                     <TableCell>
                       <Badge variant={STATUS_VARIANT[o.status] ?? 'secondary'}>{o.status}</Badge>
@@ -298,17 +328,25 @@ export default function CourseOfferingsPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             {!editing && (
               <>
-                <SelectField name="courseId" label="Course" required
+                <SelectField control={control} errors={errors} name="courseId" label="Course" required
                   options={courses.map((c) => ({ value: c._id, label: `${c.name} (${c.code})` }))} />
+                <SelectField control={control} errors={errors} name="cohortId" label="Cohort" required
+                  options={cohorts.map((c) => ({ value: c._id, label: c.name }))} />
+                {/* Academic Year is selected first — the Semester dropdown only
+                    loads once a year is picked, and only shows that year's own
+                    10 semesters (never another year's). */}
                 <div className="grid grid-cols-2 gap-3">
-                  <SelectField name="cohortId" label="Cohort" required
-                    options={cohorts.map((c) => ({ value: c._id, label: c.name }))} />
-                  <SelectField name="semesterId" label="Semester" required
-                    options={semesters.map((s) => ({ value: s._id, label: s.name }))} />
+                  <SelectField control={control} errors={errors} name="academicYearId" label="Academic Year" required
+                    options={academicYears.map((y) => ({ value: y._id, label: y.name }))}
+                    onValueChange={handleAcademicYearChange} />
+                  <SelectField control={control} errors={errors} name="semesterId" label="Semester" required
+                    disabled={!watchedAcademicYearId}
+                    placeholder={watchedAcademicYearId ? 'Select…' : 'Select an academic year first'}
+                    options={semestersForSelectedAY.map((s) => ({ value: s._id, label: s.name }))} />
                 </div>
               </>
             )}
-            <SelectField name="instructorId" label="Instructor" required
+            <SelectField control={control} errors={errors} name="instructorId" label="Instructor" required
               options={instructors.map((u) => ({ value: u._id, label: u.fullName }))} />
             {isReassigning && (
               <div className="space-y-1.5">

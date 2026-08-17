@@ -1,32 +1,15 @@
 import { baseApi } from '@/lib/api';
 
+// Semesters are entirely system-managed (auto-created 1-10 alongside their
+// academic year) — there is no create/update/delete here, only reads.
 export const semesterApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     getSemesters: build.query({
-      query: () => '/api/semesters',
+      query: (params) => ({ url: '/api/semesters', params }),
       transformResponse: (res) => res.data.semesters,
       providesTags: ['Semester'],
-    }),
-    createSemester: build.mutation({
-      query: (body) => ({ url: '/api/semesters', method: 'POST', body }),
-      transformResponse: (res) => res.data.semester,
-      invalidatesTags: ['Semester'],
-    }),
-    updateSemester: build.mutation({
-      query: ({ id, ...body }) => ({ url: `/api/semesters/${id}`, method: 'PATCH', body }),
-      transformResponse: (res) => res.data.semester,
-      invalidatesTags: ['Semester'],
-    }),
-    deleteSemester: build.mutation({
-      query: (id) => ({ url: `/api/semesters/${id}`, method: 'DELETE' }),
-      invalidatesTags: ['Semester'],
     }),
   }),
 });
 
-export const {
-  useGetSemestersQuery,
-  useCreateSemesterMutation,
-  useUpdateSemesterMutation,
-  useDeleteSemesterMutation,
-} = semesterApi;
+export const { useGetSemestersQuery } = semesterApi;

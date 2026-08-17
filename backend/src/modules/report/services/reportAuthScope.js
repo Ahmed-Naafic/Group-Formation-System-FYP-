@@ -21,17 +21,33 @@ async function resolveAuthorizedOfferings(context) {
   throw new ForbiddenError('You do not have access to reports');
 }
 
-// Narrows the authorized set by an optional courseOfferingId/cohortId filter
-// from the request. This is the actual enforcement point for "an instructor
-// must never access another instructor's data by changing an ID in the
-// request" — a filter that doesn't match anything in the authorized set
-// (whether because it belongs to someone else or doesn't exist at all)
-// rejects the same way either way, so this never confirms or denies whether
-// a given id exists to a caller who isn't allowed to see it.
-async function resolveReportScope(context, { courseOfferingId, cohortId } = {}) {
+// Narrows the authorized set by optional academicYearId/semesterId/
+// courseOfferingId/cohortId filters from the request. This is the actual
+// enforcement point for "an instructor must never access another
+// instructor's data by changing an ID in the request" — a filter that
+// doesn't match anything in the authorized set (whether because it belongs
+// to someone else or doesn't exist at all) rejects the same way either way,
+// so this never confirms or denies whether a given id exists to a caller
+// who isn't allowed to see it.
+async function resolveReportScope(context, { academicYearId, semesterId, courseOfferingId, cohortId } = {}) {
   const authorized = await resolveAuthorizedOfferings(context);
 
   let scoped = authorized;
+  if (academicYearId) {
+    scoped = scoped.filter((o) => {
+      const oAyId = o.semesterId?.academicYearId?._id ?? o.semesterId?.academicYearId;
+      return String(oAyId ?? '') === String(academicYearId);
+    });
+    if (scoped.length === 0) {
+      throw new ForbiddenError('You do not have access to this academic year');
+    }
+  }
+  if (semesterId) {
+    scoped = scoped.filter((o) => String(o.semesterId?._id ?? o.semesterId) === String(semesterId));
+    if (scoped.length === 0) {
+      throw new ForbiddenError('You do not have access to this semester');
+    }
+  }
   if (courseOfferingId) {
     scoped = scoped.filter((o) => String(o._id) === String(courseOfferingId));
     if (scoped.length === 0) {

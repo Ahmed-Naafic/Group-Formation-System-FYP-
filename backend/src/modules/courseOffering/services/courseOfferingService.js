@@ -44,8 +44,20 @@ const courseOfferingService = {
     // Validate all referenced entities exist
     await courseService.getById(data.courseId);
     await cohortService.getById(data.cohortId);
-    await semesterService.getById(data.semesterId);
+    const semester = await semesterService.getById(data.semesterId);
     await instructorAssignmentService.validateInstructor(data.instructorId);
+
+    // Cross-check: the selected semester must actually belong to the
+    // selected academic year — the UI resolves this via a cascading
+    // dropdown, but a direct API call could send a mismatched pair.
+    // academicYearId itself is never stored on the offering; semesterId
+    // alone already fully implies it.
+    if (data.academicYearId) {
+      const semesterAyId = String(semester.academicYearId?._id ?? semester.academicYearId);
+      if (semesterAyId !== String(data.academicYearId)) {
+        throw new ConflictError('The selected semester does not belong to the selected academic year.');
+      }
+    }
 
     const duplicate = await courseOfferingRepository.findActiveByKey(
       data.courseId, data.cohortId, data.semesterId,
@@ -54,7 +66,7 @@ const courseOfferingService = {
       throw new ConflictError('This course is already offered to this cohort in this semester.');
     }
 
-    const { instructorId, ...offeringData } = data;
+    const { instructorId, academicYearId, ...offeringData } = data;
     const offering = await courseOfferingRepository.create({ ...offeringData, createdBy: context.userId });
     await instructorAssignmentService.assign(offering._id, instructorId, { assignedBy: context.userId });
 

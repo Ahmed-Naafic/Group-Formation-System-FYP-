@@ -6,6 +6,11 @@ const createCourseOfferingSchema = Joi.object({
   courseId:     objectId.required(),
   cohortId:     objectId.required(),
   semesterId:   objectId.required(),
+  // Optional — the frontend's cascading Academic Year -> Semester dropdown
+  // sends this so the backend can cross-check semesterId actually belongs to
+  // it (see courseOfferingService.create). Not stored on the offering itself;
+  // semesterId alone always implies exactly one academic year.
+  academicYearId: objectId,
   instructorId: objectId.required(),
   maxStudents:  Joi.number().integer().min(1).allow(null).default(null),
   status:       Joi.string().valid('active', 'completed', 'cancelled').default('active'),

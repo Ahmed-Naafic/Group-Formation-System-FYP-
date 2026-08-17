@@ -1,38 +1,16 @@
 const semesterRepository       = require('../repositories/semesterRepository');
-const academicYearService      = require('../../academicYear/services/academicYearService');
 const courseOfferingRepository = require('../../courseOffering/repositories/courseOfferingRepository');
-const { NotFoundError, BadRequestError, ConflictError } = require('../../../common/errors');
-const {
-  MAX_SEMESTERS_PER_YEAR,
-  assertDuration,
-  assertWithinAcademicYear,
-  assertNoOverlap,
-  nextSemesterName,
-} = require('./semesterRules');
+const { NotFoundError, ConflictError } = require('../../../common/errors');
+const { buildDefaultSemesters } = require('./semesterRules');
 
 const semesterService = {
-  // `name` is never taken from the request — it's always derived from what
-  // already exists in the academic year (see semesterRules.nextSemesterName),
-  // so it can't be spoofed, mistyped, or duplicated through the API.
-  async create(data) {
-    if (new Date(data.startDate) >= new Date(data.endDate)) {
-      throw new BadRequestError('startDate must be before endDate');
-    }
-    const ay = await academicYearService.getById(data.academicYearId);
-    assertWithinAcademicYear(data.startDate, data.endDate, ay);
-    assertDuration(data.startDate, data.endDate);
-
-    const siblings = await semesterRepository.findActiveByAcademicYear(data.academicYearId);
-    assertNoOverlap(siblings, data.startDate, data.endDate, null);
-
-    const name = nextSemesterName(siblings);
-    if (!name) {
-      throw new ConflictError(
-        `This academic year already has the maximum of ${MAX_SEMESTERS_PER_YEAR} semesters.`,
-      );
-    }
-
-    return semesterRepository.create({ ...data, name });
+  // Semesters are entirely system-managed — there is no admin-facing create/
+  // update/delete. This is the only way semester documents ever come into
+  // existence, called once by academicYearService right after an academic
+  // year is created. Always exactly the 10 default semesters, in one insert.
+  createDefaultSemesters(academicYearId, createdBy) {
+    const docs = buildDefaultSemesters(academicYearId, createdBy);
+    return semesterRepository.insertMany(docs);
   },
 
   getAll(filter = {}) {
@@ -45,50 +23,28 @@ const semesterService = {
     return semester;
   },
 
-  // `name` is immutable after creation — it's not accepted by the update
-  // schema, so it's never present in `updates` here.
-  async update(id, updates) {
-    const semester = await semesterService.getById(id);
-
-    const start = updates.startDate ? new Date(updates.startDate) : semester.startDate;
-    const end   = updates.endDate   ? new Date(updates.endDate)   : semester.endDate;
-
-    if (start >= end) throw new BadRequestError('startDate must be before endDate');
-
-    const targetAYId = updates.academicYearId
-      ?? String(semester.academicYearId?._id ?? semester.academicYearId);
-    const ay = await academicYearService.getById(targetAYId);
-    assertWithinAcademicYear(start, end, ay);
-    assertDuration(start, end);
-
-    const siblings = await semesterRepository.findActiveByAcademicYear(targetAYId);
-    assertNoOverlap(siblings, start, end, id);
-
-    // Moving to a different academic year that already has this semester's
-    // number (e.g. this is "Semester 3" and the target year already has one)
-    // is the only way a duplicate name can still occur, since names are
-    // otherwise always derived fresh on create.
-    if (updates.academicYearId) {
-      const duplicate = siblings.find(
-        (s) => String(s._id) !== id && s.name.toLowerCase() === semester.name.toLowerCase(),
-      );
-      if (duplicate) {
-        throw new ConflictError(`A semester named "${semester.name}" already exists in this academic year.`);
-      }
-    }
-
-    return semesterRepository.updateById(id, updates);
+  getByAcademicYear(academicYearId) {
+    return semesterRepository.findByAcademicYear(academicYearId);
   },
 
-  async softDelete(id, userId) {
-    const semester     = await semesterService.getById(id);
-    const offeringCount = await courseOfferingRepository.countBySemester(id);
-    if (offeringCount > 0) {
-      throw new ConflictError(
-        `Cannot delete semester — it has ${offeringCount} course offering(s). Remove them first.`,
-      );
+  // Used by academicYearService's delete guard — "has historical data" now
+  // means "has course offerings under any of its 10 semesters", not merely
+  // "has semesters" (every academic year always does, by design).
+  async countCourseOfferings(academicYearId) {
+    const semesters = await semesterRepository.findByAcademicYear(academicYearId);
+    if (semesters.length === 0) return 0;
+    return courseOfferingRepository.countBySemesterIds(semesters.map((s) => s._id));
+  },
+
+  // Cross-validation used by courseOfferingService — the selected semester
+  // must actually belong to the selected/implied academic year. Throws the
+  // exact error the spec calls for rather than a generic mismatch message.
+  async assertBelongsToAcademicYear(semesterId, academicYearId) {
+    const semester = await semesterService.getById(semesterId);
+    if (String(semester.academicYearId?._id ?? semester.academicYearId) !== String(academicYearId)) {
+      throw new ConflictError('The selected semester does not belong to the selected academic year.');
     }
-    return semester.softDelete(userId);
+    return semester;
   },
 };
 

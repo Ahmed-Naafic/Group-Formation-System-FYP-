@@ -48,6 +48,15 @@ function cohortIdOf(offering) {
   return String(offering.cohortId?._id ?? offering.cohortId ?? '');
 }
 
+function academicYearIdOf(offering) {
+  const ay = offering.semesterId?.academicYearId;
+  return String(ay?._id ?? ay ?? '');
+}
+
+function semesterIdOf(offering) {
+  return String(offering.semesterId?._id ?? offering.semesterId ?? '');
+}
+
 // ── Shared presentational bits ───────────────────────────────────────────────
 
 function StatTile({ label, value }) {
@@ -99,7 +108,9 @@ function GroupCallout({ label, group, tone }) {
 function ReportFilters({
   reportType, setReportType, date, setDate, weekStart, setWeekStart,
   year, setYear, month, setMonth, courseOfferingId, onCourseOfferingChange,
-  cohortId, onCohortChange, offeringOptions, cohortOptions, onGenerate, isFetching,
+  cohortId, onCohortChange, academicYearId, onAcademicYearChange,
+  semesterId, onSemesterChange, offeringOptions, cohortOptions,
+  academicYearOptions, semesterOptions, onGenerate, isFetching,
   downloading, onExport, hasReport,
 }) {
   return (
@@ -152,6 +163,32 @@ function ReportFilters({
             />
           </div>
         )}
+
+        <div className="space-y-1.5">
+          <Label>Academic Year</Label>
+          <Select value={academicYearId || ALL} onValueChange={(v) => onAcademicYearChange(v === ALL ? '' : v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All authorized years</SelectItem>
+              {academicYearOptions.map((y) => (
+                <SelectItem key={y._id} value={String(y._id)}>{y.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Semester</Label>
+          <Select value={semesterId || ALL} onValueChange={(v) => onSemesterChange(v === ALL ? '' : v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All authorized semesters</SelectItem>
+              {semesterOptions.map((s) => (
+                <SelectItem key={s._id} value={String(s._id)}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="space-y-1.5">
           <Label>Course Offering</Label>
@@ -398,6 +435,8 @@ export default function ReportsPage() {
   const [month, setMonth]                       = useState(now.getMonth() + 1);
   const [courseOfferingId, setCourseOfferingId] = useState('');
   const [cohortId, setCohortId]                 = useState('');
+  const [academicYearId, setAcademicYearId]     = useState('');
+  const [semesterId, setSemesterId]             = useState('');
   const [downloading, setDownloading]           = useState(null);
 
   const [trigger, { data: report, isFetching, error }] = useLazyGetAnalyticsReportQuery();
@@ -415,6 +454,38 @@ export default function ReportsPage() {
   const offeringOptions = cohortId
     ? offerings.filter((o) => cohortIdOf(o) === cohortId)
     : offerings;
+
+  // Same "derive from already-authorized offerings" approach as cohort/
+  // offering above, so a mismatched Academic Year + Semester pair can't be
+  // constructed via the UI either.
+  const academicYearOptions = [...new Map(
+    offerings.map((o) => [academicYearIdOf(o), o.semesterId?.academicYearId]),
+  ).entries()]
+    .filter(([id]) => id)
+    .map(([id, ay]) => ({ _id: id, name: ay?.name ?? '—' }));
+
+  const semesterOptions = [...new Map(
+    (academicYearId ? offerings.filter((o) => academicYearIdOf(o) === academicYearId) : offerings)
+      .map((o) => [semesterIdOf(o), o.semesterId]),
+  ).entries()]
+    .filter(([id]) => id)
+    .map(([id, sem]) => ({ _id: id, name: sem?.name ?? '—' }));
+
+  function handleAcademicYearChange(nextId) {
+    setAcademicYearId(nextId);
+    if (nextId && semesterId) {
+      const offering = offerings.find((o) => semesterIdOf(o) === semesterId);
+      if (offering && academicYearIdOf(offering) !== nextId) setSemesterId('');
+    }
+  }
+
+  function handleSemesterChange(nextId) {
+    setSemesterId(nextId);
+    if (nextId) {
+      const offering = offerings.find((o) => semesterIdOf(o) === nextId);
+      if (offering) setAcademicYearId(academicYearIdOf(offering));
+    }
+  }
 
   function handleCourseOfferingChange(nextId) {
     setCourseOfferingId(nextId);
@@ -437,6 +508,8 @@ export default function ReportsPage() {
     if (reportType === 'daily') params.date = date;
     if (reportType === 'weekly') params.weekStart = weekStart;
     if (reportType === 'monthly') { params.year = year; params.month = month; }
+    if (academicYearId) params.academicYearId = academicYearId;
+    if (semesterId) params.semesterId = semesterId;
     if (courseOfferingId) params.courseOfferingId = courseOfferingId;
     if (cohortId) params.cohortId = cohortId;
     return params;
@@ -487,7 +560,10 @@ export default function ReportsPage() {
         year={year} setYear={setYear} month={month} setMonth={setMonth}
         courseOfferingId={courseOfferingId} onCourseOfferingChange={handleCourseOfferingChange}
         cohortId={cohortId} onCohortChange={handleCohortChange}
+        academicYearId={academicYearId} onAcademicYearChange={handleAcademicYearChange}
+        semesterId={semesterId} onSemesterChange={handleSemesterChange}
         offeringOptions={offeringOptions} cohortOptions={cohortOptions}
+        academicYearOptions={academicYearOptions} semesterOptions={semesterOptions}
         onGenerate={handleGenerate} isFetching={isFetching}
         downloading={downloading} onExport={handleExport}
         hasReport={!!report}

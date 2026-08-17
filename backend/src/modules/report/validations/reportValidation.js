@@ -26,6 +26,8 @@ const analyticsQuerySchema = Joi.object({
     is: 'monthly',
     then: Joi.required().messages({ 'any.required': 'month is required for a monthly report' }),
   }),
+  academicYearId: objectId,
+  semesterId: objectId,
   courseOfferingId: objectId,
   cohortId: objectId,
 }).unknown(false);

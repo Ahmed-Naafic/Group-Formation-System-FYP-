@@ -7,7 +7,10 @@ const CourseOffering = require('../models/CourseOffering');
 const POPULATE = [
   { path: 'courseId',   select: 'name code departmentId' },
   { path: 'cohortId',   select: 'name departmentId' },
-  { path: 'semesterId', select: 'name startDate endDate status' },
+  {
+    path: 'semesterId', select: 'name number academicYearId',
+    populate: { path: 'academicYearId', select: 'name' },
+  },
 ];
 
 const courseOfferingRepository = {
@@ -39,6 +42,13 @@ const courseOfferingRepository = {
 
   countBySemester(semesterId) {
     return CourseOffering.countDocuments({ semesterId });
+  },
+
+  // Used by academicYearService's delete guard — counts offerings across ALL
+  // of an academic year's semesters at once (an academic year has no direct
+  // semesterId of its own to filter by).
+  countBySemesterIds(semesterIds) {
+    return CourseOffering.countDocuments({ semesterId: { $in: semesterIds } });
   },
 
   countByCourse(courseId) {

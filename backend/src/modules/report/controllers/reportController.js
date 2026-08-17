@@ -13,6 +13,8 @@ function analyticsParams(req) {
     weekStart:        req.query.weekStart,
     year:             req.query.year,
     month:            req.query.month,
+    academicYearId:   req.query.academicYearId,
+    semesterId:       req.query.semesterId,
     courseOfferingId: req.query.courseOfferingId,
     cohortId:         req.query.cohortId,
   };
