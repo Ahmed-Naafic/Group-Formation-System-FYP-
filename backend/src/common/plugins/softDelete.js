@@ -23,18 +23,18 @@ function softDeletePlugin(schema) {
     return this.setOptions({ _includeSoftDeleted: true });
   };
 
-  // Instance method: await doc.softDelete(userId)
-  schema.methods.softDelete = function (userId) {
+  // Instance method: await doc.softDelete(userId[, session])
+  schema.methods.softDelete = function (userId, session) {
     this.deletedAt = new Date();
     this.deletedBy = userId;
-    return this.save();
+    return this.save({ session });
   };
 
-  // Instance method: await doc.restore()
-  schema.methods.restore = function () {
+  // Instance method: await doc.restore([session])
+  schema.methods.restore = function (session) {
     this.deletedAt = null;
     this.deletedBy = null;
-    return this.save();
+    return this.save({ session });
   };
 }
 

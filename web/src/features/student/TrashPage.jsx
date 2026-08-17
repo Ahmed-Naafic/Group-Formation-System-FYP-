@@ -27,7 +27,13 @@ export default function TrashPage() {
   const [restoreStudent,  { isLoading: restoring }]  = useRestoreStudentMutation();
   const [permanentDelete, { isLoading: deleting }]   = usePermanentDeleteStudentMutation();
 
-  const [permanentTarget, setPermanentTarget] = useState(null);
+  const [permanentTarget,     setPermanentTarget]     = useState(null);
+  const [restoreAllConfirm,   setRestoreAllConfirm]   = useState(false);
+  const [deleteAllConfirm,    setDeleteAllConfirm]    = useState(false);
+  const [bulkRestoring,       setBulkRestoring]       = useState(false);
+  const [bulkDeleting,        setBulkDeleting]        = useState(false);
+
+  const deletableCount = trash.filter((s) => s.canPermanentlyDelete !== false).length;
 
   async function onRestore(student) {
     try {
@@ -50,10 +56,44 @@ export default function TrashPage() {
     }
   }
 
+  // The backend's bulk restore/permanent-delete endpoints are cohort-scoped
+  // (the Trash bin used to be too) — this page spans every cohort the caller
+  // can see, so "All" here means looping the same per-student endpoints
+  // already used for the individual actions above, one call per row.
+  async function onRestoreAllConfirmed() {
+    setRestoreAllConfirm(false);
+    setBulkRestoring(true);
+    const results = await Promise.allSettled(trash.map((s) => restoreStudent(s._id).unwrap()));
+    setBulkRestoring(false);
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - succeeded;
+    if (failed === 0) {
+      toast.success(`${succeeded} student${succeeded !== 1 ? 's' : ''} restored`);
+    } else {
+      toast.error(`${succeeded} restored, ${failed} failed — check individual rows for details`);
+    }
+  }
+
+  async function onDeleteAllConfirmed() {
+    setDeleteAllConfirm(false);
+    const targets = trash.filter((s) => s.canPermanentlyDelete !== false);
+    setBulkDeleting(true);
+    const results = await Promise.allSettled(targets.map((s) => permanentDelete(s._id).unwrap()));
+    setBulkDeleting(false);
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - succeeded;
+    const skipped = trash.length - targets.length;
+    toast[failed === 0 ? 'success' : 'error'](
+      `${succeeded} permanently deleted` +
+      (failed > 0 ? `, ${failed} failed` : '') +
+      (skipped > 0 ? `, ${skipped} kept (has group formation history)` : ''),
+    );
+  }
+
   return (
     <div>
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-6 gap-3">
         <div>
           <h2 className="text-ink-900 leading-none">Trash</h2>
           <p className="text-sm text-ink-500 mt-1">
@@ -62,6 +102,30 @@ export default function TrashPage() {
               : 'Removed students, across every cohort you can access'}
           </p>
         </div>
+        {trash.length > 0 && (
+          <div className="flex gap-2 shrink-0">
+            <Button
+              variant="outline" size="sm"
+              className="text-success hover:text-success hover:bg-success/10 border-success/30"
+              onClick={() => setRestoreAllConfirm(true)}
+              disabled={bulkRestoring || bulkDeleting}
+            >
+              {bulkRestoring ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} />}
+              Restore All ({trash.length})
+            </Button>
+            {deletableCount > 0 && (
+              <Button
+                variant="outline" size="sm"
+                className="text-danger hover:text-danger hover:bg-danger/10 border-danger/30"
+                onClick={() => setDeleteAllConfirm(true)}
+                disabled={bulkRestoring || bulkDeleting}
+              >
+                {bulkDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                Permanently Delete All ({deletableCount})
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {isLoading ? (
@@ -113,8 +177,8 @@ export default function TrashPage() {
                         <Button
                           variant="ghost" size="sm" className="h-7 text-xs gap-1 text-success hover:text-success hover:bg-success/10"
                           onClick={() => onRestore(s)}
-                          disabled={restoring || !accountActive}
-                          title={accountActive ? 'Restore student' : "Restore the account first, from User Management"}
+                          disabled={restoring || bulkRestoring}
+                          title="Restore student — reactivates the account too, if needed"
                         >
                           <Undo2 size={12} /> Restore
                         </Button>
@@ -122,7 +186,7 @@ export default function TrashPage() {
                           variant="ghost" size="sm"
                           className="h-7 text-xs gap-1 text-danger hover:text-danger hover:bg-danger/10 disabled:text-ink-300 disabled:hover:bg-transparent"
                           onClick={() => setPermanentTarget(s)}
-                          disabled={s.canPermanentlyDelete === false}
+                          disabled={s.canPermanentlyDelete === false || bulkDeleting}
                           title={s.canPermanentlyDelete === false ? s.blockedReason : 'Permanently delete'}
                         >
                           <Trash2 size={12} /> Delete
@@ -136,6 +200,46 @@ export default function TrashPage() {
           </Table>
         </div>
       )}
+
+      {/* Restore all confirm */}
+      <AlertDialog open={restoreAllConfirm} onOpenChange={(v) => !v && setRestoreAllConfirm(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore All Students</AlertDialogTitle>
+            <AlertDialogDescription>
+              Restore all <span className="font-semibold text-ink-800">{trash.length}</span> student{trash.length !== 1 ? 's' : ''} from
+              the trash back into their cohorts? Any deactivated account is reactivated automatically as part of
+              restoring its student.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={onRestoreAllConfirmed}>Restore All</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Permanently delete all confirm */}
+      <AlertDialog open={deleteAllConfirm} onOpenChange={(v) => !v && setDeleteAllConfirm(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently Delete All</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete <span className="font-semibold text-ink-800">{deletableCount}</span> student{deletableCount !== 1 ? 's' : ''}?
+              This cannot be undone.
+              {trash.length - deletableCount > 0 && (
+                <> {trash.length - deletableCount} other{trash.length - deletableCount !== 1 ? 's' : ''} will be kept in the trash — they have group formation history.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-danger hover:bg-danger/90 text-white" onClick={onDeleteAllConfirmed}>
+              Permanently Delete All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Permanent delete confirm */}
       <AlertDialog open={!!permanentTarget} onOpenChange={(v) => !v && setPermanentTarget(null)}>

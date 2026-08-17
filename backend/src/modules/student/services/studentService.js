@@ -1,6 +1,7 @@
 const mongoose                = require('mongoose');
 const studentRepository       = require('../repositories/studentRepository');
 const userService             = require('../../user/services/userService');
+const userRepository          = require('../../user/repositories/userRepository');
 const cohortService           = require('../../cohort/services/cohortService');
 const groupRepository         = require('../../group/repositories/groupRepository');
 const groupHistoryRepository  = require('../../grouping/repositories/groupHistoryRepository');
@@ -147,9 +148,11 @@ const studentService = {
   },
 
   // ── Restore from trash ───────────────────────────────────────────────────
-  // Symmetric with softDelete's ordering rule: the linked User must already
-  // be restored (active) before the Student can come back, so a restore can
-  // never land the system in "Student active, User still deactivated".
+  // Restoring a student also reactivates its linked account if needed — the
+  // account was only ever deactivated as softDelete's precondition for
+  // removing this exact student, so bringing it back is the expected,
+  // automatic counterpart of restore rather than a separate manual step in
+  // User Management. Both writes commit or roll back together.
   async restore(id, context) {
     const student = await studentRepository.findByIdIncludingDeleted(id);
     if (!student) throw new NotFoundError('Student not found');
@@ -157,14 +160,33 @@ const studentService = {
     await assertCohortAccess(student.cohortId?._id ?? student.cohortId, context);
 
     const linkedUserId = student.userId?._id ?? student.userId;
-    const activeUser = await userService.findById(linkedUserId);
-    if (!activeUser) {
-      throw new ConflictError(
-        "This student's user account is still deactivated. Restore it first from User Management, then restore the student.",
-      );
+    const linkedUser = await userRepository.findByIdIncludingDeleted(linkedUserId);
+    if (!linkedUser) {
+      throw new NotFoundError("This student's user account could not be found");
+    }
+    const needsAccountReactivation = !!linkedUser.deletedAt;
+
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        if (needsAccountReactivation) {
+          await linkedUser.restore(session);
+        }
+        await student.restore(session);
+      });
+    } finally {
+      await session.endSession();
     }
 
-    const result = await student.restore();
+    if (needsAccountReactivation) {
+      await auditLogService.log({
+        actorId: context.userId, actorRole: context.role,
+        ipAddress: context.ipAddress, userAgent: context.userAgent,
+        action: 'STUDENT_USER_RESTORED',
+        entityKind: 'User', entityId: linkedUserId,
+        changes: { fullName: linkedUser.fullName },
+      });
+    }
     await auditLogService.log({
       actorId: context.userId, actorRole: context.role,
       ipAddress: context.ipAddress, userAgent: context.userAgent,
@@ -172,7 +194,7 @@ const studentService = {
       entityKind: 'Student', entityId: id,
       changes: { fullName: student.fullName },
     });
-    return result;
+    return student;
   },
 
   // ── Permanent delete from trash ──────────────────────────────────────────

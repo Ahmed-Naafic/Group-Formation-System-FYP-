@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   Loader2, UserCheck, UserPlus, Pencil, ShieldOff, ShieldCheck, Search, Trash2,
-  KeyRound, Copy, Check, Undo2, Trash,
+  KeyRound, Copy, Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -16,7 +16,6 @@ import {
   useDeactivateStudentAccountMutation,
   useRestoreUserMutation,
   useDeactivateAccountsByCohortMutation,
-  useRestoreAccountsByCohortMutation,
 } from './userApi';
 import { useGetCohortsQuery } from '@/features/cohort/cohortApi';
 import {
@@ -24,11 +23,6 @@ import {
   useUpdateStudentMutation,
   useDeleteStudentMutation,
   useResetStudentPasswordMutation,
-  useGetStudentTrashQuery,
-  useRestoreStudentMutation,
-  usePermanentDeleteStudentMutation,
-  useRestoreRosterMutation,
-  usePermanentDeleteRosterMutation,
 } from '@/features/student/studentApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -470,18 +464,12 @@ function StudentsTab() {
   const [cohortId, setCohortId] = useState('');
 
   const { data: students = [], isLoading: loadingStudents } = useGetStudentsQuery(cohortId, { skip: !cohortId });
-  const { data: trash = [], isLoading: loadingTrash } = useGetStudentTrashQuery(cohortId, { skip: !cohortId });
   const [updateStudent, { isLoading: updating }]  = useUpdateStudentMutation();
   const [deleteStudent, { isLoading: deleting }]  = useDeleteStudentMutation();
   const [resetPassword, { isLoading: resetting }] = useResetStudentPasswordMutation();
   const [deactivateAccount, { isLoading: deactivating }] = useDeactivateStudentAccountMutation();
   const [restoreAccount,    { isLoading: restoringAccount }] = useRestoreUserMutation();
-  const [restoreStudent,    { isLoading: restoringStudent }] = useRestoreStudentMutation();
-  const [permanentDelete,   { isLoading: permanentDeleting }] = usePermanentDeleteStudentMutation();
   const [deactivateAllAccounts, { isLoading: deactivatingAll }] = useDeactivateAccountsByCohortMutation();
-  const [restoreAllAccounts,    { isLoading: restoringAllAccounts }] = useRestoreAccountsByCohortMutation();
-  const [restoreRoster,         { isLoading: restoringRoster }]      = useRestoreRosterMutation();
-  const [permanentDeleteRoster, { isLoading: permanentDeletingRoster }] = usePermanentDeleteRosterMutation();
 
   const [query,            setQuery]            = useState('');
   const [editing,          setEditing]          = useState(null);
@@ -489,16 +477,9 @@ function StudentsTab() {
   const [resetTarget,      setResetTarget]      = useState(null);
   const [resetResult,      setResetResult]      = useState(null);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
-  const [permanentTarget,  setPermanentTarget]  = useState(null);
-  const [showTrash,        setShowTrash]        = useState(false);
   const [deactivateAllConfirm, setDeactivateAllConfirm] = useState(false);
-  const [restoreAllAccountsConfirm, setRestoreAllAccountsConfirm] = useState(false);
-  const [restoreRosterConfirm,      setRestoreRosterConfirm]      = useState(false);
-  const [permanentDeleteRosterConfirm, setPermanentDeleteRosterConfirm] = useState(false);
 
   const activeAccountCount = students.filter((s) => s.userId && !s.userId.deletedAt).length;
-  const deactivatedInTrashCount = trash.filter((s) => s.userId?.deletedAt).length;
-  const restorableInTrashCount  = trash.filter((s) => s.userId && !s.userId.deletedAt).length;
 
   const filtered = (() => {
     const q = query.trim().toLowerCase();
@@ -571,27 +552,6 @@ function StudentsTab() {
     }
   }
 
-  async function onRestoreStudent(student) {
-    try {
-      await restoreStudent(student._id).unwrap();
-      toast.success(`${student.fullName} restored`);
-    } catch (err) {
-      toast.error(err?.data?.error?.message ?? 'Failed to restore student');
-    }
-  }
-
-  async function onPermanentDeleteConfirmed() {
-    if (!permanentTarget) return;
-    try {
-      await permanentDelete(permanentTarget._id).unwrap();
-      toast.success(`${permanentTarget.fullName} permanently deleted`);
-    } catch (err) {
-      toast.error(err?.data?.error?.message ?? 'Failed to permanently delete student');
-    } finally {
-      setPermanentTarget(null);
-    }
-  }
-
   async function onDeactivateAllConfirmed() {
     try {
       const result = await deactivateAllAccounts(cohortId).unwrap();
@@ -600,43 +560,6 @@ function StudentsTab() {
       toast.error(err?.data?.error?.message ?? 'Failed to deactivate accounts');
     } finally {
       setDeactivateAllConfirm(false);
-    }
-  }
-
-  async function onRestoreAllAccountsConfirmed() {
-    try {
-      const result = await restoreAllAccounts(cohortId).unwrap();
-      toast.success(`${result.restored} account${result.restored !== 1 ? 's' : ''} restored`);
-    } catch (err) {
-      toast.error(err?.data?.error?.message ?? 'Failed to restore accounts');
-    } finally {
-      setRestoreAllAccountsConfirm(false);
-    }
-  }
-
-  async function onRestoreRosterConfirmed() {
-    try {
-      const result = await restoreRoster(cohortId).unwrap();
-      toast.success(`${result.restored} student${result.restored !== 1 ? 's' : ''} restored`);
-    } catch (err) {
-      toast.error(err?.data?.error?.message ?? 'Failed to restore roster');
-    } finally {
-      setRestoreRosterConfirm(false);
-    }
-  }
-
-  async function onPermanentDeleteRosterConfirmed() {
-    try {
-      const result = await permanentDeleteRoster(cohortId).unwrap();
-      toast.success(
-        result.blocked > 0
-          ? `${result.deleted} permanently deleted, ${result.blocked} kept (has group formation history)`
-          : `${result.deleted} permanently deleted`,
-      );
-    } catch (err) {
-      toast.error(err?.data?.error?.message ?? 'Failed to permanently delete trash');
-    } finally {
-      setPermanentDeleteRosterConfirm(false);
     }
   }
 
@@ -662,16 +585,6 @@ function StudentsTab() {
             </div>
             {cohortId && (
               <div className="flex gap-2 shrink-0">
-                {deactivatedInTrashCount > 0 && (
-                  <Button
-                    variant="outline"
-                    className="text-success hover:text-success hover:bg-success/10 border-success/30"
-                    onClick={() => setRestoreAllAccountsConfirm(true)}
-                  >
-                    <ShieldCheck size={14} />
-                    Restore All Accounts ({deactivatedInTrashCount})
-                  </Button>
-                )}
                 {activeAccountCount > 0 && (
                   <Button
                     variant="outline"
@@ -774,106 +687,6 @@ function StudentsTab() {
         </CardContent>
       </Card>
 
-      {/* Trash bin — removed students for the selected cohort */}
-      {cohortId && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between w-full gap-3">
-              <button
-                type="button"
-                className="flex items-center gap-2 text-left flex-1 min-w-0"
-                onClick={() => setShowTrash((v) => !v)}
-              >
-                <CardTitle className="text-sm text-ink-500 uppercase tracking-wide font-semibold flex items-center gap-2">
-                  <Trash size={14} />
-                  Trash Bin {trash.length > 0 && `(${trash.length})`}
-                </CardTitle>
-                <span className="text-xs text-ink-400">{showTrash ? 'Hide' : 'Show'}</span>
-              </button>
-              {restorableInTrashCount > 0 && (
-                <Button
-                  variant="outline" size="sm"
-                  className="text-success hover:text-success hover:bg-success/10 border-success/30 shrink-0"
-                  onClick={() => setRestoreRosterConfirm(true)}
-                >
-                  <Undo2 size={13} />
-                  Restore All ({restorableInTrashCount})
-                </Button>
-              )}
-              {trash.length > 0 && (
-                <Button
-                  variant="outline" size="sm"
-                  className="text-danger hover:text-danger hover:bg-danger/10 border-danger/30 shrink-0"
-                  onClick={() => setPermanentDeleteRosterConfirm(true)}
-                >
-                  <Trash2 size={13} />
-                  Permanently Delete All ({trash.length})
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          {showTrash && (
-            <CardContent className="p-0">
-              {loadingTrash ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 size={18} className="animate-spin text-ink-300" />
-                </div>
-              ) : trash.length === 0 ? (
-                <p className="text-sm text-ink-400 py-6 text-center">No removed students in this cohort.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student ID</TableHead>
-                      <TableHead>Full Name</TableHead>
-                      <TableHead>Account</TableHead>
-                      <TableHead className="w-40" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {trash.map((s) => {
-                      const accountActive = !!s.userId && !s.userId.deletedAt;
-                      return (
-                        <TableRow key={s._id}>
-                          <TableCell className="font-mono text-xs text-ink-500">{s.userId?.studentId ?? '—'}</TableCell>
-                          <TableCell className="font-medium text-ink-800">{s.fullName}</TableCell>
-                          <TableCell>
-                            {accountActive ? (
-                              <Badge variant="success" className="gap-1"><ShieldCheck size={11} /> Active</Badge>
-                            ) : (
-                              <Badge variant="destructive" className="gap-1"><ShieldOff size={11} /> Deactivated</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost" size="sm" className="h-7 text-xs gap-1 text-success hover:text-success hover:bg-success/10"
-                                onClick={() => onRestoreStudent(s)}
-                                disabled={restoringStudent || !accountActive}
-                                title={accountActive ? 'Restore student' : "Restore the account first, from the row's shield icon"}
-                              >
-                                <Undo2 size={12} /> Restore
-                              </Button>
-                              <Button
-                                variant="ghost" size="icon" className="h-7 w-7 hover:text-danger"
-                                onClick={() => setPermanentTarget(s)}
-                                title="Permanently delete"
-                              >
-                                <Trash2 size={13} />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          )}
-        </Card>
-      )}
-
       {/* Edit dialog */}
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
         <DialogContent className="max-w-sm">
@@ -952,74 +765,6 @@ function StudentsTab() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Restore all accounts (cohort) confirm */}
-      <AlertDialog open={restoreAllAccountsConfirm} onOpenChange={(v) => !v && setRestoreAllAccountsConfirm(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Restore All Accounts</AlertDialogTitle>
-            <AlertDialogDescription>
-              Restore all <span className="font-semibold text-ink-800">{deactivatedInTrashCount}</span> deactivated
-              account{deactivatedInTrashCount !== 1 ? 's' : ''} belonging to students currently in this cohort's
-              trash bin? This is the bulk way to unlock Restore All on the trash bin below — the student records
-              themselves stay removed until you restore them there.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onRestoreAllAccountsConfirmed} disabled={restoringAllAccounts}>
-              {restoringAllAccounts && <Loader2 size={14} className="animate-spin" />}
-              Restore All
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Restore roster (cohort) confirm */}
-      <AlertDialog open={restoreRosterConfirm} onOpenChange={(v) => !v && setRestoreRosterConfirm(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Restore All Students</AlertDialogTitle>
-            <AlertDialogDescription>
-              Restore all <span className="font-semibold text-ink-800">{restorableInTrashCount}</span> student{restorableInTrashCount !== 1 ? 's' : ''} from
-              this cohort's trash bin back into the roster? Group history is preserved either way — this just
-              brings them back into active participation.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onRestoreRosterConfirmed} disabled={restoringRoster}>
-              {restoringRoster && <Loader2 size={14} className="animate-spin" />}
-              Restore All
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Permanently delete roster (cohort) confirm */}
-      <AlertDialog open={permanentDeleteRosterConfirm} onOpenChange={(v) => !v && setPermanentDeleteRosterConfirm(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Permanently Delete All</AlertDialogTitle>
-            <AlertDialogDescription>
-              Permanently delete all <span className="font-semibold text-ink-800">{trash.length}</span> student{trash.length !== 1 ? 's' : ''} in
-              this cohort's trash bin? This cannot be undone. Any student with group-formation history (current
-              or past) is automatically kept in the trash instead of being deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-danger hover:bg-danger/90 text-white"
-              onClick={onPermanentDeleteRosterConfirmed}
-              disabled={permanentDeletingRoster}
-            >
-              {permanentDeletingRoster && <Loader2 size={14} className="animate-spin" />}
-              Permanently Delete All
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Deactivate account confirm */}
       <AlertDialog open={!!deactivateTarget} onOpenChange={(v) => !v && setDeactivateTarget(null)}>
         <AlertDialogContent>
@@ -1086,30 +831,6 @@ function StudentsTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Permanent delete confirm */}
-      <AlertDialog open={!!permanentTarget} onOpenChange={(v) => !v && setPermanentTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Permanently Delete Student</AlertDialogTitle>
-            <AlertDialogDescription>
-              Permanently delete <span className="font-semibold text-ink-800">{permanentTarget?.fullName}</span>?
-              This cannot be undone. Students with any group-formation history (current or past) can't be
-              permanently deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-danger hover:bg-danger/90 text-white"
-              onClick={onPermanentDeleteConfirmed}
-              disabled={permanentDeleting}
-            >
-              {permanentDeleting && <Loader2 size={14} className="animate-spin" />}
-              Permanently Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

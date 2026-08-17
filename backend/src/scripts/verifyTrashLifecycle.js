@@ -130,6 +130,27 @@ async function main() {
     check('deleted student appears in the system-wide trash', !!allTrashEntry);
     check('eligibility annotation says permanent delete is allowed (no group history)', allTrashEntry?.canPermanentlyDelete === true, JSON.stringify(allTrashEntry));
 
+    // ── Restore WITHOUT first manually reactivating the account ─────────────
+    // This is the exact flow that used to throw ConflictError and make
+    // restore look "broken" from the Trash page — restore must now
+    // reactivate the account itself, atomically, as part of the same call.
+    console.log('\nRestore — without a separate manual "reactivate account" step first:');
+    await studentService.restore(student._id, context);
+
+    const userAfterRestore = await userService.findById(firstUserId);
+    check('linked User is active again after restore (auto-reactivated)', !!userAfterRestore, 'expected the account to be active, but findById returned nothing');
+
+    const rosterAfterRestore = await studentService.getAll(cohortId, context);
+    check('student is back in the active roster after restore', rosterAfterRestore.some((s) => String(s._id) === String(student._id)));
+
+    const trashAfterRestore = await studentService.getTrash(cohortId, context);
+    check('student no longer appears in trash after restore', !trashAfterRestore.some((s) => String(s._id) === String(student._id)));
+
+    // Put it back in the trash so the rest of this script (permanent delete,
+    // re-import) can exercise that path too.
+    await userService.deleteStudentAccount(firstUserId, context);
+    await studentService.softDelete(student._id, context.userId, context);
+
     // ── Permanent delete — THE bug scenario ──────────────────────────────────
     console.log('\nPermanent delete:');
     await studentService.permanentDelete(student._id, context);
