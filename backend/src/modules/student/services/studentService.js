@@ -196,7 +196,18 @@ const studentService = {
       throw new ConflictError('This student cannot be permanently deleted because they have group formation history.');
     }
 
+    const userId = student.userId?._id ?? student.userId;
     await studentRepository.permanentlyDelete(id);
+
+    // If no trace of this user's student history remains anywhere (active or
+    // trashed), their account is a dead end — complete the removal so their
+    // studentId can be reused, rather than leaving an orphaned deactivated
+    // account that incorrectly claims there's something left to restore.
+    const remaining = await studentRepository.countAllByUserId(userId);
+    if (remaining === 0) {
+      await userService.permanentlyDeleteOrphanedStudentAccount(userId);
+    }
+
     await auditLogService.log({
       actorId: context.userId, actorRole: context.role,
       ipAddress: context.ipAddress, userAgent: context.userAgent,
@@ -233,8 +244,16 @@ const studentService = {
         blockedCount++;
         continue;
       }
+      const userId = student.userId?._id ?? student.userId;
       // eslint-disable-next-line no-await-in-loop
       await studentRepository.permanentlyDelete(student._id);
+      // Same dead-end cleanup as the single-student path above.
+      // eslint-disable-next-line no-await-in-loop
+      const remaining = await studentRepository.countAllByUserId(userId);
+      if (remaining === 0) {
+        // eslint-disable-next-line no-await-in-loop
+        await userService.permanentlyDeleteOrphanedStudentAccount(userId);
+      }
       deletedCount++;
     }
 

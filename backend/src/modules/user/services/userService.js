@@ -342,6 +342,21 @@ const userService = {
     });
     return { fullName: user.fullName, email: user.email, tempPassword };
   },
+
+  // Called only by studentService.permanentDelete(ByCohort) once a student's
+  // last remaining record (active or trashed, anywhere) has just been
+  // permanently deleted — completes the removal so the account can't linger
+  // as a dead end that blocks reusing that studentId, incorrectly telling a
+  // future re-upload to "restore from trash" when there's nothing left to
+  // restore. Deliberately a no-op if the account is still active: an active
+  // account is a live decision the admin hasn't made yet, not this method's
+  // call to make.
+  async permanentlyDeleteOrphanedStudentAccount(userId) {
+    const user = await userRepository.findByIdIncludingDeleted(userId);
+    if (!user || !user.deletedAt) return false;
+    await userRepository.permanentlyDelete(userId);
+    return true;
+  },
 };
 
 module.exports = userService;

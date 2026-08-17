@@ -55,6 +55,15 @@ const userRepository = {
     return User.exists({ role });
   },
 
+  // Hard delete — used only when a student's account has become a true dead
+  // end (deactivated, with no remaining student record anywhere) so their
+  // studentId can be reused. findByIdAndDelete isn't covered by the
+  // softDelete plugin's query middleware, so this works regardless of
+  // deletedAt — same pattern as studentRepository.permanentlyDelete.
+  permanentlyDelete(id) {
+    return User.findByIdAndDelete(id);
+  },
+
   // Bulk-deactivates a set of accounts — used by
   // userService.deactivateStudentAccountsByCohort, the bulk way to satisfy
   // clearByCohort's precondition that every student's account is already

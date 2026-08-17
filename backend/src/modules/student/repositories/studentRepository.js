@@ -111,6 +111,13 @@ const studentRepository = {
       .populate('cohortId', 'name')
       .sort({ createdAt: -1 });
   },
+
+  // Counts EVERY student record for a user, active or trashed — used after a
+  // permanent delete to check whether any trace of them remains at all
+  // (active enrollment or something still sitting in a trash bin).
+  countAllByUserId(userId) {
+    return Student.countDocuments({ userId }).includeSoftDeleted();
+  },
 };
 
 module.exports = studentRepository;
