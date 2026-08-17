@@ -4,6 +4,7 @@ import '../data/repositories/task_repository.dart';
 import '../data/repositories/workspace_repository.dart';
 import '../modules/auth/controllers/auth_controller.dart';
 import '../modules/chat/controllers/chat_controller.dart';
+import '../modules/tasks/controllers/task_controller.dart';
 import '../routes/app_pages.dart';
 
 /// Resolves a notification (FCM push tap, or a row tapped in the in-app
@@ -86,7 +87,23 @@ class NotificationNavigator {
     if (ws == null) return;
 
     Get.toNamed(Routes.tasks, arguments: ws);
+    // TaskController.onInit() reads Get.arguments synchronously to resolve
+    // `workspace` — pushing taskDetail (which overwrites Get.arguments with
+    // `task`) before that read happens throws a WorkspaceModel/TaskModel
+    // cast error. Manual navigation never hits this (there's always a real
+    // tap between the two screens); this deep link chains both pushes
+    // programmatically, so it must wait for that read to complete first.
+    await _waitForTaskControllerReady();
     Get.toNamed(Routes.taskDetail, arguments: task);
+  }
+
+  static Future<void> _waitForTaskControllerReady() async {
+    const maxAttempts = 20;
+    const interval = Duration(milliseconds: 50);
+    for (var i = 0; i < maxAttempts; i++) {
+      if (Get.isRegistered<TaskController>()) return;
+      await Future.delayed(interval);
+    }
   }
 
   /// Waits until the app is past the splash/auth gate — navigating while
