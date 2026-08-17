@@ -9,6 +9,16 @@ const auditLogService = require('../../auditLog/services/auditLogService');
 const passwordGenerator = require('../../../common/utils/passwordGenerator');
 
 const BCRYPT_ROUNDS = 12;
+// Lower cost for randomly-generated, forced-change passwords only (bulk
+// import, single student creation, admin-triggered reset) — never for a
+// password a user actually chose. These are high-entropy random strings,
+// not attacker-guessable, and are only ever valid until the very next
+// login (mustChangePassword forces an immediate change, which re-hashes at
+// full BCRYPT_ROUNDS). Still a real bcrypt hash — a temp password is a live
+// credential and is never stored unhashed — just cheaper than the 12 rounds
+// a bulk import of hundreds of rows can't afford to pay per row without
+// risking a client/proxy timeout on the request.
+const TEMP_PASSWORD_BCRYPT_ROUNDS = 10;
 // Accounts managed through this "staff" CRUD surface — students have their
 // own module (student create/update/delete lives in studentService, tied to
 // cohort enrollment) and are never reachable through these methods.
@@ -70,8 +80,11 @@ const userService = {
     return userRepository.existsWithRole('admin');
   },
 
-  async createUser({ password, ...rest }) {
-    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  // `rounds` defaults to full strength — pass TEMP_PASSWORD_BCRYPT_ROUNDS
+  // explicitly (only enrollmentService.bulkUpload and studentService.create
+  // do) for a randomly-generated, forced-change password.
+  async createUser({ password, rounds = BCRYPT_ROUNDS, ...rest }) {
+    const passwordHash = await bcrypt.hash(password, rounds);
     const user = await userRepository.create({ ...rest, passwordHash });
     // select: false on the schema only excludes passwordHash from queries
     // (find/findOne/...) — a doc fresh off create() still carries it, so it
@@ -360,4 +373,5 @@ const userService = {
   },
 };
 
+userService.TEMP_PASSWORD_BCRYPT_ROUNDS = TEMP_PASSWORD_BCRYPT_ROUNDS;
 module.exports = userService;

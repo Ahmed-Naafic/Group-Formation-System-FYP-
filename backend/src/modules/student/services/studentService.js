@@ -31,7 +31,15 @@ const studentService = {
   async existsByStudentIdAndCohort(studentId, cohortId) {
     const user = await userService.findByStudentId(studentId);
     if (!user) return false;
-    const existing = await studentRepository.findOne({ userId: user._id, cohortId, deletedAt: null });
+    return studentService.existsActiveByUserAndCohort(user._id, cohortId);
+  },
+
+  // Same check as above, but for a caller that has already resolved the
+  // user — skips the redundant studentId lookup. bulkUpload processes many
+  // rows per request and resolves each row's user exactly once; every extra
+  // lookup here is one more DB round trip multiplied across the whole file.
+  async existsActiveByUserAndCohort(userId, cohortId) {
+    const existing = await studentRepository.findOne({ userId, cohortId, deletedAt: null });
     return !!existing;
   },
 
@@ -68,6 +76,7 @@ const studentService = {
         role: 'student',
         password: tempPassword,
         mustChangePassword: true,
+        rounds: userService.TEMP_PASSWORD_BCRYPT_ROUNDS,
       });
     } else if (user.role !== 'student') {
       throw new BadRequestError('A non-student account already exists with that Student ID');
