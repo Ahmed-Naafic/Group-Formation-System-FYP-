@@ -1,6 +1,7 @@
 const cohortRepository          = require('../repositories/cohortRepository');
 const departmentService          = require('../../department/services/departmentService');
 const courseOfferingRepository   = require('../../courseOffering/repositories/courseOfferingRepository');
+const studentRepository          = require('../../student/repositories/studentRepository');
 // The repository, not instructorAssignmentService — that service imports
 // userService, which already imports this module, and going through the
 // service here would create a require cycle (cohortService ->
@@ -82,11 +83,18 @@ const cohortService = {
 
   async softDelete(id, userId) {
     const cohort = await cohortService.getById(id);
-    const offeringCount = await courseOfferingRepository.countByCohort(id);
-    // Note: student enrollment check (Student.cohortId) is added in Step 5
+    const [offeringCount, studentCount] = await Promise.all([
+      courseOfferingRepository.countByCohort(id),
+      studentRepository.countByCohort(id),
+    ]);
     if (offeringCount > 0) {
       throw new ConflictError(
         `Cannot delete cohort — it has ${offeringCount} active course offering(s). Remove them first.`,
+      );
+    }
+    if (studentCount > 0) {
+      throw new ConflictError(
+        `Cannot delete cohort — it has ${studentCount} active student(s). Remove them first.`,
       );
     }
     return cohort.softDelete(userId);
