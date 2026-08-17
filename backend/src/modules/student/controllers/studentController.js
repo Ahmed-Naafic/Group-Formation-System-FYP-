@@ -45,9 +45,13 @@ const studentController = {
     return sendSuccess(res, { message: 'Student deleted', data: null });
   }),
 
-  // GET /api/students/trash?cohortId=
+  // GET /api/students/trash?cohortId=  — cohortId omitted returns the
+  // system-wide trash (every cohort the caller is authorized to see).
   getTrash: asyncHandler(async (req, res) => {
-    const students = await studentService.getTrash(req.query.cohortId, req.context);
+    const { cohortId } = req.query;
+    const students = cohortId
+      ? await studentService.getTrash(cohortId, req.context)
+      : await studentService.getAllTrash(req.context);
     return sendSuccess(res, { data: { students } });
   }),
 

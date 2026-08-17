@@ -34,13 +34,28 @@ const studentRepository = {
       .sort({ deletedAt: -1 });
   },
 
+  // System-wide trash bin — soft-deleted students across a set of cohorts
+  // (the caller's authorized set). Populates the cohort name and the acting
+  // staff user's name too, since unlike the single-cohort trash view above,
+  // entries here span cohorts and this is the one place in the UI that shows
+  // "deleted by".
+  findDeletedByCohorts(cohortIds) {
+    return Student.find({ cohortId: { $in: cohortIds }, deletedAt: { $ne: null } })
+      .includeSoftDeleted()
+      .populate(USER_POPULATE)
+      .populate('cohortId', 'name')
+      .populate({ path: 'deletedBy', select: 'fullName email', options: { _includeSoftDeleted: true } })
+      .sort({ deletedAt: -1 });
+  },
+
   // Hard delete — only reached after studentService.permanentDelete has
   // already verified there's no group-formation history to preserve.
   // findByIdAndDelete isn't covered by the softDelete plugin's query
   // middleware (that only wraps find/findOne/findOneAndUpdate/countDocuments
-  // /exists), so this works regardless of deletedAt.
-  permanentlyDelete(id) {
-    return Student.findByIdAndDelete(id);
+  // /exists), so this works regardless of deletedAt. Optional `session` so
+  // the caller can run this as part of a transaction.
+  permanentlyDelete(id, session) {
+    return Student.findByIdAndDelete(id, { session });
   },
 
   findAll(filter = {}) {
@@ -114,9 +129,12 @@ const studentRepository = {
 
   // Counts EVERY student record for a user, active or trashed — used after a
   // permanent delete to check whether any trace of them remains at all
-  // (active enrollment or something still sitting in a trash bin).
-  countAllByUserId(userId) {
-    return Student.countDocuments({ userId }).includeSoftDeleted();
+  // (active enrollment or something still sitting in a trash bin). Optional
+  // `session` so this read is part of the same transaction as the delete
+  // it's verifying (otherwise it could race a concurrent write, or on some
+  // drivers not see the just-deleted document consistently).
+  countAllByUserId(userId, session) {
+    return Student.countDocuments({ userId }).includeSoftDeleted().session(session);
   },
 };
 

@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import {
   LayoutDashboard, Building2, Layers, BookOpen,
   CalendarDays, Calendar, Users, SlidersHorizontal,
-  X, Users2, ShieldAlert, FileBarChart, GraduationCap, BookMarked,
+  X, Users2, ShieldAlert, FileBarChart, GraduationCap, BookMarked, Trash,
 } from 'lucide-react';
 import { selectRole } from '@/features/auth/authSlice';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ const ADMIN_NAV = [
   { type: 'link',    label: 'Course Offerings',   icon: BookMarked,        to: '/course-offerings' },
   { type: 'section', label: 'Users' },
   { type: 'link',    label: 'User Management',    icon: Users,             to: '/users' },
+  { type: 'link',    label: 'Trash',               icon: Trash,             to: '/trash' },
   { type: 'section', label: 'Settings' },
   { type: 'link',    label: 'Performance',        icon: SlidersHorizontal, to: '/settings/performance' },
   { type: 'link',    label: 'Reports',            icon: FileBarChart,      to: '/reports' },
@@ -30,6 +31,7 @@ const ADMIN_NAV = [
 const INSTRUCTOR_NAV = [
   { type: 'link', label: 'Dashboard',       icon: LayoutDashboard,   to: '/' },
   { type: 'link', label: 'My Offerings',    icon: BookMarked,        to: '/course-offerings' },
+  { type: 'link', label: 'Trash',           icon: Trash,             to: '/trash' },
   { type: 'link', label: 'Reports',         icon: FileBarChart,      to: '/reports' },
   { type: 'link', label: 'Performance',     icon: SlidersHorizontal, to: '/settings/performance' },
 ];

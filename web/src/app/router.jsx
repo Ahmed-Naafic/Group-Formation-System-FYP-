@@ -14,6 +14,7 @@ import CourseOfferingsPage   from '@/features/courseOffering/CourseOfferingsPage
 import StudentsPage          from '@/features/student/StudentsPage';
 import BulkUploadPage        from '@/features/student/BulkUploadPage';
 import StudentDetailPage     from '@/features/student/StudentDetailPage';
+import TrashPage             from '@/features/student/TrashPage';
 import ScoresPage              from '@/features/performance/ScoresPage';
 import PerformanceSettingsPage from '@/features/performance/PerformanceSettingsPage';
 import GroupsPage              from '@/features/group/GroupsPage';
@@ -168,6 +169,13 @@ export const router = createBrowserRouter([
         handle: { title: 'User Management' },
       },
       { path: '/instructors', element: <Navigate to="/users" replace /> },
+
+      // ── Trash (students only, admin + instructor) ──────────────────────
+      {
+        path: '/trash',
+        element: <ProtectedRoute roles={['admin', 'instructor']}><TrashPage /></ProtectedRoute>,
+        handle: { title: 'Trash' },
+      },
 
       // ── Notifications ─────────────────────────────────────────────────
       {

@@ -1,3 +1,4 @@
+const mongoose                = require('mongoose');
 const studentRepository       = require('../repositories/studentRepository');
 const userService             = require('../../user/services/userService');
 const cohortService           = require('../../cohort/services/cohortService');
@@ -197,15 +198,27 @@ const studentService = {
     }
 
     const userId = student.userId?._id ?? student.userId;
-    await studentRepository.permanentlyDelete(id);
 
-    // If no trace of this user's student history remains anywhere (active or
-    // trashed), their account is a dead end — complete the removal so their
-    // studentId can be reused, rather than leaving an orphaned deactivated
-    // account that incorrectly claims there's something left to restore.
-    const remaining = await studentRepository.countAllByUserId(userId);
-    if (remaining === 0) {
-      await userService.permanentlyDeleteOrphanedStudentAccount(userId);
+    // Student delete + conditional User delete must land as one unit — a
+    // crash between the two would otherwise leave the Student gone but the
+    // dead-end User account still sitting there, blocking re-import forever.
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await studentRepository.permanentlyDelete(id, session);
+
+        // If no trace of this user's student history remains anywhere
+        // (active or trashed), their account is a dead end — complete the
+        // removal so their studentId can be reused, rather than leaving an
+        // orphaned deactivated account that incorrectly claims there's
+        // something left to restore.
+        const remaining = await studentRepository.countAllByUserId(userId, session);
+        if (remaining === 0) {
+          await userService.permanentlyDeleteOrphanedStudentAccount(userId, session);
+        }
+      });
+    } finally {
+      await session.endSession();
     }
 
     await auditLogService.log({
@@ -245,14 +258,23 @@ const studentService = {
         continue;
       }
       const userId = student.userId?._id ?? student.userId;
+      // Same atomicity as the single-student path above — each student's
+      // Student+User removal is its own all-or-nothing unit, so one failing
+      // partway through the batch can't leave that student half-deleted.
       // eslint-disable-next-line no-await-in-loop
-      await studentRepository.permanentlyDelete(student._id);
-      // Same dead-end cleanup as the single-student path above.
-      // eslint-disable-next-line no-await-in-loop
-      const remaining = await studentRepository.countAllByUserId(userId);
-      if (remaining === 0) {
+      const session = await mongoose.startSession();
+      try {
         // eslint-disable-next-line no-await-in-loop
-        await userService.permanentlyDeleteOrphanedStudentAccount(userId);
+        await session.withTransaction(async () => {
+          await studentRepository.permanentlyDelete(student._id, session);
+          const remaining = await studentRepository.countAllByUserId(userId, session);
+          if (remaining === 0) {
+            await userService.permanentlyDeleteOrphanedStudentAccount(userId, session);
+          }
+        });
+      } finally {
+        // eslint-disable-next-line no-await-in-loop
+        await session.endSession();
       }
       deletedCount++;
     }
@@ -272,6 +294,38 @@ const studentService = {
     if (!cohortId) throw new BadRequestError('cohortId query parameter is required');
     await assertCohortAccess(cohortId, context);
     return studentRepository.findDeletedByCohort(cohortId);
+  },
+
+  // System-wide trash — every removed student across every cohort the caller
+  // is authorized to see (admin: all cohorts; instructor: only cohorts with
+  // an active offering they're assigned to, same scoping as
+  // cohortService.getAll). Each entry is annotated with whether the backend
+  // would actually allow a permanent delete right now, so the Trash page
+  // never offers an action the API will just reject.
+  async getAllTrash(context) {
+    const cohorts = await cohortService.getAll({}, context);
+    if (cohorts.length === 0) return [];
+
+    const cohortIds = cohorts.map((c) => c._id);
+    const trashed = await studentRepository.findDeletedByCohorts(cohortIds);
+
+    const hasHistory = await Promise.all(
+      trashed.map(async (student) => {
+        const [inGroups, inHistory] = await Promise.all([
+          groupRepository.existsWithMember(student._id),
+          groupHistoryRepository.existsWithStudent(student._id),
+        ]);
+        return inGroups || inHistory;
+      }),
+    );
+
+    return trashed.map((student, i) => ({
+      ...student.toObject(),
+      canPermanentlyDelete: !hasHistory[i],
+      blockedReason: hasHistory[i]
+        ? 'This student cannot be permanently deleted because group formation history exists.'
+        : null,
+    }));
   },
 
   // Restores every removed student in a cohort in one shot — the restore

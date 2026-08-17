@@ -25,6 +25,23 @@ function downloadCsv(rows, filename) {
   URL.revokeObjectURL(url);
 }
 
+// Distinguishes a genuine server/network failure (request never reached the
+// backend, or its response never came back) from an actual validation error
+// the backend returned — never collapse either one into a bare "Upload
+// failed" that hides which of the two actually happened.
+function describeUploadError(err) {
+  if (err?.status === 'FETCH_ERROR' || err?.status === 'TIMEOUT_ERROR') {
+    return 'Upload could not be completed because the server could not be reached.';
+  }
+  if (err?.status === 'PARSING_ERROR') {
+    return 'Upload could not be completed — the server sent a response that could not be read.';
+  }
+  if (err?.data?.error?.message) {
+    return err.data.error.message;
+  }
+  return `Upload could not be completed due to an unexpected error${err?.status ? ` (status ${err.status})` : ''}.`;
+}
+
 function CopyButton({ text, className }) {
   const [copied, setCopied] = useState(false);
   function copy() {
@@ -93,7 +110,7 @@ export default function BulkUploadPage() {
         setPendingTransfers(err.data.data);
         return;
       }
-      toast.error(err?.data?.error?.message ?? 'Upload failed');
+      toast.error(describeUploadError(err));
     }
   }
 
@@ -260,10 +277,11 @@ export default function BulkUploadPage() {
               <p className="p-6 text-sm text-ink-400 text-center">No rows were skipped.</p>
             ) : (
               <Table>
-                <TableHeader><TableRow><TableHead>Student ID</TableHead><TableHead>Full Name</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead className="w-16">Row</TableHead><TableHead>Student ID</TableHead><TableHead>Full Name</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {result.skipped.map((r, i) => (
                     <TableRow key={i}>
+                      <TableCell className="font-mono text-xs text-ink-500">{r.row ?? '—'}</TableCell>
                       <TableCell className="font-mono text-xs text-ink-500">{r.studentId}</TableCell>
                       <TableCell className="text-ink-700">{r.fullName}</TableCell>
                       <TableCell className="text-amber-700 text-xs">{r.reason}</TableCell>
@@ -276,11 +294,12 @@ export default function BulkUploadPage() {
               <p className="p-6 text-sm text-ink-400 text-center">No rows failed.</p>
             ) : (
               <Table>
-                <TableHeader><TableRow><TableHead className="w-20">Row</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead className="w-16">Row</TableHead><TableHead className="w-40">Student ID</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {result.failed.map((r, i) => (
                     <TableRow key={i}>
                       <TableCell className="font-mono text-xs text-ink-500">{r.row}</TableCell>
+                      <TableCell className="font-mono text-xs text-ink-500">{r.studentId ?? '—'}</TableCell>
                       <TableCell className="text-danger text-xs">{r.reason}</TableCell>
                     </TableRow>
                   ))}

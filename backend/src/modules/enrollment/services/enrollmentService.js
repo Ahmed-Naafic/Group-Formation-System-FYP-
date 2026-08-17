@@ -1,4 +1,5 @@
 const columnMapper    = require('../utils/columnMapper');
+const describeRowError = require('../utils/describeRowError');
 const cohortService   = require('../../cohort/services/cohortService');
 const userService     = require('../../user/services/userService');
 const studentService  = require('../../student/services/studentService');
@@ -78,6 +79,7 @@ const enrollmentService = {
     const skipped     = [];
     const transferred = [];
     const failed      = [];
+    const seenInFile  = new Map(); // studentId -> first row it appeared on
 
     for (let i = 0; i < rawRows.length; i++) {
       const rowNum = i + 2; // row 1 = header
@@ -91,13 +93,27 @@ const enrollmentService = {
           const missing = [];
           if (!studentId) missing.push('studentId');
           if (!fullName)  missing.push('fullName');
-          failed.push({ row: rowNum, reason: `Missing required fields: ${missing.join(', ')}` });
+          failed.push({ row: rowNum, studentId: studentId || null, reason: `Missing required field(s): ${missing.join(', ')}.` });
           continue;
         }
 
+        // A studentId repeated within THIS file is a real data problem in the
+        // upload itself — distinct from "already exists" (which means it
+        // predates this upload) — reported as a failure, not silently
+        // collapsed into a duplicate-in-cohort skip.
+        const firstSeenRow = seenInFile.get(studentId);
+        if (firstSeenRow) {
+          failed.push({
+            row: rowNum, studentId,
+            reason: `Duplicate Student ID "${studentId}" inside the uploaded file — first seen on row ${firstSeenRow}.`,
+          });
+          continue;
+        }
+        seenInFile.set(studentId, rowNum);
+
         const isDuplicate = await studentService.existsByStudentIdAndCohort(studentId, cohortId);
         if (isDuplicate) {
-          skipped.push({ studentId, fullName, reason: 'already exists in this cohort' });
+          skipped.push({ row: rowNum, studentId, fullName, reason: `Student ID "${studentId}" already exists in this cohort.` });
           continue;
         }
 
@@ -109,15 +125,18 @@ const enrollmentService = {
 
         if (!user) {
           // A removed student's account is invisible to findByStudentId
-          // (soft-delete excludes it) — check separately so a re-upload
-          // can't silently fork their identity into a second, unrelated
-          // account. Reported as a per-row failure, not an aborted batch.
+          // (soft-delete excludes it). If they're genuinely still in the
+          // trash (a Student record still exists somewhere), this is a
+          // SKIP — the admin must explicitly restore, never an automatic
+          // one. If permanent deletion already released the account, this
+          // branch is never reached at all: findByStudentIdIncludingDeleted
+          // returns nothing and a fresh account gets created below.
           const removedUser = await userService.findByStudentIdIncludingDeleted(studentId);
           if (removedUser && removedUser.deletedAt) {
-            failed.push({
-              row: rowNum,
-              reason: `Student ID ${studentId} belongs to a removed student — restore them from the ` +
-                'trash bin in User Management instead of re-uploading',
+            skipped.push({
+              row: rowNum, studentId, fullName,
+              reason: `Student ID "${studentId}" already exists in Trash. Restore the existing student ` +
+                'instead of creating a duplicate.',
             });
             continue;
           }
@@ -144,8 +163,7 @@ const enrollmentService = {
             performanceCategory,
           });
           transferred.push({
-            studentId,
-            fullName,
+            row: rowNum, studentId, fullName,
             fromCohortId:   String(existing.cohortId),
             fromCohortName: fromCohort.name,
           });
@@ -154,12 +172,14 @@ const enrollmentService = {
           // removed record for THIS exact cohort, in which case re-adding
           // them would create a second Student under the same user in the
           // same cohort instead of just restoring the one already there.
+          // Same "must explicitly restore" rule as above — a skip, not a
+          // failure, and never automatic.
           const trashedHere = await studentService.findTrashedInCohort(user._id, cohortId);
           if (trashedHere) {
-            failed.push({
-              row: rowNum,
-              reason: `Student ID ${studentId} already has a removed record in this cohort — restore it ` +
-                'from the trash bin instead of re-uploading',
+            skipped.push({
+              row: rowNum, studentId, fullName,
+              reason: `Student ID "${studentId}" already exists in Trash for this cohort. Restore the ` +
+                'existing student instead of creating a duplicate.',
             });
             continue;
           }
@@ -170,10 +190,11 @@ const enrollmentService = {
             averageScore,
             performanceCategory,
           });
-          created.push({ studentId, fullName, tempPassword });
+          created.push({ row: rowNum, studentId, fullName, tempPassword });
         }
       } catch (err) {
-        failed.push({ row: rowNum, reason: err.message });
+        const studentId = row.studentId != null ? String(row.studentId).trim() : null;
+        failed.push({ row: rowNum, studentId, reason: describeRowError(err) });
       }
     }
 

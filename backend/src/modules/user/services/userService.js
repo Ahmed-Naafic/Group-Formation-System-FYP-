@@ -350,11 +350,12 @@ const userService = {
   // future re-upload to "restore from trash" when there's nothing left to
   // restore. Deliberately a no-op if the account is still active: an active
   // account is a live decision the admin hasn't made yet, not this method's
-  // call to make.
-  async permanentlyDeleteOrphanedStudentAccount(userId) {
-    const user = await userRepository.findByIdIncludingDeleted(userId);
+  // call to make. Optional `session` threads this through the same
+  // transaction as the Student deletion that triggered it.
+  async permanentlyDeleteOrphanedStudentAccount(userId, session) {
+    const user = await userRepository.findByIdIncludingDeleted(userId, session);
     if (!user || !user.deletedAt) return false;
-    await userRepository.permanentlyDelete(userId);
+    await userRepository.permanentlyDelete(userId, session);
     return true;
   },
 };

@@ -27,9 +27,11 @@ const bulkUploadSchema = Joi.object({
   confirmTransfers: Joi.boolean().truthy('true').falsy('false').sensitive(false).default(false),
 });
 
-// Same shape as clearByCohortSchema (a required cohortId query param) —
-// reused as-is for the trash-bin listing.
-const trashQuerySchema = clearByCohortSchema;
+// Unlike clearByCohortSchema, cohortId is optional here — omitting it
+// returns the system-wide trash across every cohort the caller can see.
+const trashQuerySchema = Joi.object({
+  cohortId: objectId,
+});
 
 module.exports = {
   createStudentSchema, updateStudentSchema, bulkUploadSchema, clearByCohortSchema, trashQuerySchema,

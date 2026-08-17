@@ -6,9 +6,10 @@ const userRepository = {
   },
 
   // Soft-deleted users are excluded from findById by default (softDelete
-  // plugin) — needed to locate them for restore.
-  findByIdIncludingDeleted(id) {
-    return User.findById(id).includeSoftDeleted();
+  // plugin) — needed to locate them for restore. Optional `session` so this
+  // read can participate in an in-flight transaction.
+  findByIdIncludingDeleted(id, session) {
+    return User.findById(id).includeSoftDeleted().session(session);
   },
 
   findByIdWithPassword(id) {
@@ -59,9 +60,10 @@ const userRepository = {
   // end (deactivated, with no remaining student record anywhere) so their
   // studentId can be reused. findByIdAndDelete isn't covered by the
   // softDelete plugin's query middleware, so this works regardless of
-  // deletedAt — same pattern as studentRepository.permanentlyDelete.
-  permanentlyDelete(id) {
-    return User.findByIdAndDelete(id);
+  // deletedAt — same pattern as studentRepository.permanentlyDelete. Optional
+  // `session` so the caller can run this as part of a transaction.
+  permanentlyDelete(id, session) {
+    return User.findByIdAndDelete(id, { session });
   },
 
   // Bulk-deactivates a set of accounts — used by
