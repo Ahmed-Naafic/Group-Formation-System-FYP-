@@ -30,7 +30,6 @@ import {
   useRestoreRosterMutation,
   usePermanentDeleteRosterMutation,
 } from '@/features/student/studentApi';
-import { useUpdateScoresMutation } from '@/features/performance/performanceApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
@@ -475,7 +474,6 @@ function StudentsTab() {
   const [updateStudent, { isLoading: updating }]  = useUpdateStudentMutation();
   const [deleteStudent, { isLoading: deleting }]  = useDeleteStudentMutation();
   const [resetPassword, { isLoading: resetting }] = useResetStudentPasswordMutation();
-  const [updateScores]                            = useUpdateScoresMutation();
   const [deactivateAccount, { isLoading: deactivating }] = useDeactivateStudentAccountMutation();
   const [restoreAccount,    { isLoading: restoringAccount }] = useRestoreUserMutation();
   const [restoreStudent,    { isLoading: restoringStudent }] = useRestoreStudentMutation();
@@ -515,16 +513,12 @@ function StudentsTab() {
 
   function openEdit(student) {
     setEditing(student);
-    resetEdit({ fullName: student.fullName, averageScore: student.averageScore ?? '' });
+    resetEdit({ fullName: student.fullName });
   }
 
   async function onEditSave(data) {
     try {
-      const averageScore = data.averageScore !== '' ? Number(data.averageScore) : null;
-      await updateStudent({ id: editing._id, fullName: data.fullName.trim(), averageScore }).unwrap();
-      if (averageScore !== null) {
-        await updateScores({ studentId: editing._id, averageScore }).unwrap();
-      }
+      await updateStudent({ id: editing._id, fullName: data.fullName.trim() }).unwrap();
       toast.success('Student updated');
       setEditing(null);
     } catch (err) {
@@ -716,23 +710,19 @@ function StudentsTab() {
                   <TableRow>
                     <TableHead>Student ID</TableHead>
                     <TableHead>Full Name</TableHead>
-                    <TableHead className="w-28 text-right">Avg Score</TableHead>
                     <TableHead className="w-28">Account</TableHead>
                     <TableHead className="w-44" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
                   ) : filtered.map((s) => {
                     const accountActive = !!s.userId && !s.userId.deletedAt;
                     return (
                     <TableRow key={s._id}>
                       <TableCell className="font-mono text-xs text-ink-500">{s.userId?.studentId ?? '—'}</TableCell>
                       <TableCell className="font-medium text-ink-800">{s.fullName}</TableCell>
-                      <TableCell className="text-right text-ink-500">
-                        {s.averageScore != null ? s.averageScore.toFixed(1) : <span className="text-ink-300">—</span>}
-                      </TableCell>
                       <TableCell>
                         {accountActive ? (
                           <Badge variant="success" className="gap-1">
@@ -896,12 +886,6 @@ function StudentsTab() {
               <Label htmlFor="us-name">Full Name <span className="text-danger">*</span></Label>
               <Input id="us-name" {...regEdit('fullName', { required: 'Name is required', minLength: { value: 2 } })} aria-invalid={!!errEdit.fullName} />
               {errEdit.fullName && <p className="text-xs text-danger">{errEdit.fullName.message}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="us-avg">Average Score (0–100)</Label>
-              <Input id="us-avg" type="number" min={0} max={100} step="0.01" placeholder="— ungraded"
-                {...regEdit('averageScore', { min: { value: 0, message: 'Min 0' }, max: { value: 100, message: 'Max 100' } })} />
-              {errEdit.averageScore && <p className="text-xs text-danger">{errEdit.averageScore.message}</p>}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
