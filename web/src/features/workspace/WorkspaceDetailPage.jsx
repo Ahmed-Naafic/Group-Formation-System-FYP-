@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   Loader2, Crown, ArrowLeft, ArrowRight, Send, Paperclip, Download, Trash2,
-  File as FileIcon, FileText, FileImage, FileVideo, ClipboardList, Calendar, Eye, EyeOff,
+  File as FileIcon, FileText, FileImage, FileVideo, ClipboardList, Calendar,
   Star, MessageSquare, Smile, Sticker,
 } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
@@ -23,13 +23,10 @@ import { useGetFeedbackQuery, useSubmitFeedbackMutation } from '@/features/feedb
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
 
 // Reports true once the element has scrolled near the viewport — used to
 // defer media fetches (images/video/voice) until a bubble is actually about
@@ -362,18 +359,13 @@ function TabBar({ active, onChange }) {
 function MembersTab({ workspace }) {
   const group    = workspace.groupId;
   const leaderId = String(group?.leaderId?._id ?? group?.leaderId);
-  const { showCategory, toggleCategory } = useCategoryVisibility();
 
   return (
     <div className="rounded-lg border border-border bg-white shadow-xs overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-ink-50/50 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-border bg-ink-50/50">
         <p className="text-xs font-semibold text-ink-500 uppercase tracking-wide">
           Group Members — {group?.memberIds?.length ?? 0}
         </p>
-        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 text-ink-500" onClick={toggleCategory}>
-          {showCategory ? <EyeOff size={11} /> : <Eye size={11} />}
-          {showCategory ? 'Hide Category' : 'Show Category'}
-        </Button>
       </div>
       <div className="divide-y divide-border">
         {group?.memberIds?.map((m) => {
@@ -385,14 +377,6 @@ function MembersTab({ workspace }) {
               </span>
               <span className="flex-1 font-medium text-ink-800 text-sm">{m.fullName}</span>
               <span className="font-mono text-xs text-ink-400">{m.userId?.studentId ?? '—'}</span>
-              {showCategory && (
-                <Badge
-                  variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}
-                  className="text-[10px] px-1.5 py-0 h-4"
-                >
-                  {m.performanceCategory ?? 'UNGRADED'}
-                </Badge>
-              )}
             </div>
           );
         })}

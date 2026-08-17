@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Loader2, Crown, Trash2, ArrowLeft, UserPlus, ExternalLink, Eye, EyeOff, Search } from 'lucide-react';
-import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
+import { Loader2, Crown, Trash2, ArrowLeft, UserPlus, ExternalLink, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetGroupByIdQuery, useGetGroupsQuery, useUpdateGroupMutation } from './groupApi';
 import { useGetWorkspaceByGroupIdQuery } from '@/features/workspace/workspaceApi';
@@ -9,7 +8,6 @@ import { useGetStudentsQuery } from '@/features/student/studentApi';
 import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
@@ -17,12 +15,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 
-const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
-
 export default function GroupDetailPage() {
   const { id }   = useParams();
   const location = useLocation();
-  const { showCategory, toggleCategory } = useCategoryVisibility();
 
   const { data: group, isLoading, error } = useGetGroupByIdQuery(id);
   const [updateGroup, { isLoading: updating }] = useUpdateGroupMutation();
@@ -161,10 +156,6 @@ export default function GroupDetailPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={toggleCategory}>
-            {showCategory ? <EyeOff size={13} /> : <Eye size={13} />}
-            {showCategory ? 'Hide Category' : 'Show Category'}
-          </Button>
           {workspace && (
             <Button variant="outline" size="sm" className="gap-1.5" asChild>
               <Link to={`/workspaces/${workspace._id}`}>
@@ -187,7 +178,6 @@ export default function GroupDetailPage() {
                 <TableHead className="w-8" />
                 <TableHead>Name</TableHead>
                 <TableHead>Student ID</TableHead>
-                {showCategory && <TableHead>Category</TableHead>}
                 <TableHead className="w-36 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -209,13 +199,6 @@ export default function GroupDetailPage() {
                     <TableCell className="font-mono text-xs text-ink-500">
                       {m.userId?.studentId ?? '—'}
                     </TableCell>
-                    {showCategory && (
-                      <TableCell>
-                        <Badge variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}>
-                          {m.performanceCategory ?? 'UNGRADED'}
-                        </Badge>
-                      </TableCell>
-                    )}
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
                         {!isLeader && (
@@ -288,12 +271,11 @@ export default function GroupDetailPage() {
                   <TableHead className="w-10" />
                   <TableHead>Name</TableHead>
                   <TableHead>Student ID</TableHead>
-                  {showCategory && <TableHead>Category</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAvailable.length === 0 ? (
-                  <TableRow><TableCell colSpan={showCategory ? 4 : 3} className="text-center py-6 text-sm text-ink-400">No students match "{availableQuery}"</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={3} className="text-center py-6 text-sm text-ink-400">No students match "{availableQuery}"</TableCell></TableRow>
                 ) : filteredAvailable.map((s) => {
                   const checked = selectedToAdd.includes(s._id);
                   return (
@@ -314,13 +296,6 @@ export default function GroupDetailPage() {
                       <TableCell className="font-mono text-xs text-ink-500">
                         {s.userId?.studentId ?? '—'}
                       </TableCell>
-                      {showCategory && (
-                        <TableCell>
-                          <Badge variant={CATEGORY_VARIANT[s.performanceCategory] ?? 'secondary'}>
-                            {s.performanceCategory ?? 'UNGRADED'}
-                          </Badge>
-                        </TableCell>
-                      )}
                     </TableRow>
                   );
                 })}

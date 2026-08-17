@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, EyeOff, Copy, Check, BarChart2, Users2, UserX, Search } from 'lucide-react';
-import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
+import { Pencil, Trash2, Plus, Loader2, Upload, KeyRound, Eye, Copy, Check, BarChart2, Users2, UserX, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSelector } from 'react-redux';
 import {
@@ -22,16 +21,9 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
-
-function CategoryBadge({ category }) {
-  return <Badge variant={CATEGORY_VARIANT[category] ?? 'secondary'}>{category ?? 'UNGRADED'}</Badge>;
-}
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
@@ -46,7 +38,6 @@ function CopyButton({ text }) {
 }
 
 export default function StudentsPage() {
-  const { showCategory, toggleCategory } = useCategoryVisibility();
   const { cohortId } = useParams();
   const navigate     = useNavigate();
   const isAdmin      = useSelector(selectRole) === 'admin';
@@ -172,10 +163,6 @@ export default function StudentsPage() {
           </p>
         </div>
         <div className="flex gap-2 ml-4 shrink-0">
-          <Button variant="outline" onClick={toggleCategory}>
-            {showCategory ? <EyeOff size={15} /> : <Eye size={15} />}
-            {showCategory ? 'Hide Category' : 'Show Category'}
-          </Button>
           <Button variant="outline" asChild>
             <Link to={`/cohorts/${cohortId}/scores`}>
               <BarChart2 size={15} />
@@ -251,13 +238,12 @@ export default function StudentsPage() {
                 <TableHead>Student ID</TableHead>
                 <TableHead>Full Name</TableHead>
                 <TableHead className="w-28 text-right">Avg Score</TableHead>
-                {showCategory && <TableHead className="w-28">Category</TableHead>}
                 <TableHead className="w-36" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={showCategory ? 5 : 4} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
               ) : filtered.map((s) => (
                 <TableRow key={s._id}>
                   <TableCell className="font-mono text-xs text-ink-500">{s.userId?.studentId ?? '—'}</TableCell>
@@ -265,7 +251,6 @@ export default function StudentsPage() {
                   <TableCell className="text-right text-ink-500">
                     {s.averageScore != null ? s.averageScore.toFixed(1) : <span className="text-ink-300">—</span>}
                   </TableCell>
-                  {showCategory && <TableCell><CategoryBadge category={s.performanceCategory} /></TableCell>}
                   <TableCell>
                     <div className="flex items-center justify-end gap-0.5">
                       <Button variant="ghost" size="icon" className="h-8 w-8"

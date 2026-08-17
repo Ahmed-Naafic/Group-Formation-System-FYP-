@@ -1,11 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown, Eye, EyeOff, Search,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown, Search,
 } from 'lucide-react';
-import { useCategoryVisibility } from '@/context/CategoryVisibilityContext';
 import { toast } from 'sonner';
 import { selectCurrentToken } from '@/features/auth/authSlice';
 import {
@@ -16,7 +15,6 @@ import {
 } from './groupApi';
 import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
 import { useLazyGetWorkspaceByGroupIdQuery } from '@/features/workspace/workspaceApi';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,15 +32,6 @@ import { cn } from '@/lib/utils';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
-
-const CATEGORY_VARIANT = { HIGH: 'success', MEDIUM: 'default', LOW: 'destructive' };
-
-const BALANCE_CONFIG = [
-  { key: 'HIGH',     color: 'text-success',       bg: 'bg-success/10' },
-  { key: 'MEDIUM',   color: 'text-just-blue-700', bg: 'bg-just-blue-50' },
-  { key: 'LOW',      color: 'text-danger',         bg: 'bg-danger/10' },
-  { key: 'UNGRADED', color: 'text-ink-400',        bg: 'bg-ink-100' },
-];
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -100,41 +89,7 @@ function GenerateFields({ control, register }) {
   );
 }
 
-function BalanceSummary({ groups }) {
-  const counts = useMemo(() => {
-    const c = { HIGH: 0, MEDIUM: 0, LOW: 0, UNGRADED: 0 };
-    // A removed member populates as null (soft-deleted students are excluded
-    // from the lookup) — skip those slots rather than crash on `m.performanceCategory`.
-    groups.forEach((g) => g.memberIds?.forEach((m) => {
-      if (!m) return;
-      const cat = m.performanceCategory ?? 'UNGRADED';
-      c[cat] = (c[cat] || 0) + 1;
-    }));
-    return c;
-  }, [groups]);
-
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-
-  return (
-    <div className="rounded-lg border border-border bg-white shadow-xs p-4">
-      <p className="text-xs font-semibold text-ink-500 uppercase tracking-wide mb-3">
-        Performance Distribution — {total} students across {groups.length} groups
-      </p>
-      <div className="grid grid-cols-4 gap-3">
-        {BALANCE_CONFIG.map(({ key, color, bg }) => (
-          <div key={key} className={cn('rounded-md px-3 py-2.5 text-center', bg)}>
-            <p className={cn('text-2xl font-bold leading-none', color)}>{counts[key]}</p>
-            <p className={cn('text-[11px] font-semibold mt-1 uppercase tracking-wide', color)}>
-              {key === 'UNGRADED' ? 'Ungraded' : key}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading, showCategory }) {
+function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading }) {
   const leaderId = String(group.leaderId?._id ?? group.leaderId);
 
   return (
@@ -187,14 +142,6 @@ function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading, showCat
                 <span className="font-mono text-[11px] text-ink-400 shrink-0">
                   {m.userId?.studentId ?? '—'}
                 </span>
-                {showCategory && (
-                  <Badge
-                    variant={CATEGORY_VARIANT[m.performanceCategory] ?? 'secondary'}
-                    className="shrink-0 text-[10px] px-1.5 py-0 h-4"
-                  >
-                    {m.performanceCategory ?? 'UNG'}
-                  </Badge>
-                )}
               </div>
             );
           })}
@@ -209,7 +156,6 @@ function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading, showCat
 export default function GroupsPage() {
   const { offeringId } = useParams();
   const navigate       = useNavigate();
-  const { showCategory, toggleCategory } = useCategoryVisibility();
 
   const { data: offering, isLoading: loadingOffering } = useGetCourseOfferingByIdQuery(offeringId);
 
@@ -354,15 +300,6 @@ export default function GroupsPage() {
           {hasGroups && (
             <>
               <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleCategory}
-                title={showCategory ? 'Hide performance category' : 'Show performance category'}
-              >
-                {showCategory ? <EyeOff size={14} /> : <Eye size={14} />}
-                {showCategory ? 'Hide Category' : 'Show Category'}
-              </Button>
-              <Button
                 size="sm"
                 className="bg-just-blue-600 hover:bg-just-blue-700 text-white"
                 onClick={() => downloadExcel(
@@ -432,7 +369,6 @@ export default function GroupsPage() {
 
         /* ── Groups view ──────────────────────────────────────────────────── */
         <>
-          {showCategory && <BalanceSummary groups={groups} />}
           <div className="mt-5 mb-4 relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
             <Input
@@ -449,7 +385,6 @@ export default function GroupsPage() {
               <GroupCard
                 key={group._id}
                 group={group}
-                showCategory={showCategory}
                 onAdjust={() => navigate(`/groups/${group._id}`, { state: { courseOfferingId: offeringId } })}
                 onOpenWorkspace={handleOpenWorkspace}
                 workspaceLoading={workspaceLoading}
