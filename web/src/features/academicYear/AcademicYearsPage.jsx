@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
-import { Pencil, Trash2, Plus, Loader2 } from 'lucide-react';
+import { useForm, useWatch } from 'react-hook-form';
+import { Pencil, Trash2, Plus, Loader2, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetAcademicYearsQuery,
@@ -25,7 +25,19 @@ function fmtDate(iso) {
   return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 }
 
-const STATUS_VARIANT = { active: 'success', completed: 'default', archived: 'secondary' };
+// Mirrors the backend's academicYearRules.deriveName exactly — parsed as UTC
+// midnight (matching how Joi/Mongoose interpret a plain YYYY-MM-DD value) so
+// the preview shown here can never disagree with what the server actually
+// saves, regardless of the admin's local timezone.
+function deriveNamePreview(startDateStr) {
+  if (!startDateStr) return '';
+  const d = new Date(`${startDateStr}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  const year = d.getUTCFullYear();
+  return `${year}/${year + 1}`;
+}
+
+const STATUS_VARIANT = { CURRENT: 'success', UPCOMING: 'default', CLOSED: 'secondary' };
 const ALL = '__all__';
 
 export default function AcademicYearsPage() {
@@ -38,27 +50,34 @@ export default function AcademicYearsPage() {
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [editing, setEditing]           = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [formError, setFormError]       = useState(null);
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
+  const startDate = useWatch({ control, name: 'startDate' });
+  const namePreview = deriveNamePreview(startDate);
 
-  const visible = statusFilter === ALL ? years : years.filter((y) => y.status === statusFilter);
+  const visible = statusFilter === ALL ? years : years.filter((y) => y.effectiveStatus === statusFilter);
 
   useEffect(() => {
     reset(editing ? {
-      name:      editing.name,
       startDate: toDateInput(editing.startDate),
       endDate:   toDateInput(editing.endDate),
-      status:    editing.status,
     } : {
-      name: '', startDate: '', endDate: '', status: 'active',
+      startDate: '', endDate: '',
     });
   }, [editing, reset]);
 
-  function openCreate() { setEditing(null); setDialogOpen(true); }
-  function openEdit(y)  { setEditing(y);    setDialogOpen(true); }
-  function closeDialog() { setDialogOpen(false); setEditing(null); }
+  function openCreate() { setEditing(null); setFormError(null); setDialogOpen(true); }
+  function openEdit(y)  { setEditing(y);    setFormError(null); setDialogOpen(true); }
+  function closeDialog() { setDialogOpen(false); setEditing(null); setFormError(null); }
+
+  function extractMessage(err) {
+    const e = err?.data?.error;
+    return e?.details?.length ? e.details.join(' · ') : (e?.message ?? 'Something went wrong');
+  }
 
   async function onSubmit(data) {
+    setFormError(null);
     try {
       if (editing) {
         await updateAcademicYear({ id: editing._id, ...data }).unwrap();
@@ -69,7 +88,7 @@ export default function AcademicYearsPage() {
       }
       closeDialog();
     } catch (err) {
-      toast.error(err?.data?.error?.message ?? 'Something went wrong');
+      setFormError(extractMessage(err));
     }
   }
 
@@ -79,7 +98,7 @@ export default function AcademicYearsPage() {
       toast.success(`"${deleteTarget.name}" deleted`);
       setDeleteTarget(null);
     } catch (err) {
-      toast.error(err?.data?.error?.message ?? 'Failed to delete academic year');
+      toast.error(extractMessage(err));
     }
   }
 
@@ -106,9 +125,9 @@ export default function AcademicYearsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>All</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="archived">Archived</SelectItem>
+            <SelectItem value="UPCOMING">Upcoming</SelectItem>
+            <SelectItem value="CURRENT">Current</SelectItem>
+            <SelectItem value="CLOSED">Closed</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -141,7 +160,7 @@ export default function AcademicYearsPage() {
                     {fmtDate(y.startDate)} – {fmtDate(y.endDate)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_VARIANT[y.status] ?? 'secondary'}>{y.status}</Badge>
+                    <Badge variant={STATUS_VARIANT[y.effectiveStatus] ?? 'secondary'}>{y.effectiveStatus}</Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
@@ -167,19 +186,6 @@ export default function AcademicYearsPage() {
             <DialogTitle>{editing ? 'Edit Academic Year' : 'New Academic Year'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-            <div className="space-y-1.5">
-              <Label htmlFor="ay-name">Name <span className="text-danger">*</span></Label>
-              <Input
-                id="ay-name"
-                placeholder="e.g. 2025/2026"
-                {...register('name', {
-                  required: 'Name is required',
-                  maxLength: { value: 20, message: 'Max 20 characters' },
-                })}
-                aria-invalid={!!errors.name}
-              />
-              {errors.name && <p className="text-xs text-danger">{errors.name.message}</p>}
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="ay-start">Start date <span className="text-danger">*</span></Label>
@@ -192,25 +198,26 @@ export default function AcademicYearsPage() {
                 {errors.endDate && <p className="text-xs text-danger">{errors.endDate.message}</p>}
               </div>
             </div>
-            {editing && (
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Controller
-                  control={control}
-                  name="status"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
+
+            {/* Read-only, server-derived — there is no text input for this. */}
+            <div className="space-y-1.5">
+              <Label>Academic Year</Label>
+              <div className="rounded-md border border-border bg-ink-50/60 px-3 py-2 text-sm font-medium text-ink-700">
+                {namePreview || <span className="text-ink-400 font-normal">Select a start date to preview</span>}
+              </div>
+              <p className="flex items-start gap-1.5 text-xs text-ink-400">
+                <Info size={13} className="mt-0.5 shrink-0" />
+                Duration must be 9–12 months, and only the next sequential year after the latest
+                one can be created — allowed once the current year has one month or less remaining.
+              </p>
+            </div>
+
+            {formError && (
+              <div className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
+                {formError}
               </div>
             )}
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
               <Button type="submit" disabled={creating || updating}>

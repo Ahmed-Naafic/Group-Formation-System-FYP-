@@ -17,6 +17,13 @@ const academicYearRepository = {
     return AcademicYear.findOne({ name });
   },
 
+  // The most recently-starting academic year — the anchor for both the
+  // "only the next sequential year" rule and the "final month" creation
+  // window. null when no academic years exist yet (first-ever bootstrap).
+  findLatest() {
+    return AcademicYear.findOne().sort({ startDate: -1 });
+  },
+
   updateById(id, updates) {
     return AcademicYear.findByIdAndUpdate(id, updates, { new: true });
   },

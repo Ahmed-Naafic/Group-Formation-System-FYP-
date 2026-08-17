@@ -1,6 +1,14 @@
 const academicYearRepository = require('../repositories/academicYearRepository');
 const semesterRepository     = require('../../semester/repositories/semesterRepository');
 const { NotFoundError, BadRequestError, ConflictError } = require('../../../common/errors');
+const {
+  deriveName,
+  assertDuration,
+  assertEarliestYear,
+  assertNoOverlap,
+  assertSequentialNext,
+  assertCreationWindow,
+} = require('./academicYearRules');
 
 const academicYearService = {
   getAll() {
@@ -13,29 +21,77 @@ const academicYearService = {
     return ay;
   },
 
-  async create(data) {
-    if (new Date(data.startDate) >= new Date(data.endDate)) {
+  // `data` is expected to contain only startDate/endDate — the Joi schema
+  // strips name/status if a caller sends them directly, so they never reach
+  // here. `now` defaults to the real current date; tests can pass a fixed
+  // value to make the one-month creation window deterministic.
+  async create(data, now = new Date()) {
+    const start = new Date(data.startDate);
+    const end   = new Date(data.endDate);
+    if (start >= end) {
       throw new BadRequestError('startDate must be before endDate');
     }
-    const duplicate = await academicYearRepository.findActiveByName(data.name);
-    if (duplicate) throw new ConflictError(`An academic year named "${data.name}" already exists.`);
-    return academicYearRepository.create(data);
+
+    assertEarliestYear(start);
+    assertDuration(start, end);
+
+    const latest = await academicYearRepository.findLatest();
+    assertSequentialNext(start, latest);
+    assertCreationWindow(latest, now);
+
+    const existing = await academicYearRepository.findAll();
+    assertNoOverlap(existing, start, end, null);
+
+    const name = deriveName(start);
+    const duplicate = await academicYearRepository.findActiveByName(name);
+    if (duplicate) throw new ConflictError(`An academic year named "${name}" already exists.`);
+
+    return academicYearRepository.create({
+      startDate: start,
+      endDate:   end,
+      name,
+      createdBy: data.createdBy,
+    });
   },
 
+  // Only startDate/endDate are ever accepted (see validation schema) — name
+  // is always re-derived from the resulting startDate, never taken from the
+  // client. Sequential-next and the one-month creation window are create-time
+  // gates only; they don't re-apply here.
   async update(id, updates) {
     const ay = await academicYearService.getById(id);
-    if (updates.startDate || updates.endDate) {
-      const start = updates.startDate ? new Date(updates.startDate) : ay.startDate;
-      const end   = updates.endDate   ? new Date(updates.endDate)   : ay.endDate;
-      if (start >= end) throw new BadRequestError('startDate must be before endDate');
+
+    // The update schema only accepts startDate/endDate (min 1 required), so
+    // at least one of them is always present here.
+    const semesterCount = await semesterRepository.countByAcademicYear(id);
+    if (semesterCount > 0) {
+      throw new ConflictError(
+        `Cannot change the dates of this academic year — it has ${semesterCount} semester(s) `
+        + `that depend on its current range. Remove them first.`,
+      );
     }
-    if (updates.name) {
-      const duplicate = await academicYearRepository.findActiveByName(updates.name);
+
+    const start = updates.startDate ? new Date(updates.startDate) : new Date(ay.startDate);
+    const end   = updates.endDate   ? new Date(updates.endDate)   : new Date(ay.endDate);
+    if (start >= end) {
+      throw new BadRequestError('startDate must be before endDate');
+    }
+
+    assertEarliestYear(start);
+    assertDuration(start, end);
+
+    const existing = await academicYearRepository.findAll();
+    assertNoOverlap(existing, start, end, id);
+
+    const name = deriveName(start);
+    if (name !== ay.name) {
+      const duplicate = await academicYearRepository.findActiveByName(name);
       if (duplicate && String(duplicate._id) !== id) {
-        throw new ConflictError(`An academic year named "${updates.name}" already exists.`);
+        throw new ConflictError(`An academic year named "${name}" already exists.`);
       }
     }
-    return academicYearRepository.updateById(id, updates);
+
+    return academicYearRepository.updateById(id, { startDate: start, endDate: end, name });
   },
 
   async softDelete(id, userId) {
