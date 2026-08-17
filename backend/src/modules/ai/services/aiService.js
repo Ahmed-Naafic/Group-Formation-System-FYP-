@@ -6,7 +6,10 @@ const {
   ServiceUnavailableError, BadGatewayError, BadRequestError, NotFoundError,
 } = require('../../../common/errors');
 
-const MODEL = 'llama-3.3-70b-versatile';
+// llama-3.3-70b-versatile was decommissioned by Groq — migrated to its
+// recommended replacement. Groq namespaces third-party models by vendor, so
+// the API id is "openai/gpt-oss-120b", not the bare "gpt-oss-120b".
+const MODEL = 'openai/gpt-oss-120b';
 const MAX_GROUPS = 20;
 
 const SYSTEM_PROMPT = `You are an assistant that helps university instructors
