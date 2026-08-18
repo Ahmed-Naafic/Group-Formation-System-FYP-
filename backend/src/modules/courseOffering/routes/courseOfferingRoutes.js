@@ -8,7 +8,9 @@ const {
   idParamSchema,
   offeringQuerySchema,
 } = require('../validations/courseOfferingValidation');
+const { broadcastMessage: broadcastMessageSchema } = require('../../chat/validations/messageValidation');
 const courseOfferingController = require('../controllers/courseOfferingController');
+const messageController = require('../../chat/controllers/messageController');
 
 const router = Router();
 
@@ -24,6 +26,18 @@ router.get(
   '/:id/instructor-history',
   validate(idParamSchema, 'params'),
   courseOfferingController.getInstructorHistory,
+);
+
+// Broadcasts one announcement to every active group's chat in this offering.
+// Instructor-only (enforced in messageService.broadcast, same place the
+// existing "admins cannot send chat messages" rule lives) — gated here by
+// idParamSchema/:id like every other single-offering route, not by role
+// middleware, to stay consistent with how that rule is already enforced.
+router.post(
+  '/:id/broadcast-message',
+  validate(idParamSchema, 'params'),
+  validate(broadcastMessageSchema),
+  messageController.broadcast,
 );
 
 // Mutations: admin only (enforced in service layer for update/delete)

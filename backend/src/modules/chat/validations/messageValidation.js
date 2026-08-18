@@ -23,6 +23,10 @@ const messageValidation = {
     replyToId:  objectId.allow(null),
   }),
 
+  broadcastMessage: Joi.object({
+    content: Joi.string().trim().min(1).max(4000).required(),
+  }),
+
   sendVoiceMessage: Joi.object({
     duration: Joi.number().integer().positive().max(MAX_AUDIO_DURATION_SECONDS).required().messages({
       'number.base':     'Duration is required',

@@ -35,6 +35,9 @@ const messageSchema = new mongoose.Schema(
     reactions:   [reactionSchema],
     replyTo:     { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
     readBy:      [readReceiptSchema],
+    // True only for copies created by messageService.broadcast — lets the
+    // chat UI show these as an announcement rather than a regular message.
+    isBroadcast: { type: Boolean, default: false },
   },
   {
     timestamps: { createdAt: true, updatedAt: false }, // content itself is never edited, only (soft-)deleted

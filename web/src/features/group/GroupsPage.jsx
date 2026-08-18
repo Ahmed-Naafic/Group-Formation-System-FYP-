@@ -3,17 +3,17 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown, Search,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown, Search, Megaphone,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { selectCurrentToken } from '@/features/auth/authSlice';
+import { selectCurrentToken, selectRole } from '@/features/auth/authSlice';
 import {
   useGetGroupsQuery,
   useGenerateGroupsMutation,
   useRegenerateGroupsMutation,
   useDeleteGroupsMutation,
 } from './groupApi';
-import { useGetCourseOfferingByIdQuery } from '@/features/courseOffering/courseOfferingApi';
+import { useGetCourseOfferingByIdQuery, useBroadcastMessageMutation } from '@/features/courseOffering/courseOfferingApi';
 import { useLazyGetWorkspaceByGroupIdQuery } from '@/features/workspace/workspaceApi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -163,8 +163,10 @@ export default function GroupsPage() {
   const [generateGroups,   { isLoading: generating }]  = useGenerateGroupsMutation();
   const [regenerateGroups, { isLoading: regenerating }] = useRegenerateGroupsMutation();
   const [deleteGroups,     { isLoading: deleting }]     = useDeleteGroupsMutation();
+  const [broadcastMessage, { isLoading: broadcasting }] = useBroadcastMessageMutation();
 
   const token = useSelector(selectCurrentToken);
+  const isInstructor = useSelector(selectRole) === 'instructor';
 
   const [fetchWorkspace]          = useLazyGetWorkspaceByGroupIdQuery();
   const [workspaceLoading, setWorkspaceLoading] = useState(null); // group._id being opened
@@ -172,6 +174,8 @@ export default function GroupsPage() {
   const [regenOpen,  setRegenOpen]  = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [genWarning, setGenWarning] = useState(null);
+  const [broadcastOpen,    setBroadcastOpen]    = useState(false);
+  const [broadcastContent, setBroadcastContent] = useState('');
 
   const [query, setQuery] = useState('');
 
@@ -263,6 +267,18 @@ export default function GroupsPage() {
     }
   }
 
+  async function handleBroadcast() {
+    if (!broadcastContent.trim()) return;
+    try {
+      const result = await broadcastMessage({ id: offeringId, content: broadcastContent.trim() }).unwrap();
+      toast.success(`Announcement sent to ${result.sentCount} group${result.sentCount !== 1 ? 's' : ''}`);
+      setBroadcastOpen(false);
+      setBroadcastContent('');
+    } catch (err) {
+      toast.error(err?.data?.error?.message ?? 'Failed to send announcement');
+    }
+  }
+
   async function handleRegenerate(data) {
     try {
       const result = await regenerateGroups({
@@ -299,6 +315,12 @@ export default function GroupsPage() {
         <div className="flex items-center gap-2 ml-4 shrink-0">
           {hasGroups && (
             <>
+              {isInstructor && (
+                <Button variant="outline" size="sm" onClick={() => setBroadcastOpen(true)}>
+                  <Megaphone size={15} />
+                  Broadcast
+                </Button>
+              )}
               <Button
                 size="sm"
                 className="bg-just-blue-600 hover:bg-just-blue-700 text-white"
@@ -443,6 +465,38 @@ export default function GroupsPage() {
             >
               {regenerating && <Loader2 size={14} className="animate-spin" />}
               Regenerate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Broadcast to all groups */}
+      <Dialog open={broadcastOpen} onOpenChange={(v) => { if (!v) { setBroadcastOpen(false); setBroadcastContent(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Broadcast to All Groups</DialogTitle>
+            <DialogDescription>
+              Sends one announcement to every group's chat in <strong>{courseName}</strong> ({groups.length} group{groups.length !== 1 ? 's' : ''}) at once,
+              instead of sending it to each group separately.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5 py-1">
+            <Label htmlFor="broadcast-content">Message</Label>
+            <textarea
+              id="broadcast-content"
+              rows={4}
+              maxLength={4000}
+              placeholder="e.g. The deadline for Task 3 has been extended to Friday."
+              value={broadcastContent}
+              onChange={(e) => setBroadcastContent(e.target.value)}
+              className="w-full rounded-md border border-input bg-white px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setBroadcastOpen(false)}>Cancel</Button>
+            <Button onClick={handleBroadcast} disabled={!broadcastContent.trim() || broadcasting}>
+              {broadcasting && <Loader2 size={14} className="animate-spin" />}
+              Send to All Groups
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -58,6 +58,16 @@ const messageController = {
     return sendSuccess(res, { status: 201, data: { message } });
   }),
 
+  // POST /api/course-offerings/:id/broadcast-message
+  broadcast: asyncHandler(async (req, res) => {
+    const result = await messageService.broadcast(req.params.id, req.body.content, req.context);
+    return sendSuccess(res, {
+      status: 201,
+      message: `Announcement sent to ${result.sentCount} group${result.sentCount !== 1 ? 's' : ''}`,
+      data: { sentCount: result.sentCount },
+    });
+  }),
+
   // GET /api/workspaces/:workspaceId/messages/:messageId/audio
   // Returns the signed URL as JSON (rather than redirecting, the convention
   // used by file downloads) so a native audio player can load it directly

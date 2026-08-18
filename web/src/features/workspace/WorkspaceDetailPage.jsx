@@ -582,7 +582,7 @@ function ChatTab({ workspaceId, isAdmin, currentUser }) {
                       'text-[11px] font-medium ml-1',
                       isInstructor ? 'text-just-gold-700' : 'text-ink-400',
                     )}>
-                      {msg.senderId?.fullName ?? '—'}{isInstructor ? ' · Instructor' : ''}
+                      {msg.isBroadcast ? '📢 Announcement · ' : ''}{msg.senderId?.fullName ?? '—'}{isInstructor ? ' · Instructor' : ''}
                     </span>
                   )}
                   {hasAttachment ? (

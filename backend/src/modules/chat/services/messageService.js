@@ -1,6 +1,9 @@
 const messageRepository   = require('../repositories/messageRepository');
 const fileRepository      = require('../../file/repositories/fileRepository');
 const workspaceService    = require('../../workspace/services/workspaceService');
+const workspaceRepository = require('../../workspace/repositories/workspaceRepository');
+const groupRepository     = require('../../group/repositories/groupRepository');
+const courseOfferingService = require('../../courseOffering/services/courseOfferingService');
 const StorageService      = require('../../../common/services/storage/StorageService');
 const emitter             = require('../../../common/events/emitter');
 const { NotFoundError, ForbiddenError, BadRequestError } = require('../../../common/errors');
@@ -162,6 +165,57 @@ const messageService = {
     });
 
     return message;
+  },
+
+  /**
+   * Sends one copy of the same announcement to every active group's chat in
+   * a course offering — instructor-only (admins still can't send any chat
+   * message, per the existing rule above), and scoped to offerings the
+   * instructor actually owns via courseOfferingService.getById's access
+   * check. REST-only (there's no "the" workspace room to reply from), so
+   * each copy is broadcast to its room via the shared emitter, mirroring
+   * how sendVoice/sendAttachment reach clients that are already in a room.
+   */
+  async broadcast(courseOfferingId, content, context) {
+    if (context.role !== 'instructor') {
+      throw new ForbiddenError('Only instructors can send a broadcast announcement');
+    }
+    // Enforces instructor-owns-offering access; throws otherwise.
+    await courseOfferingService.getById(courseOfferingId, context);
+
+    const groups = await groupRepository.findByCourseOffering(courseOfferingId);
+    if (groups.length === 0) {
+      throw new BadRequestError('This course offering has no active groups to notify');
+    }
+
+    const workspaces = await workspaceRepository.findByGroupIds(groups.map((g) => g._id));
+    const trimmed = content.trim();
+    const preview = trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;
+
+    const messages = [];
+    for (const workspace of workspaces) {
+      // eslint-disable-next-line no-await-in-loop
+      const message = await messageRepository.create({
+        workspaceId: workspace._id,
+        senderId:    context.userId,
+        content:     trimmed,
+        isBroadcast: true,
+      });
+      // eslint-disable-next-line no-await-in-loop
+      await message.populate({ path: 'senderId', select: 'fullName role studentId' });
+      messages.push(message);
+
+      emitter.emit('chat.broadcastMessage', { workspaceId: String(workspace._id), message });
+      emitter.emit('message.sent', {
+        workspaceId:  String(workspace._id),
+        messageId:    String(message._id),
+        senderUserId: String(context.userId),
+        senderName:   message.senderId?.fullName ?? 'Instructor',
+        preview:      `📢 ${preview}`,
+      });
+    }
+
+    return { sentCount: messages.length, messages };
   },
 
   /**

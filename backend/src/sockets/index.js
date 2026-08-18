@@ -135,6 +135,12 @@ function initSocket(httpServer) {
     io.to(roomName(workspaceId)).emit('new-message', { message });
   });
 
+  // Broadcast (announcement) messages are REST-only, one event per group's
+  // workspace — same reasoning as voice/attachment messages.
+  emitter.on('chat.broadcastMessage', ({ workspaceId, message }) => {
+    io.to(roomName(workspaceId)).emit('new-message', { message });
+  });
+
   // Message deletion is also REST-only (DELETE /workspaces/:id/messages/:messageId) —
   // same reasoning as voice messages: no socket in scope at that point, so it
   // reaches the room via the shared emitter instead.

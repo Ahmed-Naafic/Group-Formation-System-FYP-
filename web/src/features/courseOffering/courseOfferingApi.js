@@ -33,6 +33,11 @@ export const courseOfferingApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.data.history,
       providesTags: (result, error, id) => [{ type: 'CourseOffering', id: `history-${id}` }],
     }),
+
+    broadcastMessage: build.mutation({
+      query: ({ id, content }) => ({ url: `/api/course-offerings/${id}/broadcast-message`, method: 'POST', body: { content } }),
+      transformResponse: (res) => res.data,
+    }),
   }),
   overrideExisting: false,
 });
@@ -44,4 +49,5 @@ export const {
   useUpdateCourseOfferingMutation,
   useDeleteCourseOfferingMutation,
   useGetInstructorHistoryQuery,
+  useBroadcastMessageMutation,
 } = courseOfferingApi;
