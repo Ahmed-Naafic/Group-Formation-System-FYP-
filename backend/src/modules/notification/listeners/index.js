@@ -187,26 +187,49 @@ function initListeners(io) {
     }
   });
 
+  // Resolves who should hear about a whole-submission grade. Individual-mode:
+  // just the one student who submitted (they're the only one graded).
+  // Group-mode: the grade applies to the whole group's shared submission, so
+  // every member needs to know — not just whoever happened to click submit.
+  async function resolveGradedRecipientUserIds(submission, task) {
+    if (task?.submissionType === 'individual') {
+      const submittedBy = submission.submittedBy;
+      if (!submittedBy) return [];
+      const userId = submittedBy.userId?._id ?? submittedBy.userId ?? submittedBy;
+      return [userId];
+    }
+
+    const groupId = submission.groupId?._id ?? submission.groupId;
+    if (!groupId) return [];
+    const group = await groupRepository.findById(groupId);
+    if (!group) return [];
+    return (group.memberIds ?? [])
+      .filter(Boolean)
+      .map((m) => m.userId?._id ?? m.userId)
+      .filter(Boolean);
+  }
+
   // ── submission.graded ────────────────────────────────────────────────────────
   // Payload: { submission, task, actorId, actorRole, ipAddress, userAgent }
   emitter.on('submission.graded', async (payload) => {
     try {
       const { submission, task, actorId, actorRole, ipAddress, userAgent } = payload;
 
-      const submittedBy = submission.submittedBy;
-      if (submittedBy) {
-        const userId = submittedBy.userId?._id ?? submittedBy.userId ?? submittedBy;
-        const n = await notificationService.create({
+      const recipientUserIds = await resolveGradedRecipientUserIds(submission, task);
+      if (recipientUserIds.length > 0) {
+        const message = `Your submission for "${task?.title ?? 'a task'}" received a grade of ${submission.grade}/100.`;
+        const docs = recipientUserIds.map((userId) => ({
           userId,
           type:    'SUBMISSION_GRADED',
           title:   'Your submission has been graded',
-          message: `Your submission for "${task?.title ?? 'a task'}" received a grade of ${submission.grade}/100.`,
+          message,
           relatedEntity: { kind: 'Submission', id: submission._id },
-        });
-        pushToUser(String(userId), n);
+        }));
+        const created = await notificationService.createMany(docs);
+        for (const n of created) pushToUser(String(n.userId), n);
 
         await sendFcmBatch(
-          [userId],
+          recipientUserIds,
           'Your submission has been graded',
           `"${task?.title ?? 'A task'}" — ${submission.grade}/100`,
           { type: 'SUBMISSION_GRADED', entityId: String(submission._id) }
