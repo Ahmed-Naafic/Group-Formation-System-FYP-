@@ -25,6 +25,22 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+// Titles some accounts have stored as part of fullName (e.g. "Eng. Geedi
+// Baafoow") — without this, splitting on the first word for a friendly
+// greeting picks up the title itself ("Welcome back, Eng.") instead of an
+// actual name.
+const NAME_TITLE_PREFIXES = ['eng', 'dr', 'prof', 'mr', 'mrs', 'ms', 'miss', 'sheikh'];
+
+function greetingName(fullName) {
+  if (!fullName) return 'there';
+  const words = fullName.trim().split(/\s+/);
+  const first = words[0]?.toLowerCase().replace(/\.$/, '');
+  if (words.length > 1 && NAME_TITLE_PREFIXES.includes(first)) {
+    return words[1];
+  }
+  return words[0];
+}
+
 // ── Shared stat card ──────────────────────────────────────────────────────────
 
 function StatCard({ icon: Icon, label, count, to, iconBg, iconColor }) {
@@ -138,7 +154,7 @@ function AdminDashboard({ user }) {
     <div>
       <p className="eyebrow mb-2">Overview</p>
       <h2 className="text-ink-900 mb-1">
-        Welcome back, {user?.fullName?.split(' ')[0] ?? 'there'}
+        Welcome back, {greetingName(user?.fullName)}
       </h2>
       <p className="text-ink-500 mb-8" style={{ fontSize: 'var(--fs-small)' }}>
         System overview — all figures are live from the database.
@@ -275,7 +291,7 @@ function InstructorDashboard({ user }) {
     <div>
       <p className="eyebrow mb-2">Overview</p>
       <h2 className="text-ink-900 mb-1">
-        Welcome back, {user?.fullName?.split(' ')[0] ?? 'there'}
+        Welcome back, {greetingName(user?.fullName)}
       </h2>
       <p className="text-ink-500 mb-8" style={{ fontSize: 'var(--fs-small)' }}>
         Manage your course offerings, groups, and students from here.
@@ -458,7 +474,7 @@ function StudentDashboard({ user }) {
     <div>
       <p className="eyebrow mb-2">My Groups</p>
       <h2 className="text-ink-900 mb-1">
-        Welcome, {user?.fullName?.split(' ')[0] ?? 'there'}
+        Welcome, {greetingName(user?.fullName)}
       </h2>
       <p className="text-ink-500 mb-8" style={{ fontSize: 'var(--fs-small)' }}>
         Your active group workspaces and task progress.
