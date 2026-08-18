@@ -46,32 +46,44 @@ const submissionService = {
     const isLate = task.deadline && new Date() > new Date(task.deadline);
     const status = isLate ? 'late' : 'submitted';
 
+    let submission;
     if (task.submissionType === 'individual') {
       const existing = await submissionRepository.findOne({ taskId, submittedBy: studentRecord._id });
       if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
         throw new ConflictError('You have already submitted this task');
       }
-      return submissionRepository.upsertByStudent(taskId, studentRecord._id, {
+      submission = await submissionRepository.upsertByStudent(taskId, studentRecord._id, {
         groupId: group._id,
         files:   fileIds,
         notes,
         status,
         submittedAt: new Date(),
       });
+    } else {
+      // Group mode: one submission per group
+      const existing = await submissionRepository.findOne({ taskId, groupId: group._id });
+      if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
+        throw new ConflictError('This task has already been submitted by your group');
+      }
+      submission = await submissionRepository.upsert(taskId, group._id, {
+        submittedBy: studentRecord._id,
+        files:       fileIds,
+        notes,
+        status,
+        submittedAt: new Date(),
+      });
     }
 
-    // Group mode: one submission per group
-    const existing = await submissionRepository.findOne({ taskId, groupId: group._id });
-    if (existing && ['submitted', 'reviewed'].includes(existing.status)) {
-      throw new ConflictError('This task has already been submitted by your group');
-    }
-    return submissionRepository.upsert(taskId, group._id, {
-      submittedBy: studentRecord._id,
-      files:       fileIds,
-      notes,
-      status,
-      submittedAt: new Date(),
+    // Notifies the offering's currently-assigned instructor — draft saves
+    // (saveDraft, below) deliberately don't emit this; only a real
+    // submission should land in the instructor's inbox.
+    emitter.emit('submission.submitted', {
+      submission, task, group, studentRecord,
+      actorId: context.userId, actorRole: context.role,
+      ipAddress: context.ipAddress, userAgent: context.userAgent,
     });
+
+    return submission;
   },
 
   async saveDraft(taskId, { fileIds = [], notes }, context) {

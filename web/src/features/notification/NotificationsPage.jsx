@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Users2, ClipboardList, CheckCircle2, Loader2 } from 'lucide-react';
+import { Bell, Users2, ClipboardList, CheckCircle2, Loader2, Inbox } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetNotificationsQuery,
@@ -15,6 +15,7 @@ const TYPE_CONFIG = {
   GROUP_FORMED:       { icon: Users2,        color: 'text-just-blue-600',  bg: 'bg-just-blue-50' },
   TASK_ASSIGNED:      { icon: ClipboardList, color: 'text-amber-600',       bg: 'bg-amber-50' },
   SUBMISSION_GRADED:  { icon: CheckCircle2,  color: 'text-success',         bg: 'bg-success/10' },
+  SUBMISSION_RECEIVED: { icon: Inbox,        color: 'text-just-blue-600',  bg: 'bg-just-blue-50' },
 };
 
 function typeConfig(type) {

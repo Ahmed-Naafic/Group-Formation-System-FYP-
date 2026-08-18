@@ -4,6 +4,7 @@ const auditLogService    = require('../../auditLog/services/auditLogService');
 const userRepository     = require('../../user/repositories/userRepository');
 const groupRepository    = require('../../group/repositories/groupRepository');
 const studentRepository  = require('../../student/repositories/studentRepository');
+const instructorAssignmentRepository = require('../../instructorAssignment/repositories/instructorAssignmentRepository');
 const Workspace          = require('../../workspace/models/Workspace');
 const pushService        = require('../../../common/services/push/PushService');
 const logger             = require('../../../common/utils/logger');
@@ -132,6 +133,57 @@ function initListeners(io) {
       });
     } catch (err) {
       logger.error('task.created listener error', { err: err.message });
+    }
+  });
+
+  // ── submission.submitted ─────────────────────────────────────────────────────
+  // Payload: { submission, task, group, studentRecord, actorId, actorRole, ipAddress, userAgent }
+  // Notifies the course offering's currently-assigned instructor — mirrors
+  // instructorAssignmentRepository.findActiveByOffering, the same single
+  // source of truth every other "who currently teaches this offering" check
+  // in the app uses. Silently does nothing if the offering has no active
+  // assignment (nobody to notify), rather than erroring the submission.
+  emitter.on('submission.submitted', async (payload) => {
+    try {
+      const { submission, task, group, studentRecord, actorId, actorRole, ipAddress, userAgent } = payload;
+
+      const courseOfferingId = task.courseOfferingId?._id ?? task.courseOfferingId;
+      const assignment = await instructorAssignmentRepository.findActiveByOffering(courseOfferingId);
+      const instructor = assignment?.instructorId;
+
+      if (instructor) {
+        const instructorUserId = instructor._id ?? instructor;
+        const who = task.submissionType === 'individual'
+          ? `${studentRecord.fullName} (${group.name})`
+          : group.name;
+        const message = `${who} submitted "${task.title}".`;
+
+        const n = await notificationService.create({
+          userId: instructorUserId,
+          type:    'SUBMISSION_RECEIVED',
+          title:   'New submission received',
+          message,
+          relatedEntity: { kind: 'Submission', id: submission._id },
+        });
+        pushToUser(String(instructorUserId), n);
+
+        await sendFcmBatch(
+          [instructorUserId],
+          'New submission received',
+          message,
+          { type: 'SUBMISSION_RECEIVED', entityId: String(submission._id) }
+        );
+      }
+
+      await auditLogService.log({
+        actorId, actorRole, ipAddress, userAgent,
+        action:     'SUBMISSION_CREATED',
+        entityKind: 'Submission',
+        entityId:   submission._id,
+        changes:    { taskId: String(task._id), groupId: String(group._id), status: submission.status },
+      });
+    } catch (err) {
+      logger.error('submission.submitted listener error', { err: err.message });
     }
   });
 
