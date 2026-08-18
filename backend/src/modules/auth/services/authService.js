@@ -33,7 +33,15 @@ const authService = {
 
     // Deliberate vague message — don't reveal whether the identifier exists
     if (!user) throw new UnauthorizedError('Invalid credentials');
-    if (!user.isActive) throw new ForbiddenError('Account is deactivated');
+    // Two different deactivation mechanisms land here: isActive:false (staff
+    // accounts, via userService.setActive) and deletedAt (student accounts,
+    // via softDelete) — both mean "this account cannot log in right now",
+    // and both need the specific message below rather than falling through
+    // to the generic invalid-credentials one. findByIdentifier deliberately
+    // includes soft-deleted accounts so this check can actually see them.
+    if (user.deletedAt || !user.isActive) {
+      throw new ForbiddenError('This account has been deactivated. Contact an administrator for assistance.');
+    }
     assertAllowedPlatform(user, platform);
 
     // Already locked out from a prior burst of wrong attempts — re-report

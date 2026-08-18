@@ -20,8 +20,12 @@ const userRepository = {
     return User.findOne({ email: email.toLowerCase() });
   },
 
+  // Includes a soft-deleted (deactivated) account — login needs to see it to
+  // tell "this account was deactivated" apart from "no such account exists",
+  // rather than both collapsing into the same generic invalid-credentials
+  // response. See authService.login.
   findByEmailWithPassword(email) {
-    return User.findOne({ email: email.toLowerCase() }).select('+passwordHash');
+    return User.findOne({ email: email.toLowerCase() }).select('+passwordHash').includeSoftDeleted();
   },
 
   findByStudentId(studentId) {
@@ -36,8 +40,10 @@ const userRepository = {
     return User.findOne({ studentId }).includeSoftDeleted();
   },
 
+  // Same reasoning as findByEmailWithPassword above — includes soft-deleted
+  // accounts so login can distinguish "deactivated" from "doesn't exist".
   findByStudentIdWithPassword(studentId) {
-    return User.findOne({ studentId }).select('+passwordHash');
+    return User.findOne({ studentId }).select('+passwordHash').includeSoftDeleted();
   },
 
   findAll(filter = {}) {
