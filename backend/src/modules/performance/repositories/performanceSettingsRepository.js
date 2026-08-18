@@ -17,6 +17,14 @@ const performanceSettingsRepository = {
       { new: true, upsert: true, runValidators: true }
     );
   },
+
+  setCategoryVisibility(enabled) {
+    return PerformanceSettings.findOneAndUpdate(
+      {},
+      { $set: { categoryVisibleToInstructors: enabled } },
+      { new: true, upsert: true, runValidators: true }
+    );
+  },
 };
 
 module.exports = performanceSettingsRepository;

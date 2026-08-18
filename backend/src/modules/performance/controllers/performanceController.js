@@ -18,6 +18,17 @@ const performanceController = {
     });
   }),
 
+  // PATCH /api/performance/settings/category-visibility  (admin only)
+  setCategoryVisibility: asyncHandler(async (req, res) => {
+    const settings = await performanceService.setCategoryVisibility(req.body.enabled);
+    return sendSuccess(res, {
+      message: req.body.enabled
+        ? 'Instructors can now show performance categories on their pages'
+        : 'Performance categories are hidden from instructors again',
+      data: { settings },
+    });
+  }),
+
   // POST /api/performance/recalculate/student/:studentId
   recalculateStudent: asyncHandler(async (req, res) => {
     const student = await performanceService.calculateForStudent(req.params.studentId, req.context);

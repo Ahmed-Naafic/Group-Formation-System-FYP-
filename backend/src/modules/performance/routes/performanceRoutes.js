@@ -4,6 +4,7 @@ const { requireRole } = require('../../../middleware/rbac');
 const validate = require('../../../common/validators/validate');
 const {
   updateSettingsSchema,
+  setCategoryVisibilitySchema,
   studentParamSchema,
   cohortParamSchema,
   updateStudentScoresSchema,
@@ -21,6 +22,16 @@ router.put(
   authenticate, requireRole('admin', 'instructor'),
   validate(updateSettingsSchema),
   performanceController.updateSettings,
+);
+
+// Admin-only — controls whether instructors get the "Show Category" toggle
+// on their pages at all. Separate from the threshold PUT above (which
+// admin+instructor can both edit) since this is deliberately admin-only.
+router.patch(
+  '/settings/category-visibility',
+  authenticate, requireRole('admin'),
+  validate(setCategoryVisibilitySchema),
+  performanceController.setCategoryVisibility,
 );
 
 router.post(

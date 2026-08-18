@@ -12,6 +12,11 @@ export const performanceApi = baseApi.injectEndpoints({
       transformResponse: (res) => ({ ...res.data, message: res.message }),
       invalidatesTags: ['Performance'],
     }),
+    setCategoryVisibility: build.mutation({
+      query: (enabled) => ({ url: '/api/performance/settings/category-visibility', method: 'PATCH', body: { enabled } }),
+      transformResponse: (res) => ({ ...res.data, message: res.message }),
+      invalidatesTags: ['Performance'],
+    }),
     recalculateCohort: build.mutation({
       query: (cohortId) => ({
         url: `/api/performance/recalculate/cohort/${cohortId}`,
@@ -32,6 +37,7 @@ export const performanceApi = baseApi.injectEndpoints({
 export const {
   useGetPerformanceSettingsQuery,
   useUpdatePerformanceSettingsMutation,
+  useSetCategoryVisibilityMutation,
   useRecalculateCohortMutation,
   useUpdateScoresMutation,
 } = performanceApi;

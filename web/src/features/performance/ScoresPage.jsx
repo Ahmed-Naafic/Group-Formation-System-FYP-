@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
-import { Loader2, RefreshCw, Save, Search } from 'lucide-react';
+import { Loader2, RefreshCw, Save, Search, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { selectRole } from '@/features/auth/authSlice';
 import { useGetStudentsQuery } from '@/features/student/studentApi';
@@ -11,6 +11,8 @@ import {
   useRecalculateCohortMutation,
   useUpdateScoresMutation,
 } from './performanceApi';
+import { useCategoryVisibility } from './useCategoryVisibility';
+import CategoryBadge from './CategoryBadge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +21,7 @@ import { Input } from '@/components/ui/input';
 // cohort refactor. Attendance is now per-offering in the Attendance table.
 // Full page migration to cohortId happens in Step 9.
 
-function ScoreRow({ student, isAdmin }) {
+function ScoreRow({ student, isAdmin, showCategory }) {
   const [updateScores, { isLoading: saving }] = useUpdateScoresMutation();
 
   const { register, handleSubmit, formState: { isDirty } } = useForm({
@@ -55,6 +57,9 @@ function ScoreRow({ student, isAdmin }) {
           </span>
         )}
       </TableCell>
+      {showCategory && (
+        <TableCell><CategoryBadge category={student.performanceCategory} /></TableCell>
+      )}
       <TableCell className="w-24">
         {isDirty && isAdmin && (
           <Button
@@ -78,6 +83,7 @@ export default function ScoresPage() {
   const { data: cohort, isLoading: loadingCohort } = useGetCohortByIdQuery(cohortId);
   const { data: students = [], isLoading, error } = useGetStudentsQuery(cohortId);
   const [recalculate, { isLoading: recalculating }] = useRecalculateCohortMutation();
+  const { canShow: canShowCategory, visible: showCategory, toggle: toggleCategory } = useCategoryVisibility();
 
   const cohortName = cohort?.name ?? (loadingCohort ? '…' : 'Cohort');
   const [query, setQuery] = useState('');
@@ -117,6 +123,12 @@ export default function ScoresPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 ml-4 shrink-0">
+          {canShowCategory && (
+            <Button variant="outline" onClick={toggleCategory}>
+              {showCategory ? <EyeOff size={15} /> : <Eye size={15} />}
+              {showCategory ? 'Hide Category' : 'Show Category'}
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={handleRecalculate}
@@ -163,14 +175,15 @@ export default function ScoresPage() {
                 <TableHead className="w-28">
                   Avg Score{!isAdmin && <span className="ml-1 text-ink-300 font-normal text-[10px]">(read-only)</span>}
                 </TableHead>
+                {showCategory && <TableHead className="w-28">Category</TableHead>}
                 <TableHead className="w-24" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
+                <TableRow><TableCell colSpan={showCategory ? 5 : 4} className="text-center py-8 text-sm text-ink-400">No students match "{query}"</TableCell></TableRow>
               ) : filtered.map((s) => (
-                <ScoreRow key={s._id} student={s} isAdmin={isAdmin} />
+                <ScoreRow key={s._id} student={s} isAdmin={isAdmin} showCategory={showCategory} />
               ))}
             </TableBody>
           </Table>

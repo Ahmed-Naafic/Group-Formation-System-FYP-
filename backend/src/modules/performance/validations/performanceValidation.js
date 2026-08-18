@@ -16,6 +16,10 @@ const updateSettingsSchema = Joi.object({
     }),
 });
 
+const setCategoryVisibilitySchema = Joi.object({
+  enabled: Joi.boolean().required(),
+});
+
 const studentParamSchema = Joi.object({
   studentId: objectId.required(),
 });
@@ -31,6 +35,7 @@ const updateStudentScoresSchema = Joi.object({
 
 module.exports = {
   updateSettingsSchema,
+  setCategoryVisibilitySchema,
   studentParamSchema,
   cohortParamSchema,
   updateStudentScoresSchema,

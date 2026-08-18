@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useForm, Controller } from 'react-hook-form';
 import {
-  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown, Search, Megaphone,
+  Loader2, RefreshCw, Crown, AlertTriangle, ArrowRight, Trash2, ExternalLink, FileDown, Search, Megaphone, Eye, EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { selectCurrentToken, selectRole } from '@/features/auth/authSlice';
@@ -15,6 +15,8 @@ import {
 } from './groupApi';
 import { useGetCourseOfferingByIdQuery, useBroadcastMessageMutation } from '@/features/courseOffering/courseOfferingApi';
 import { useLazyGetWorkspaceByGroupIdQuery } from '@/features/workspace/workspaceApi';
+import { useCategoryVisibility } from '@/features/performance/useCategoryVisibility';
+import CategoryBadge from '@/features/performance/CategoryBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -89,7 +91,7 @@ function GenerateFields({ control, register }) {
   );
 }
 
-function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading }) {
+function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading, showCategory }) {
   const leaderId = String(group.leaderId?._id ?? group.leaderId);
 
   return (
@@ -139,6 +141,9 @@ function GroupCard({ group, onAdjust, onOpenWorkspace, workspaceLoading }) {
                 <span className="flex-1 font-medium text-ink-800 truncate min-w-0">
                   {m.fullName}
                 </span>
+                {showCategory && (
+                  <span className="shrink-0"><CategoryBadge category={m.performanceCategory} /></span>
+                )}
                 <span className="font-mono text-[11px] text-ink-400 shrink-0">
                   {m.userId?.studentId ?? '—'}
                 </span>
@@ -167,6 +172,7 @@ export default function GroupsPage() {
 
   const token = useSelector(selectCurrentToken);
   const isInstructor = useSelector(selectRole) === 'instructor';
+  const { canShow: canShowCategory, visible: showCategory, toggle: toggleCategory } = useCategoryVisibility();
 
   const [fetchWorkspace]          = useLazyGetWorkspaceByGroupIdQuery();
   const [workspaceLoading, setWorkspaceLoading] = useState(null); // group._id being opened
@@ -315,6 +321,12 @@ export default function GroupsPage() {
         <div className="flex items-center gap-2 ml-4 shrink-0">
           {hasGroups && (
             <>
+              {canShowCategory && (
+                <Button variant="outline" size="sm" onClick={toggleCategory}>
+                  {showCategory ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showCategory ? 'Hide Category' : 'Show Category'}
+                </Button>
+              )}
               {isInstructor && (
                 <Button variant="outline" size="sm" onClick={() => setBroadcastOpen(true)}>
                   <Megaphone size={15} />
@@ -410,6 +422,7 @@ export default function GroupsPage() {
                 onAdjust={() => navigate(`/groups/${group._id}`, { state: { courseOfferingId: offeringId } })}
                 onOpenWorkspace={handleOpenWorkspace}
                 workspaceLoading={workspaceLoading}
+                showCategory={showCategory}
               />
             ))}
           </div>

@@ -30,6 +30,13 @@ const performanceService = {
     return performanceSettingsRepository.getSettings();
   },
 
+  // Admin-only (enforced at the route). Doesn't touch thresholds or trigger
+  // a recalculation — this only controls whether instructors are offered the
+  // "Show Category" toggle on their pages, not the categories themselves.
+  setCategoryVisibility(enabled) {
+    return performanceSettingsRepository.setCategoryVisibility(enabled);
+  },
+
   async updateSettings(data, userId) {
     const settings = await performanceSettingsRepository.updateSettings({
       ...data,
